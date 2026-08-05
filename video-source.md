@@ -54,6 +54,7 @@ truncated to `transcript_max_chars`. Items route to the profile set per channel
 | `asr_max_duration_sec` | `5400` | Skip ASR above this length (a 3-hour stream VOD costs more wall clock than the rest of the run). `0` disables the guard |
 | `min_duration_sec` | `120` | Skip videos shorter than this — channel feeds carry Shorts, which cost a full LLM analysis for no substance. `0` disables the filter |
 | `min_transcript_rate` | `0.5` | Health floor: below this share of videos yielding text, the run logs a WARNING instead of degrading silently. `0` disables the check |
+| `min_transcript_coverage` | `0.75` | Completeness floor for one transcript: its last timestamp against the video's runtime. Below it the item is flagged `partial` |
 
 Channel entry:
 
@@ -218,6 +219,30 @@ of exactly that, observed in production.
 Note what is *not* checked: preflight verifies the cookie file **exists**, not
 that YouTube still accepts it. A dead jar looks perfectly healthy on disk —
 trigger 1 is the only thing that catches it.
+
+### Is the transcript complete?
+
+A transcript that stops a third of the way in looks exactly like a short one to
+everything downstream. `transcript_coverage()` compares the last `[MM:SS]` cue
+against the runtime from metadata; below `min_transcript_coverage` the item is
+counted `partial`, logged with a WARNING, and the ratio is stored in
+`metadata["transcript_coverage"]`. Typical causes: subtitles published for only
+part of a video, or an ASR pass cut short. Missing duration or timestamps yield
+`None`, which never counts as a fault.
+
+This is separate from the *rate* check above: rate asks "did videos produce
+text at all", coverage asks "is this one text the whole video".
+
+### Truncation keeps the ending
+
+`transcript_max_chars` caps item content, and a long video overruns it easily —
+a 21-minute talk transcribes to ~25 000 characters against a 12 000 cap. The
+transcript is therefore **sampled head-middle-tail, not prefix-cut**. A raw
+slice would end the item around minute eight and the analyzer's own
+head-middle-tail sampling could not recover it: truncation happens here, in the
+scraper, before the profile's `content` limits ever apply. The excerpt markers
+(`[Opening excerpt]` / `[Middle excerpt]` / `[Closing excerpt]`) survive into
+the prompt so the model knows it is reading a sample.
 
 The counters live on `scraper.last_run_stats` (`VideoRunStats`) for scripts and
 tests. Per item, `metadata["content_source"]` records the rung that won —
