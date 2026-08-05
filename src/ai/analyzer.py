@@ -118,7 +118,10 @@ class ContentAnalyzer:
         discussion_parts = []
         if content_parts.comments:
             discussion_parts.append(
-                f"Community Comments:\n{content_parts.comments[:1500]}"
+                "Community Comments:\n"
+                + content_parts.comments[
+                    : profile.definition.content.analysis_comments_max_chars
+                ]
             )
 
         meta = item.metadata

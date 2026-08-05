@@ -15,6 +15,9 @@ class ProfileContent(BaseModel):
 
     analysis_max_chars: int = Field(default=1000, ge=500, le=100_000)
     enrichment_max_chars: int = Field(default=8000, ge=500, le=100_000)
+    classification_max_chars: int = Field(default=2000, ge=500, le=100_000)
+    analysis_comments_max_chars: int = Field(default=1500, ge=500, le=100_000)
+    enrichment_comments_max_chars: int = Field(default=2000, ge=500, le=100_000)
     sampling: Literal["prefix", "head-middle-tail"] = "prefix"
 
 

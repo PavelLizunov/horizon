@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import os
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import httpx
@@ -397,3 +399,65 @@ class TestFactoryFunction:
 
     def test_deepseek_provider_enum(self):
         assert AIProvider.DEEPSEEK.value == "deepseek"
+
+
+class TestTruncationWarning:
+    """A response cut off at max_tokens must be reported, not silently parsed."""
+
+    def _openai_response(self, finish_reason: str):
+        return SimpleNamespace(
+            choices=[
+                SimpleNamespace(
+                    message=SimpleNamespace(content='{"partial": '),
+                    finish_reason=finish_reason,
+                )
+            ],
+            usage=SimpleNamespace(prompt_tokens=10, completion_tokens=4096),
+        )
+
+    def _complete(self, client, response):
+        with patch.object(
+            client.client.chat.completions, "create", new_callable=AsyncMock
+        ) as mock_create:
+            mock_create.return_value = response
+            return asyncio.run(client.complete(system="test", user="hello"))
+
+    def test_openai_length_finish_reason_warns(self, monkeypatch, caplog):
+        monkeypatch.setenv("MINIMAX_API_KEY", "test-key")
+        client = OpenAIClient(_make_config())
+
+        with caplog.at_level(logging.WARNING, logger="src.ai.client"):
+            self._complete(client, self._openai_response("length"))
+
+        assert "truncated" in caplog.text
+        assert "max_tokens" in caplog.text
+
+    def test_openai_normal_stop_does_not_warn(self, monkeypatch, caplog):
+        monkeypatch.setenv("MINIMAX_API_KEY", "test-key")
+        client = OpenAIClient(_make_config())
+
+        with caplog.at_level(logging.WARNING, logger="src.ai.client"):
+            self._complete(client, self._openai_response("stop"))
+
+        assert "truncated" not in caplog.text
+
+    def test_anthropic_max_tokens_stop_reason_warns(self, monkeypatch, caplog):
+        monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
+        client = AnthropicClient(
+            _make_config(provider=AIProvider.ANTHROPIC, api_key_env="ANTHROPIC_API_KEY")
+        )
+        message = SimpleNamespace(
+            content=[SimpleNamespace(text='{"partial": ')],
+            usage=SimpleNamespace(input_tokens=10, output_tokens=4096),
+            stop_reason="max_tokens",
+        )
+
+        with caplog.at_level(logging.WARNING, logger="src.ai.client"):
+            with patch.object(
+                client.client.messages, "create", new_callable=AsyncMock
+            ) as mock_create:
+                mock_create.return_value = message
+                asyncio.run(client.complete(system="test", user="hello"))
+
+        assert "truncated" in caplog.text
+        assert "max_tokens" in caplog.text

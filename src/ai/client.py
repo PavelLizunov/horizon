@@ -39,6 +39,24 @@ _DEFAULT_API_KEY_ENVS = {
 }
 
 
+# Provider stop/finish reasons that mean "output cut off at the token ceiling":
+# OpenAI-compatible "length", Anthropic "max_tokens", Gemini FinishReason.MAX_TOKENS.
+_TRUNCATION_REASONS = {"length", "max_tokens"}
+
+
+def _warn_if_truncated(provider: str, reason: Any) -> None:
+    """Log a warning when the model stopped because it hit the token limit."""
+    value = getattr(reason, "value", reason)
+    if isinstance(value, str) and value.lower() in _TRUNCATION_REASONS:
+        logger.warning(
+            "%s output was truncated: the model stopped at the max_tokens limit "
+            "(stop reason %r). The response is incomplete, so JSON parsing will "
+            "likely fail. Raise ai.max_tokens.",
+            provider,
+            value,
+        )
+
+
 def _resolve_api_key(config: AIConfig, *, fallback: Optional[str] = None) -> str:
     api_key = os.getenv(config.api_key_env)
     if api_key:
@@ -171,6 +189,9 @@ class AnthropicClient(AIClient):
                 input_tokens=getattr(usage, "input_tokens", 0),
                 output_tokens=getattr(usage, "output_tokens", 0),
             )
+        _warn_if_truncated(
+            self.config.provider.value, getattr(message, "stop_reason", None)
+        )
         return message.content[0].text
 
 
@@ -303,6 +324,9 @@ class OpenAIClient(AIClient):
                 input_tokens=getattr(usage, "prompt_tokens", 0),
                 output_tokens=getattr(usage, "completion_tokens", 0),
             )
+        _warn_if_truncated(
+            self.provider, getattr(response.choices[0], "finish_reason", None)
+        )
         return response.choices[0].message.content
 
     async def _do_request(
@@ -438,6 +462,9 @@ class AzureOpenAIClient(AIClient):
                 input_tokens=getattr(usage, "prompt_tokens", 0),
                 output_tokens=getattr(usage, "completion_tokens", 0),
             )
+        _warn_if_truncated(
+            "azure", getattr(response.choices[0], "finish_reason", None)
+        )
         return response.choices[0].message.content
 
     async def _create_completion(
@@ -530,6 +557,9 @@ class GeminiClient(AIClient):
             prompt = getattr(usage, "prompt_token_count", 0) or 0
             completion = max(0, total - prompt)
             record_usage("gemini", input_tokens=prompt, output_tokens=completion)
+        candidates = getattr(response, "candidates", None) or []
+        if candidates:
+            _warn_if_truncated("gemini", getattr(candidates[0], "finish_reason", None))
         return response.text
 
 

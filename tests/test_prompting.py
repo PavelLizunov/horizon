@@ -1,6 +1,7 @@
 from pathlib import Path
 from datetime import datetime, timezone
 
+from src.ai.prompting.classification import classification_user_prompt
 from src.ai.prompting.enrichment import (
     artifact_prompt,
     block_prompt,
@@ -15,6 +16,7 @@ from src.models import (
     SourceType,
 )
 from src.processing import ProfileRegistry
+from src.processing.content import COMMENTS_MARKER
 
 
 PROFILES = ProfileRegistry.load(
@@ -67,3 +69,59 @@ def test_enrichment_context_uses_profile_content_budget():
     assert "OPENING" in context
     assert "MIDDLE" in context
     assert "ENDING" in context
+
+
+def _make_discussion_item(content: str) -> ContentItem:
+    return ContentItem(
+        id="reddit:test:thread",
+        source_type=SourceType.REDDIT,
+        title="A discussion thread",
+        url="https://example.com/thread",
+        published_at=datetime.now(timezone.utc),
+        profile="tech-news",
+        content=content,
+        processing=ProcessingResult(
+            classification=ClassificationResult(
+                profile="tech-news", method="source_override"
+            ),
+            analysis=ContentAnalysis(score=7, reason="Busy thread", summary="A thread"),
+        ),
+    )
+
+
+def test_enrichment_comment_budget_is_profile_configurable(monkeypatch):
+    profile = PROFILES.get("tech-news")
+    item = _make_discussion_item("Post body." + COMMENTS_MARKER + "c" * 6000)
+
+    context = item_context(item, profile, include_content=True)
+    # Default preserves the previously hardcoded 2000-character cap.
+    assert len(_comments_section(context)) == 2000
+
+    monkeypatch.setattr(
+        profile.definition.content, "enrichment_comments_max_chars", 5000
+    )
+    context = item_context(item, profile, include_content=True)
+    assert len(_comments_section(context)) == 5000
+
+
+def test_classification_prompt_uses_profile_routing_budget(monkeypatch):
+    item = _make_discussion_item("x" * 6000)
+
+    prompt = classification_user_prompt(item, PROFILES)
+    # Default preserves the previously hardcoded 2000-character cap.
+    assert len(_excerpt(prompt)) == 2000
+
+    monkeypatch.setattr(
+        PROFILES.get(PROFILES.default_profile).definition.content,
+        "classification_max_chars",
+        4500,
+    )
+    assert len(_excerpt(classification_user_prompt(item, PROFILES))) == 4500
+
+
+def _comments_section(context: str) -> str:
+    return context.split("# Community comments\n\n", 1)[1].split("\n", 1)[0]
+
+
+def _excerpt(prompt: str) -> str:
+    return prompt.split("Excerpt: ", 1)[1].split("\n", 1)[0]

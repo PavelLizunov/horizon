@@ -16,7 +16,11 @@ def classification_user_prompt(
     profiles: ProfileRegistry,
     profile_ids: tuple[str, ...] | None = None,
 ) -> str:
-    content = (item.content or "").strip()[:2000]
+    # Routing runs before a profile is picked, so the default profile's budget applies.
+    routing_max_chars = (
+        profiles.get(profiles.default_profile).definition.content.classification_max_chars
+    )
+    content = (item.content or "").strip()[:routing_max_chars]
     selected_profiles = (
         profiles.profiles
         if profile_ids is None

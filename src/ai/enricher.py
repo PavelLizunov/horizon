@@ -63,6 +63,14 @@ class GeneratedArtifact(BaseModel):
         return self
 
 
+def _artifact_leaks(generated: "GeneratedArtifact", language: str) -> bool:
+    """True when a generated artifact carries CJK text into a non-CJK language."""
+    return has_cjk_leak(generated.title, language) or any(
+        has_cjk_leak(block.title, language) or has_cjk_leak(block.content, language)
+        for block in generated.blocks
+    )
+
+
 class GeneratedBlock(BaseModel):
     title: str = ""
     block: Optional[ContentBlock] = None
@@ -240,17 +248,21 @@ class ContentEnricher:
 
         for language in self.languages:
             generated = await build(language)
-            if has_cjk_leak(generated.title, language) or any(
-                has_cjk_leak(block.title, language)
-                or has_cjk_leak(block.content, language)
-                for block in generated.blocks
-            ):
+            if _artifact_leaks(generated, language):
                 logger.warning(
                     "Language leak in %s [%s]; regenerating artifact once",
                     item.id,
                     language,
                 )
                 generated = await build(language)
+                if _artifact_leaks(generated, language):
+                    logger.warning(
+                        "Language leak persists after retry in %s [%s]; "
+                        "shipping CJK text into the %s digest",
+                        item.id,
+                        language,
+                        language,
+                    )
             referenced = {
                 source_id
                 for block in generated.blocks

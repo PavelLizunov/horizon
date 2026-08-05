@@ -9,6 +9,35 @@ recoverable by reading the code.
 
 ## Unreleased
 
+### AI layer — guards that now check their own outcome
+
+Three defects of one shape: a limit or a guard applied where its failure is
+invisible downstream.
+
+- **The language-leak retry never verified itself.** `enricher.py` detected CJK
+  in non-CJK output, regenerated the artifact once, and used the result
+  unconditionally. If the retry also leaked, Chinese shipped into a Russian
+  digest silently. Production logs showed ~8 leak events per run, so the base
+  rate was high; shipped digests happened to be clean. The retry is now
+  re-checked and a persistent leak logs a distinct `persists after retry`
+  warning. Still one retry, still no raise — the defect was the missing
+  verification, not the retry policy.
+- **LLM output truncation was never detected.** `finish_reason` / `stop_reason`
+  appeared nowhere in `src/ai/`. A response that hit `max_tokens` came back cut
+  off, failed all five JSON repair strategies in `ai/utils.py`, and surfaced as
+  "response was not a JSON object" — a diagnosis that sends you to fix the
+  prompt when the fix is to raise `max_tokens`. `_warn_if_truncated` now runs
+  next to `record_usage` for Anthropic (`max_tokens`), OpenAI and Azure
+  (`length`) and Gemini (`FinishReason.MAX_TOKENS`, enum-unwrapped).
+- **Three invisible hardcodes** — `content[:2000]` for profile routing,
+  `comments[:1500]` in analysis, `comments[:2000]` in enrichment — are now
+  `ProfileContent` fields (`classification_max_chars`,
+  `analysis_comments_max_chars`, `enrichment_comments_max_chars`) with defaults
+  equal to the old constants, so behaviour is unchanged until a profile opts
+  in. Routing uses the *default* profile's budget, since it runs before a
+  profile is chosen. For Reddit and Hacker News the discussion is often worth
+  more than the post, and that ceiling was previously unreachable.
+
 ### Video source — observability
 
 The video scraper catches every external failure and degrades to

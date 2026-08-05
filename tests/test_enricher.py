@@ -1,5 +1,6 @@
 import asyncio
 import json
+import logging
 from datetime import datetime, timezone
 from pathlib import Path
 from types import SimpleNamespace
@@ -526,3 +527,53 @@ def test_enrichment_batch_reports_failure_without_discarding_successes():
     assert result.succeeded_ids == [successful_item.id]
     assert result.failed_ids == [failed_item.id]
     assert result.failures[failed_item.id] == "RuntimeError: AI unavailable"
+
+
+def test_persistent_language_leak_is_logged_once_and_artifact_still_shipped(caplog):
+    leaked = json.dumps(
+        {
+            "title": "新架构发布",
+            "blocks": [
+                {
+                    "id": "summary",
+                    "type": "section",
+                    "title": "摘要",
+                    "content": "项目发布了新的架构。",
+                    "source_refs": [],
+                },
+                {
+                    "id": "background",
+                    "type": "section",
+                    "title": "背景",
+                    "content": "旧架构的背景信息。",
+                    "source_refs": [],
+                },
+            ],
+        }
+    )
+    # Exactly three responses: a tool plan plus one generation and one retry.
+    # A retry loop would exhaust the iterator instead of passing.
+    responses = iter([json.dumps({"tool_requests": []}), leaked, leaked])
+    requests = []
+
+    async def complete(**kwargs):
+        requests.append(kwargs)
+        return next(responses)
+
+    item = make_item()
+    enricher = ContentEnricher(
+        SimpleNamespace(complete=complete),
+        PROFILES,
+        ["ru"],
+        tools=FakeTools(),
+    )
+
+    with caplog.at_level(logging.WARNING, logger="src.ai.enricher"):
+        asyncio.run(enricher._enrich_item(item))
+
+    assert len(requests) == 3
+    assert "persists after retry" in caplog.text
+    assert item.id in caplog.text
+    assert "ru" in caplog.text
+    # Degrade, do not drop: the best available artifact still ships.
+    assert item.processing.artifacts["ru"].title == "新架构发布"

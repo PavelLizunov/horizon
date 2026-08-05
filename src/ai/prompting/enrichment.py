@@ -153,7 +153,11 @@ def item_context(
         if include_content
         else ""
     )
-    comments = parts.comments[:2000] if include_content else ""
+    comments = (
+        parts.comments[: profile.definition.content.enrichment_comments_max_chars]
+        if include_content
+        else ""
+    )
     return f"""# Item
 
 Title: {item.title}
