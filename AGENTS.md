@@ -41,8 +41,11 @@ data/
   youtube-cookies*.txt # GITIGNORED session cookies — TOP-SECRET, never commit
 tests/               # pytest suite (offline; network code is mocked)
 scripts/             # dev/debug utilities (dev_check_*.py need a real config to run)
-deploy/              # launchd plist template for scheduled runs on macOS
-docs/                # long-form docs; video-source.md is the video module deep dive
+deploy/              # launchd templates + RUNBOOK.md for driving the deployed box
+docs/                # long-form docs; video-source.md is the video module deep dive,
+                     #   pipeline.md maps orchestrator.py's seven stages
+CHANGELOG.md         # what this fork added and WHY — read before "fixing" something
+                     #   that looks odd; several oddities are load-bearing
 ```
 
 ## 3. Setup & Commands
@@ -62,6 +65,28 @@ horizon --hours 24              # full pipeline for the last 24h
 horizon --source video          # single source (useful for debugging)
 horizon-video --hours 24        # video sidecar only (writes data/video-inbox.json)
 ```
+
+### What costs real money — read before running anything
+
+`horizon` is a paid LLM job. A measured reference run: **259 942 tokens
+(137 669 in / 122 273 out) for 11 delivered items**, ~23 600 tokens per item.
+Output dominates the bill — on the reference deployment's tariff it is 2.8× the
+input rate and ~71% of the cost of a run.
+
+| Command | Cost |
+|---------|------|
+| `pytest` | free, offline, no API keys |
+| `scripts/dev_check_*.py` | **free of LLM tokens** — they build the scraper without an AI config, so the vision rung stays off. They do hit YouTube. |
+| `horizon-video` | LLM tokens **only** for videos with no transcript (vision fallback). Usually near-zero. |
+| `horizon`, `horizon --source ...` | full price, every time |
+
+Never run `horizon` to "check that it works" — run the tests, then a
+`dev_check_*` script. If you genuinely need a paid run, ask the owner first.
+
+Cutting cost: the lever is **output volume**, not model choice — raise profile
+thresholds, lower `digest.max_items`, or reduce enrichment blocks. Note that
+`record_usage` accounts per *provider*, not per *stage*, so per-stage attribution
+is not available today; do not guess at it.
 
 Tests (must pass before any "done" claim; all offline, no API keys needed):
 
@@ -165,7 +190,10 @@ The short version:
 
 ## 8. Deployment
 
-Production runs on a macOS (Apple Silicon) box via launchd — see `deploy/README.md`.
+Production runs on a macOS (Apple Silicon) box via launchd — see `deploy/README.md`
+for setup and `deploy/RUNBOOK.md` for operating it remotely (shell traps, health
+checks, which commands cost money). The host address is deliberately absent from
+this repo; it lives in the operator's local SSH config (§5).
 Key facts for agents:
 
 - The runtime needs `node` on PATH (yt-dlp's JS challenge solver), plus `ffmpeg`
@@ -176,7 +204,25 @@ Key facts for agents:
 - Logs: `logs/horizon.log` (gitignored). A healthy run ends with
   "Horizon completed successfully!" and a token-usage summary.
 
-## 9. Working Norms
+## 9. Measurement Discipline
+
+Findings in this repo are expected to be measured, not asserted. Three traps
+that have already produced wrong conclusions here:
+
+- **RSS is the wrong instrument for MLX memory.** The allocator retains pages
+  after a free, so `ps -o rss=` gave 378 MB on one run and 1810 MB on the next
+  for identical work. Use `mx.get_active_memory()` / `mx.get_cache_memory()`.
+- **A single run is not a measurement.** Both of the above came from one run
+  each. Repeat before writing a number into the docs.
+- **Assumptions about third-party internals must be verified against the
+  installed version.** `_release_asr` was built around an `lru_cache` on
+  `mlx_whisper.load_model` that does not exist in 0.4.3, and it logged a false
+  WARNING on every healthy run until that was checked.
+
+When a claim cannot be verified on the current machine (mlx does not install on
+Windows, for example), say so rather than inferring it.
+
+## 10. Working Norms
 
 - Minimal diffs. No speculative abstractions; deletion beats addition.
 - Every behavior change ships with a test in `tests/` (offline, mocked network).
