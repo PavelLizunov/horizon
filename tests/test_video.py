@@ -715,8 +715,42 @@ def test_sidecar_mode_skips_preflight(monkeypatch, tmp_path, caplog) -> None:
     assert "preflight" not in caplog.text
 
 
-def test_release_asr_warns_when_the_cache_cannot_be_found(monkeypatch, caplog) -> None:
-    for name in ("mlx_whisper", "mlx_whisper.transcribe", "mlx_whisper.load_models"):
+def test_release_asr_is_quiet_when_mlx_whisper_has_no_model_cache(
+    monkeypatch, caplog
+) -> None:
+    # mlx-whisper 0.4.3 memoises nothing — verified on the deployment box.
+    # Warning about a cache that was never supposed to exist would be noise.
+    calls = _install_fake_mlx(monkeypatch, cache_home="none")
+    scraper = VideoScraper(VideoConfig(), None)
+    scraper._asr_loaded = True
+
+    with caplog.at_level(logging.WARNING, logger="src.scrapers.video"):
+        scraper._release_asr()
+
+    assert caplog.text == ""
+    # The buffer pool is what actually holds the memory, and it was released.
+    assert calls["clear_cache"] == 1
+
+
+def test_release_asr_warns_when_mlx_cannot_free_its_buffers(monkeypatch, caplog) -> None:
+    calls = _install_fake_mlx(monkeypatch)
+    mlx_core = sys.modules["mlx.core"]
+    del mlx_core.clear_cache
+    scraper = VideoScraper(VideoConfig(), None)
+    scraper._asr_loaded = True
+
+    with caplog.at_level(logging.WARNING, logger="src.scrapers.video"):
+        scraper._release_asr()
+
+    # Silence here would mean whisper's working set leaking with nothing in
+    # the log to explain it.
+    assert "clear_cache" in caplog.text
+    assert calls["clear_cache"] == 0
+
+
+def test_release_asr_survives_mlx_being_absent(monkeypatch, caplog) -> None:
+    for name in ("mlx_whisper", "mlx_whisper.transcribe", "mlx_whisper.load_models",
+                 "mlx", "mlx.core"):
         monkeypatch.delitem(sys.modules, name, raising=False)
     scraper = VideoScraper(VideoConfig(), None)
     scraper._asr_loaded = True
@@ -724,8 +758,7 @@ def test_release_asr_warns_when_the_cache_cannot_be_found(monkeypatch, caplog) -
     with caplog.at_level(logging.WARNING, logger="src.scrapers.video"):
         scraper._release_asr()  # must not raise off Apple Silicon
 
-    # Silence here would mean 1.6 GB leaking with nothing in the log to explain it.
-    assert "mlx-whisper" in caplog.text
+    assert caplog.text == ""
     assert scraper._asr_loaded is False
 
 

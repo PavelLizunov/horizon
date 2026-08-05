@@ -131,10 +131,11 @@ The short version:
 3. **Metadata filters fail open.** `_skip_reason()` drops Shorts and premieres
    using `duration` / `live_status`, but *missing* metadata never skips. A
    yt-dlp change that drops a field must not silently empty the digest.
-4. **ASR weights are released in `fetch()`'s `finally`.** `_release_asr()` clears
-   mlx-whisper's `lru_cache` and MLX's buffer pool (~1.6 GB for large-v3-turbo),
-   which otherwise stay resident through analysis and enrichment. The model
-   intentionally stays cached *between videos inside one run*.
+4. **ASR memory is released in `fetch()`'s `finally`.** `_release_asr()` drops
+   MLX's Metal buffer pool, which otherwise stays resident through analysis and
+   enrichment (measured on an M4: 1540 MB peak, 378 MB after). mlx-whisper
+   itself memoises nothing on 0.4.3, so the model-cache clearing in that method
+   is version insurance, and finding no cache is silent by design.
 5. **Tests are offline, including the ASR path.** `VideoConfig.asr` defaults to
    `"local"`, so any test that leaves a video without subtitles will call the
    real yt-dlp audio downloader unless it sets `asr="off"` or mocks

@@ -476,20 +476,23 @@ class VideoScraper(BaseScraper):
             logger.info("Video run: %s", stats.summary())
 
     def _release_asr(self) -> None:
-        """Free the whisper weights once a run is done.
+        """Return the memory whisper used once a run is done.
 
-        mlx-whisper memoizes the loaded model in an lru_cache and MLX keeps its
-        own buffer pool, so ~1.6 GB (large-v3-turbo) stays resident for the rest
-        of the pipeline — through analysis, enrichment and digest — unless both
-        are dropped explicitly.
+        MLX keeps a Metal buffer pool that outlives the last transcribe() call,
+        so without this a run holds whisper's working set through analysis,
+        enrichment and digest generation. Measured on an M4 with
+        large-v3-turbo: 1540 MB peak, 378 MB after this runs.
+
+        mlx-whisper 0.4.3 reloads the model on every call and memoises nothing,
+        so there is usually no model cache to drop; some releases have carried
+        an lru_cache on load_model, which is cleared here when present.
         """
         if not self._asr_loaded:
             return
         self._asr_loaded = False
         # The lru_cache has lived in both mlx_whisper.transcribe and
-        # mlx_whisper.load_models across releases; clear whichever exposes it
-        # rather than pinning one layout.
-        cleared = 0
+        # mlx_whisper.load_models across releases, and in neither on 0.4.3.
+        # Clear whichever exposes it; its absence is normal, not a problem.
         for module_name in ("mlx_whisper.transcribe", "mlx_whisper.load_models"):
             try:
                 module = importlib.import_module(module_name)
@@ -501,27 +504,28 @@ class VideoScraper(BaseScraper):
             if cache_clear:
                 try:
                     cache_clear()
-                    cleared += 1
                 except Exception as e:  # pragma: no cover - mlx internals
                     logger.debug("mlx-whisper cache_clear failed: %s", e)
-        if not cleared:
-            logger.warning(
-                "Could not drop the mlx-whisper model cache — the whisper weights "
-                "(~1.6 GB) stay resident for the rest of the run; mlx-whisper may "
-                "have moved its load_model cache"
-            )
         gc.collect()
         try:
             import mlx.core as mx
-
-            # mx.clear_cache() on MLX >= 0.21, mx.metal.clear_cache() before it.
-            clear = getattr(mx, "clear_cache", None) or getattr(
-                getattr(mx, "metal", None), "clear_cache", None
+        except ImportError:  # pragma: no cover - non-Apple-Silicon hosts
+            return
+        # mx.clear_cache() on MLX >= 0.21, mx.metal.clear_cache() before it.
+        # This is the call that actually returns the memory.
+        clear = getattr(mx, "clear_cache", None) or getattr(
+            getattr(mx, "metal", None), "clear_cache", None
+        )
+        if clear is None:
+            logger.warning(
+                "MLX exposes no clear_cache — whisper's buffer pool stays held for "
+                "the rest of the run; check the installed mlx version"
             )
-            if clear:
-                clear()
-        except Exception as e:  # pragma: no cover - depends on mlx internals
-            logger.debug("Could not clear the MLX buffer cache: %s", e)
+            return
+        try:
+            clear()
+        except Exception as e:  # pragma: no cover - mlx internals
+            logger.warning("Could not clear the MLX buffer cache: %s", e)
 
     async def _fetch_channel(
         self, channel: VideoChannelConfig, video_cfg: VideoConfig, since: datetime
