@@ -19,7 +19,7 @@ from rich.progress import (
 from tenacity import retry, stop_after_attempt, wait_exponential
 
 from .client import AIClient
-from .localization import normalize_language
+from .localization import has_cjk_leak, normalize_language
 from .prompting.enrichment import (
     MAX_TOOL_REQUESTS,
     artifact_prompt,
@@ -30,6 +30,7 @@ from .prompting.enrichment import (
 )
 from .utils import parse_json_response
 from ..models import ArtifactSource, ContentArtifact, ContentBlock, ContentItem
+
 from ..processing.profiles import LoadedProfile, ProfileBlock, ProfileRegistry
 from ..processing.tools import ToolRegistry, ToolResult
 
@@ -224,7 +225,8 @@ class ContentEnricher:
         sources = self._sources_from_tool_results(tool_results)
 
         artifacts = {}
-        for language in self.languages:
+
+        async def build(language: str):
             generated = await self._generate_artifact(
                 item, profile, language, tool_results
             )
@@ -234,6 +236,21 @@ class ContentEnricher:
             for block in generated.blocks:
                 block.title = normalize_language(block.title, language)
                 block.content = normalize_language(block.content, language)
+            return generated
+
+        for language in self.languages:
+            generated = await build(language)
+            if has_cjk_leak(generated.title, language) or any(
+                has_cjk_leak(block.title, language)
+                or has_cjk_leak(block.content, language)
+                for block in generated.blocks
+            ):
+                logger.warning(
+                    "Language leak in %s [%s]; regenerating artifact once",
+                    item.id,
+                    language,
+                )
+                generated = await build(language)
             referenced = {
                 source_id
                 for block in generated.blocks
