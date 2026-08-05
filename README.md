@@ -73,9 +73,16 @@ Good news is scattered; bad news is endless. Horizon gives you a personal first 
 
 But Horizon is not just another summarizer. AI is great at reducing noise, but news still needs human taste: the sources you trust, the comments that change how you read a story, and the hidden gems only people can share. Horizon keeps that human layer in the loop with customizable sources, processing profiles, models, languages, delivery channels, comment summaries, and a community source hub.
 
+> **About this fork.** This repository builds on upstream
+> [Thysrael/Horizon](https://github.com/Thysrael/Horizon) and adds a first-class
+> **YouTube video source**: channel videos are ingested as transcripts (subtitles →
+> local Whisper ASR → vision fallback) and scored alongside every other source.
+> See [docs/video-source.md](docs/video-source.md) and [AGENTS.md](AGENTS.md).
+
 ## Features
 
 - **📡 Watch Your Own Sources** — Track Hacker News, RSS, Reddit, Telegram, Twitter/X, GitHub releases or user activity, and OpenBB financial news watchlists in one pipeline
+- **📺 Digest YouTube Channels** — Turn new videos from curated channels into scored, enriched text via subtitles, on-device ASR, or AI visual summaries
 - **🤖 Turn Noise Into a Reading List** — Analyze each item with a stable processing profile and apply your own filter threshold
 - **🔗 Merge Repeated Stories** — Deduplicate the same story across platforms before it reaches your briefing
 - **🔍 Understand the Background** — Add web-researched context for unfamiliar concepts, companies, projects, and technical terms
@@ -360,6 +367,7 @@ Horizon works great as a **GitHub Actions** cron job. See [`.github/workflows/da
 | **Twitter / X** | Tweets from specific users | Yes (top N replies) |
 | **GitHub** | User events & repo releases | — |
 | **OpenBB** | Financial company news by watchlist/provider | — |
+| **YouTube** | New videos from curated channels as transcripts (subtitles / ASR / vision fallback) | — |
 
 ## Where Your Briefing Goes
 
@@ -390,7 +398,10 @@ Horizon is an open-source project maintained in spare time. If you'd like to sup
 | [Processing Profiles](docs/profiles.md) | Profile routing, prompts, runtime filtering preferences, enrichment blocks, and tools |
 | [Scoring](docs/scoring.md) | How Horizon evaluates and ranks news items |
 | [Scrapers](docs/scrapers.md) | Source scraper details and extension notes |
+| [Video Source](docs/video-source.md) | YouTube channel ingestion: transcripts, ASR, vision fallback, anti-bot notes |
 | [Extractors](docs/extractors.md) | Full article extraction for RSS sources |
+| [Deployment](deploy/README.md) | Scheduled runs via launchd/cron |
+| [Agent Guide](AGENTS.md) | Working norms and safety rules for AI agents (and humans) |
 | [MCP Tools](src/mcp/README.md) | Tool reference for MCP-compatible clients |
 
 ## Project Status

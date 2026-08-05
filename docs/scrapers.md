@@ -230,3 +230,58 @@ Flow:
 **Authentication**: Set `APIFY_TOKEN` in your `.env`. Get a token at [console.apify.com](https://console.apify.com/account/integrations).
 
 **Extracted data**: tweet text, URL, author, publish time, likes, retweets, replies, views, category, and (optionally) reply-thread text appended under `--- Top Comments ---`.
+
+## Video (YouTube)
+
+**File**: `src/scrapers/video.py`
+
+Ingests videos from curated YouTube channels as text. New videos are discovered via
+the channel RSS feed (`https://www.youtube.com/feeds/videos.xml?channel_id=...`), so
+discovery itself needs no authentication. Content is then extracted with `yt-dlp`
+using a fallback ladder:
+
+1. **Subtitles** — downloaded as VTT without downloading the video; YouTube
+   auto-caption rolling duplicates are collapsed into a clean timestamped transcript
+2. **Local ASR** (`asr: "local"`) — audio-only download transcribed with mlx-whisper
+   (Apple Silicon)
+3. **Vision fallback** (`vision_fallback: true`) — storyboard frame grids are sent
+   to the configured vision model, which produces a visual summary
+
+The first rung that yields text wins; the result plus the full video description
+becomes the item content.
+
+**Config** (`sources.video`):
+
+```json
+{
+  "enabled": true,
+  "channels": [
+    {
+      "name": "Fireship",
+      "channel": "@Fireship",
+      "enabled": true,
+      "max_videos": 3,
+      "category": "dev",
+      "profile": "video"
+    }
+  ],
+  "subtitle_langs": ["en.*", "ru.*"],
+  "transcript_max_chars": 12000,
+  "cookies_file": "data/youtube-cookies.txt",
+  "audio_cookies_file": null,
+  "vision_fallback": true,
+  "asr": "local"
+}
+```
+
+- `channel` — `UC...` channel id (preferred: skips the yt-dlp channel lookup),
+  `@handle`, or channel URL
+- `max_videos` — per-channel, per-run cap
+- `cookies_file` / `audio_cookies_file` — Netscape cookie exports to bypass the
+  "Sign in to confirm you're not a bot" gate on non-residential IPs
+- `asr` — `"local"` (mlx-whisper) or `"off"`
+
+**Extracted data**: title, URL, author (channel name), publish time, transcript or
+visual summary, full description, and `has_transcript` metadata.
+
+See [Video Source](video-source.md) for the anti-bot details and debugging guide.

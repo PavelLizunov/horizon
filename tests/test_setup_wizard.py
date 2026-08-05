@@ -1,9 +1,13 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 
 from src.models import AIConfig, AIProvider, Config
 from src.setup import wizard
+
+_BUNDLED_PRESETS = str(Path("data") / "presets.json")
 
 
 class _StopWizard(Exception):
@@ -230,7 +234,7 @@ def test_data_dir_and_config_default_to_data_directory(monkeypatch):
         wizard.main()
 
     assert storage_calls == [{"data_dir": "data", "config_path": None}]
-    assert load_presets_calls == [{"presets_path": "data/presets.json", "prefer_api": True}]
+    assert load_presets_calls == [{"presets_path": _BUNDLED_PRESETS, "prefer_api": True}]
 
 
 def test_missing_custom_presets_falls_back_to_bundled_file(monkeypatch, tmp_path):
@@ -250,7 +254,7 @@ def test_missing_custom_presets_falls_back_to_bundled_file(monkeypatch, tmp_path
         wizard.main()
 
     assert load_presets_calls == [
-        {"presets_path": "data/presets.json", "prefer_api": True}
+        {"presets_path": _BUNDLED_PRESETS, "prefer_api": True}
     ]
 
 
