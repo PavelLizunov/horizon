@@ -38,6 +38,9 @@ truncated to `transcript_max_chars`. Items route to the profile set per channel
 | Field | Default | Meaning |
 |-------|---------|---------|
 | `enabled` | `false` | Master switch |
+| `mode` | `"inline"` | `"inline"` = extract during the digest run; `"sidecar"` = read items produced by a separate `horizon-video` process (see below) |
+| `inbox_file` | `data/video-inbox.json` | Where the sidecar writes and the pipeline reads (sidecar mode only) |
+| `inbox_max_age_hours` | `48` | Warn when the inbox has not been refreshed in this long. `0` disables the check |
 | `channels` | `[]` | List of channel entries (see below) |
 | `subtitle_langs` | `["en.*", "ru.*"]` | yt-dlp subtitle language patterns |
 | `transcript_max_chars` | `12000` | Content cap per item |
@@ -48,6 +51,9 @@ truncated to `transcript_max_chars`. Items route to the profile set per channel
 | `vision_max_frames` | `8` | Max storyboard grids sent to the vision model |
 | `asr` | `"local"` | `"local"` = mlx-whisper on Apple Silicon; `"off"` = skip ASR |
 | `asr_model` | `mlx-community/whisper-large-v3-turbo` | HuggingFace repo for mlx-whisper |
+| `asr_max_duration_sec` | `5400` | Skip ASR above this length (a 3-hour stream VOD costs more wall clock than the rest of the run). `0` disables the guard |
+| `min_duration_sec` | `120` | Skip videos shorter than this — channel feeds carry Shorts, which cost a full LLM analysis for no substance. `0` disables the filter |
+| `min_transcript_rate` | `0.5` | Health floor: below this share of videos yielding text, the run logs a WARNING instead of degrading silently. `0` disables the check |
 
 Channel entry:
 
@@ -119,12 +125,146 @@ do not remove them while "cleaning up".
 6. **Vision models cannot fetch YouTube URLs.** DashScope-family backends fail to
    download remote videos/images from YouTube. Frames are sent as base64 data URIs.
 
+## Inline vs Sidecar
+
+`mode: "inline"` (the default) runs the whole ladder inside the digest run. It
+is simpler, needs one scheduled job, and is the right choice while things work.
+
+`mode: "sidecar"` splits the source in two:
+
+```
+horizon-video   →  data/video-inbox.json  →  horizon (digest run)
+ yt-dlp, cookies,      atomic JSON,            just reads the file
+ whisper, node         schema-versioned        no node/ffmpeg/mlx needed
+```
+
+Use it when the video half starts costing you the digest:
+
+- **Blast radius.** Expired cookies, a YouTube change, or a wedged yt-dlp can
+  no longer slow down or destabilise the digest run — worst case the digest has
+  no video section that day.
+- **Wall clock.** A long ASR pass runs on its own schedule instead of holding
+  the pipeline's `asyncio.gather`.
+- **Placement.** The heavy job can live on the Apple Silicon box (ASR, cookies,
+  residential IP) while the digest runs anywhere.
+- **Retries.** Re-running `horizon-video` is cheap and touches no LLM tokens.
+
+The cost is a second scheduled job and a file that can go stale — which is why
+the reader warns about staleness rather than trusting it silently.
+
+```bash
+horizon-video --hours 24          # writes the inbox; run this before the digest
+horizon --hours 24                # reads it, because mode is "sidecar"
+```
+
+`horizon-video` always scrapes for real: it forces `mode: "inline"` internally,
+so pointing it at a sidecar config cannot make it read the file it is meant to
+produce. Deploy both jobs with `deploy/horizon-video.launchd.example.plist` and
+`deploy/horizon.launchd.example.plist` — schedule the video job first.
+
+### What the reader does when the inbox is wrong
+
+Every case degrades to "no video items this run" and logs a WARNING; none of
+them raise:
+
+| Inbox state | Behaviour |
+|-------------|-----------|
+| missing | warn (`does not exist`), no items — the sidecar job is probably not running |
+| unparsable JSON | warn (`unreadable`), no items |
+| `version` mismatch | warn, no items — re-run `horizon-video` after upgrading rather than guessing at an old shape |
+| one malformed item | drop that item, keep the rest, warn with the count |
+| older than `inbox_max_age_hours` | warn (`stopped running`) **and still use it** — stale beats empty, and `seen.json` already drops anything a previous run consumed |
+
+Items older than the run's time window are filtered on read, so a large inbox
+never re-floods the digest. The sidecar's own `VideoRunStats` travel inside the
+file, so the degradation warning described below still fires in the digest log
+even though the work happened in another process.
+
+## Observability — the module degrades, it does not fail
+
+Every failure path here is caught and logged: a dead cookie jar, a missing
+`node`, a YouTube change. The pipeline keeps running and still emits items —
+just with descriptions instead of transcripts. In the digest that is
+indistinguishable from a quiet week, so the module reports its own health.
+
+**Preflight.** Once per run, before any channel is touched, the scraper checks
+`node` and `ffmpeg` on PATH, that the configured cookie files exist, that
+`mlx_whisper` is importable when `asr: "local"`, and that an AI config reached
+the scraper when `vision_fallback` is on. Each problem is one WARNING line
+prefixed `Video preflight:`.
+
+**Run summary.** Every run ends with a breakdown of which rung produced the text:
+
+```
+Video run: 9 videos: 7 subtitles, 1 ASR, 0 vision, 0 description-only, 1 skipped, 0 failed
+```
+
+The line is promoted to a WARNING starting with `Video run degraded` on any of
+three triggers:
+
+1. **Any bot-gated call.** YouTube answered "Sign in to confirm you're not a
+   bot", which has one cause and one fix: the cookies expired. Counted as
+   `bot_gated` and reported regardless of how many videos were seen — channel
+   resolution itself can be gated, leaving zero videos to count.
+2. **Nothing yielded text**, with at least one graded video. Total extraction
+   failure is conclusive even on a sample of one.
+3. **The rate fell below `min_transcript_rate`** with at least 3 graded videos.
+
+Trigger 3 alone is not enough in practice: a curated channel set often produces
+only one or two videos a day, which would keep a rate check permanently silent
+while the source quietly returns descriptions. Triggers 1 and 2 exist because
+of exactly that, observed in production.
+
+Note what is *not* checked: preflight verifies the cookie file **exists**, not
+that YouTube still accepts it. A dead jar looks perfectly healthy on disk —
+trigger 1 is the only thing that catches it.
+
+The counters live on `scraper.last_run_stats` (`VideoRunStats`) for scripts and
+tests. Per item, `metadata["content_source"]` records the rung that won —
+`subtitles`, `asr`, `vision`, or `description` — which is the only way to tell a
+real transcript from a description after the fact.
+
+```bash
+grep 'Video preflight:' logs/horizon.log
+grep 'Video run'        logs/horizon.log
+uv run python scripts/dev_check_video_fetch.py    # same numbers, on demand
+```
+
+## What Gets Skipped
+
+Channel RSS feeds are not just long-form uploads. Two classes are dropped before
+they reach the LLM (counted as `skipped`, not `failed`):
+
+- **Shorts** — anything under `min_duration_sec`. They cost a full analysis pass
+  and almost never carry substance.
+- **Premieres and running livestreams** — `live_status` of `is_upcoming` or
+  `is_live`. There is nothing to transcribe yet. Finished VODs (`was_live`) are
+  ordinary videos and are kept.
+
+Both checks read `duration` / `live_status` from the yt-dlp metadata that the
+subtitle call already returns, so neither costs an extra request. Both **fail
+open**: if the field is missing, the video is kept. A yt-dlp change that drops a
+field must not silently empty the digest.
+
 ## ASR Notes
 
 - `mlx-whisper` runs on Apple Silicon only; on other platforms set `asr: "off"`
   (cloud ASR is not wired up: it needs a provider endpoint with an ASR model).
-- Model downloads on first use (~2 GB cache). Language is auto-detected.
+  Install it through the extra — `uv sync --extra asr` — never by hand: a later
+  plain `uv sync` prunes packages missing from the lockfile and would turn ASR
+  off with no error.
+- Model downloads on first use (~2 GB cache under `HF_HOME`, default
+  `~/.cache/huggingface`). Language is auto-detected.
 - A 20-minute video transcribes in roughly a minute on an M4.
+- Videos longer than `asr_max_duration_sec` skip ASR and fall through to the
+  vision rung or description.
+- **Memory.** mlx-whisper memoizes the loaded model in an `lru_cache` and MLX
+  keeps its own buffer pool, so `large-v3-turbo` (~1.6 GB) would stay resident
+  through analysis, enrichment and digest generation. `fetch()` drops both in a
+  `finally` block (`_release_asr`), so the weights live only for the video
+  stage. The model deliberately stays cached *between videos within one run* —
+  reloading per video would cost seconds each. If mlx-whisper ever moves that
+  cache, `_release_asr` logs a WARNING rather than leaking quietly.
 
 ## Debugging Scripts
 
@@ -141,8 +281,16 @@ Typical failure triage:
 
 | Symptom | Likely cause |
 |---------|--------------|
-| "Sign in to confirm you're not a bot" | expired/absent cookies, or datacenter IP without cookies |
+| `Video run degraded` in the log | start here — the rest of this table narrows it down |
+| `N bot-gated` / `re-export the YouTube cookies` | the jar expired — YouTube rejects it even though the file exists. Confirm and fix per `deploy/RUNBOOK.md` |
+| "Sign in to confirm you're not a bot" | same thing, seen raw from yt-dlp |
 | audio download produces no files | SABR experiment — try `audio_cookies_file` from another account |
 | `Channel resolve failed` | handle changed / yt-dlp outdated — pin `UC...` id instead |
 | subtitles fine but content looks like intro only | missing `content` block in the profile (§Scoring) |
-| `mlx-whisper not installed` | expected off Apple Silicon — set `asr: "off"` |
+| `Video preflight: node is not on PATH` | launchd `PATH` misses node — scheduled runs ignore your shell profile |
+| `Video preflight: ffmpeg is not on PATH` | Homebrew installs to `/opt/homebrew/bin`; add it to the plist `PATH` |
+| `Video preflight: mlx-whisper is not installed` | expected off Apple Silicon (set `asr: "off"`); on a Mac, a plain `uv sync` pruned it — re-run `uv sync --extra asr` |
+| `Video preflight: cookies_file points at a missing file` | path is relative to the working directory; launchd sets it via `WorkingDirectory` |
+| every item is `description-only` | subtitles blocked *and* ASR unavailable — check the preflight lines first |
+| fewer items than expected, `skipped` is high | Shorts/premieres filtered by `min_duration_sec` — lower it if that is wrong for the channel |
+| whisper keeps ~1.6 GB after the video stage | `_release_asr` logged a WARNING — mlx-whisper moved its `load_model` cache |

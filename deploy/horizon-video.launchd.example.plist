@@ -1,24 +1,27 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <!--
-  macOS launchd template: run Horizon once a day.
+  macOS launchd template: the video sidecar.
 
-  Before installing, replace every YOURUSER with the macOS account name that
-  owns the checkout (e.g. sed -i '' 's/YOURUSER/yourname/g' this-file), adjust
-  Hour/Minute to your off-peak token window if you pay per-token, then:
+  Only needed when sources.video.mode is "sidecar". This job does the fragile,
+  slow half (yt-dlp, cookies, whisper) and writes data/video-inbox.json; the
+  digest job then just reads that file. Schedule it comfortably BEFORE the
+  digest run so a slow ASR pass never delays the digest.
 
-    cp this-file ~/Library/LaunchAgents/com.horizon.digest.plist
-    launchctl load ~/Library/LaunchAgents/com.horizon.digest.plist
+  Replace every YOURUSER, then:
+
+    cp this-file ~/Library/LaunchAgents/com.horizon.video.plist
+    launchctl load ~/Library/LaunchAgents/com.horizon.video.plist
 
   See deploy/README.md for the full walkthrough.
 -->
 <plist version="1.0">
 <dict>
   <key>Label</key>
-  <string>com.horizon.digest</string>
+  <string>com.horizon.video</string>
   <key>ProgramArguments</key>
   <array>
-    <string>/Users/YOURUSER/horizon/.venv/bin/horizon</string>
+    <string>/Users/YOURUSER/horizon/.venv/bin/horizon-video</string>
     <string>--hours</string>
     <string>24</string>
   </array>
@@ -26,25 +29,23 @@
   <string>/Users/YOURUSER/horizon</string>
   <key>EnvironmentVariables</key>
   <dict>
+    <!-- node is required here (yt-dlp JS challenge); ffmpeg for local ASR. -->
     <key>PATH</key>
     <string>/Users/YOURUSER/bin:/Users/YOURUSER/node/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
-    <!-- Pin the whisper model cache (~2 GB). Without this it follows
-         XDG_CACHE_HOME, so adding that variable later would silently move the
-         cache and re-download the model on the next scheduled run. -->
     <key>HF_HOME</key>
     <string>/Users/YOURUSER/.cache/huggingface</string>
   </dict>
   <key>StartCalendarInterval</key>
   <dict>
     <key>Hour</key>
-    <integer>17</integer>
+    <integer>16</integer>
     <key>Minute</key>
     <integer>0</integer>
   </dict>
   <key>StandardOutPath</key>
-  <string>/Users/YOURUSER/horizon/logs/horizon.log</string>
+  <string>/Users/YOURUSER/horizon/logs/horizon-video.log</string>
   <key>StandardErrorPath</key>
-  <string>/Users/YOURUSER/horizon/logs/horizon.log</string>
+  <string>/Users/YOURUSER/horizon/logs/horizon-video.log</string>
   <key>RunAtLoad</key>
   <false/>
 </dict>

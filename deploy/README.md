@@ -21,13 +21,28 @@ bot-gate pressure — you will need the `cookies_file` setup described in
 
    ```bash
    git clone <this-repo> ~/horizon && cd ~/horizon
-   uv venv && uv pip install -e .        # adds .venv/bin/horizon
-   # local ASR (optional, Apple Silicon only):
-   uv pip install mlx-whisper
+   uv venv && uv sync                    # adds .venv/bin/horizon
+   uv sync --extra asr                   # local ASR, Apple Silicon only
    ```
 
-2. Runtime prerequisites on `PATH`: `node` (yt-dlp JS challenge solver). `ffmpeg`
-   is not required for the default flow.
+   Use the `asr` extra rather than `uv pip install mlx-whisper`: a later plain
+   `uv sync` prunes anything not in the lockfile, which would remove a
+   hand-installed mlx-whisper and turn ASR off without any error — the scraper
+   just starts logging "mlx-whisper is not installed" and falls back.
+
+   The extra is marked `darwin`/`arm64` only, so it resolves to nothing on Linux
+   or Intel Macs and is safe to leave in place. It pulls a native scientific
+   stack (mlx, numba, scipy), plus ~2 GB of model cache on first transcription.
+
+2. Runtime prerequisites on `PATH`:
+
+   | Binary | Needed for | Symptom when missing |
+   |--------|-----------|----------------------|
+   | `node` | yt-dlp's JS challenge solver | audio formats stay hidden → ASR never gets input |
+   | `ffmpeg` | mlx-whisper audio decoding (`asr: "local"` only) | every ASR attempt fails |
+
+   `horizon --source video` logs a `Video preflight:` warning for each of these
+   at the start of a run, so check the log before hunting deeper.
 
 3. Create `data/config.json` and `.env` from the examples. If you use YouTube
    cookies, place the exports under `data/` and `chmod 600` them.
@@ -55,6 +70,23 @@ bot-gate pressure — you will need the `cookies_file` setup described in
    scheduled runs use only the plist's `EnvironmentVariables`, so make sure `PATH`
    there covers `node` and any other binaries you rely on.
 
+## Splitting the video job off (optional)
+
+With `sources.video.mode: "sidecar"` the YouTube work moves into its own
+process and its own schedule, so yt-dlp breakage or a slow ASR pass cannot
+delay or destabilise the digest run. Install the second job *before* the digest
+job's slot:
+
+```bash
+sed 's/YOURUSER/yourusername/g' deploy/horizon-video.launchd.example.plist \
+  > ~/Library/LaunchAgents/com.horizon.video.plist
+launchctl load ~/Library/LaunchAgents/com.horizon.video.plist
+```
+
+The template runs at 16:00, an hour ahead of the 17:00 digest. Only this job
+needs `node`, `ffmpeg` and `mlx-whisper` — the digest host just reads
+`data/video-inbox.json`. Details and failure behaviour: `docs/video-source.md`.
+
 ## Linux via cron (sketch)
 
 ```cron
@@ -69,7 +101,60 @@ With `video.asr` set to `"off"` unless you wire up a different ASR backend.
 - **Output**: `data/summaries/YYYY-MM-DD-*.md` (gitignored state).
 - **Cookies expiry**: when subtitle fetches start failing, re-export
   `data/youtube-cookies*.txt` (see `docs/video-source.md`).
-- **Updates**: `git pull && uv pip install -e .` — no service restart needed;
-  the next scheduled run picks up changes.
+- **Updates**: `git pull && uv sync` — no service restart needed; the next
+  scheduled run picks up changes. Re-run with `--extra asr` if you use local ASR.
 - **Secrets on the host**: `.env` and cookie files should be readable only by the
   service account (`chmod 600`). Never commit them.
+
+### Watching for silent breakage
+
+The video source degrades instead of failing: expired cookies or a YouTube
+change produce items with descriptions but no transcripts, which looks like a
+quiet week rather than an outage. Two log lines make that visible:
+
+```bash
+grep 'Video preflight:'   ~/horizon/logs/horizon.log   # missing node/ffmpeg/cookies/mlx
+grep 'Video run'          ~/horizon/logs/horizon.log   # per-run extraction breakdown
+```
+
+A healthy run logs `Video run: 9 videos: 7 subtitles, 1 ASR, 0 vision, 0
+description-only, 1 skipped, 0 failed`. When the share of videos yielding text
+falls below `video.min_transcript_rate` (default 0.5, needs ≥3 graded videos),
+the line is promoted to a WARNING containing `Video run degraded` — that is the
+alert to act on. Set up whatever notifier you like on that string; the
+[weekly check](#weekly-check) below is the manual version.
+
+### Weekly check
+
+```bash
+cd ~/horizon
+uv run python scripts/dev_check_video_fetch.py   # real fetch + extraction summary
+uv sync --upgrade-package yt-dlp                 # YouTube changes often; yt-dlp tracks it
+```
+
+### The mac stays awake, or it misses days
+
+`StartCalendarInterval` does **not** replay missed runs: if the machine is
+asleep at the scheduled time, that day is simply skipped. For an always-on Mac
+mini the simplest fix is to stop it sleeping:
+
+```bash
+sudo pmset -a sleep 0 disksleep 0
+```
+
+Or, to let it sleep and still wake for the job:
+
+```bash
+sudo pmset repeat wakeorpoweron MTWRFSU 16:55:00
+```
+
+### Log rotation
+
+`logs/horizon.log` is append-only and never rotated. Add a `newsyslog` rule:
+
+```bash
+echo '/Users/YOURUSER/horizon/logs/horizon.log 644 7 5000 * J' \
+  | sudo tee /etc/newsyslog.d/horizon.conf
+```
+
+(7 generations, rotate past ~5 MB, bzip2-compressed.)

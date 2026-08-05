@@ -31,7 +31,8 @@ src/
   services/          # webhook delivery
   mcp/               # MCP server exposing pipeline stages as tools
   models.py          # ALL pydantic config models live here (Config, SourcesConfig, ...)
-  orchestrator.py    # wires scrapers together; fetch_all_sources() is the entry point
+  orchestrator.py    # wires every stage together — read docs/pipeline.md first,
+                     #   it maps the 7 stages to methods so you can skip the file
 profiles/            # per-profile prompt/config dirs (tech-news, video, ...)
   video/             # profile used by the YouTube source
 data/
@@ -59,6 +60,7 @@ Run:
 ```bash
 horizon --hours 24              # full pipeline for the last 24h
 horizon --source video          # single source (useful for debugging)
+horizon-video --hours 24        # video sidecar only (writes data/video-inbox.json)
 ```
 
 Tests (must pass before any "done" claim; all offline, no API keys needed):
@@ -114,6 +116,39 @@ The short version:
   debugging time.
 - `yt-dlp` is imported lazily inside methods, so tests run without it touching
   the network; keep it that way.
+
+### Invariants — do not break these without reading why they exist
+
+1. **This module degrades, it never raises.** Every external call is wrapped;
+   failure means fewer transcripts, not a dead run. That is deliberate *and*
+   dangerous, which is why (2) exists.
+2. **Degradation must stay visible.** `_preflight()` reports missing
+   runtime deps once per run; `_log_run_summary()` prints the extraction
+   breakdown and promotes it to a WARNING (`Video run degraded`) when the share
+   of videos yielding text falls under `video.min_transcript_rate`. If you add a
+   new failure path, count it in `VideoRunStats` — an uncounted failure is an
+   invisible one.
+3. **Metadata filters fail open.** `_skip_reason()` drops Shorts and premieres
+   using `duration` / `live_status`, but *missing* metadata never skips. A
+   yt-dlp change that drops a field must not silently empty the digest.
+4. **ASR weights are released in `fetch()`'s `finally`.** `_release_asr()` clears
+   mlx-whisper's `lru_cache` and MLX's buffer pool (~1.6 GB for large-v3-turbo),
+   which otherwise stay resident through analysis and enrichment. The model
+   intentionally stays cached *between videos inside one run*.
+5. **Tests are offline, including the ASR path.** `VideoConfig.asr` defaults to
+   `"local"`, so any test that leaves a video without subtitles will call the
+   real yt-dlp audio downloader unless it sets `asr="off"` or mocks
+   `_asr_local`. The helper in `tests/test_video.py` defaults to `"off"` for
+   this reason — keep new tests on that path.
+6. **`mlx-whisper` lives in the `asr` extra, never in the base deps.** It is
+   Apple-Silicon-only, and a plain `uv sync` prunes anything not in the
+   lockfile — a hand-installed copy disappears without an error.
+7. **Two modes, one module.** `sources.video.mode` is `"inline"` (extract during
+   the digest run) or `"sidecar"` (read `inbox_file`, produced by the separate
+   `horizon-video` CLI in `src/services/video_cli.py`). The sidecar forces
+   itself back to `"inline"` internally — never remove that, or it will read the
+   file it is supposed to write. Bump `INBOX_VERSION` in `video.py` whenever the
+   on-disk shape changes; the reader ignores a mismatch instead of guessing.
 
 ## 7. AI Backend Notes
 
