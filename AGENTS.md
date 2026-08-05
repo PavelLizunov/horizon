@@ -132,10 +132,11 @@ The short version:
    using `duration` / `live_status`, but *missing* metadata never skips. A
    yt-dlp change that drops a field must not silently empty the digest.
 4. **ASR memory is released in `fetch()`'s `finally`.** `_release_asr()` drops
-   MLX's Metal buffer pool, which otherwise stays resident through analysis and
-   enrichment (measured on an M4: 1540 MB peak, 378 MB after). mlx-whisper
-   itself memoises nothing on 0.4.3, so the model-cache clearing in that method
-   is version insurance, and finding no cache is silent by design.
+   MLX's Metal buffer pool — measured on an M4, ~2.5 GB back to 0, reproducibly.
+   It cannot free the ~1.5 GB of model weights: `mlx_whisper.transcribe()`
+   retains the model it builds and exposes no handle on it. The weights do not
+   accumulate across videos. Sidecar mode is the complete fix, because the
+   process exits. Do not "improve" this by reimplementing `transcribe()`.
 5. **Tests are offline, including the ASR path.** `VideoConfig.asr` defaults to
    `"local"`, so any test that leaves a video without subtitles will call the
    real yt-dlp audio downloader unless it sets `asr="off"` or mocks
