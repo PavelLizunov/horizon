@@ -9,7 +9,6 @@ You can contribute in more than one way:
 - Report bugs or suggest features by opening an issue
 - Improve code, documentation, or examples through pull requests
 - Contribute reusable processing profiles for new content domains
-- Share valuable news sources with the community through the website
 
 ## Code Contributions
 
@@ -44,20 +43,6 @@ preferences in runtime configuration rather than the profile.
 
 See [Processing Profiles](docs/profiles.md#contributing-a-profile) for the full
 format and submission checklist.
-
-## Share Sources
-
-Horizon also welcomes **source contributions**, not just code.
-
-If you discover high-quality sources worth sharing with other users, please submit them via **[horizon1123.top](https://horizon1123.top)**.
-
-Good examples include:
-
-- niche RSS or Atom feeds
-- valuable Hacker News or Reddit sources
-- notable GitHub repositories or release sources
-- high-signal Telegram channels
-- other reliable tech news sources
 
 ## Before You Submit
 

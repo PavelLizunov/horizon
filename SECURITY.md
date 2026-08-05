@@ -3,8 +3,8 @@
 ## Reporting a Vulnerability
 
 If you discover a security vulnerability in Horizon, please do **not** open a public issue.
-Instead, please report it privately by email:
-**thysrael@gmail.com**
+Instead, report it privately via GitHub:
+**Security → Report a vulnerability** on this repository (private vulnerability reporting).
 
 Please include:
 - A clear description of the issue
