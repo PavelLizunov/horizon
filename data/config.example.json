@@ -223,9 +223,15 @@
       "cookies_file": null,
       "audio_cookies_file": null,
       "vision_fallback": true,
+      "mode": "inline",
+      "inbox_file": "data/video-inbox.json",
+      "inbox_max_age_hours": 48,
       "vision_max_frames": 8,
       "asr": "local",
-      "asr_model": "mlx-community/whisper-large-v3-turbo"
+      "asr_model": "mlx-community/whisper-large-v3-turbo",
+      "asr_max_duration_sec": 5400,
+      "min_duration_sec": 120,
+      "min_transcript_rate": 0.5
     }
   },
   "collection": {

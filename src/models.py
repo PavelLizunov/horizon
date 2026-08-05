@@ -279,6 +279,17 @@ class VideoConfig(BaseModel):
     """YouTube/video source configuration (transcript-based ingestion)."""
 
     enabled: bool = False
+    # "inline" runs the whole extraction ladder during the digest run.
+    # "sidecar" makes the pipeline read items produced by a separate
+    # `horizon-video` process, so yt-dlp/whisper breakage and their wall clock
+    # cannot reach the digest job at all.
+    mode: Literal["inline", "sidecar"] = "inline"
+    # Where the sidecar writes and the pipeline reads (sidecar mode only).
+    inbox_file: str = "data/video-inbox.json"
+    # A sidecar that silently stopped running leaves a stale inbox behind.
+    # Past this age the scraper warns; items are still used, because seen.json
+    # already drops the ones a previous run consumed. 0 disables the check.
+    inbox_max_age_hours: int = Field(default=48, ge=0)
     channels: List[VideoChannelConfig] = Field(default_factory=list)
     subtitle_langs: List[str] = Field(default_factory=lambda: ["en.*", "ru.*"])
     transcript_max_chars: int = 12000
@@ -300,6 +311,16 @@ class VideoConfig(BaseModel):
     # (Apple Silicon); "off" disables ASR and relies on vision fallback.
     asr: str = "local"
     asr_model: str = "mlx-community/whisper-large-v3-turbo"
+    # Transcribing a multi-hour stream VOD costs more wall clock than the whole
+    # rest of the run; above this length the item degrades to description-only.
+    asr_max_duration_sec: int = Field(default=5400, ge=0)
+    # Channel feeds also carry Shorts. Below this length a video is skipped
+    # entirely (no item, no LLM cost). 0 disables the filter.
+    min_duration_sec: int = Field(default=120, ge=0)
+    # Share of non-skipped videos that must yield text (subtitles/ASR/vision)
+    # before the run is considered healthy. Below it the scraper logs a WARNING
+    # instead of degrading silently. 0 disables the check.
+    min_transcript_rate: float = Field(default=0.5, ge=0.0, le=1.0)
 
 
 class RedditSubredditConfig(BaseModel):

@@ -40,6 +40,7 @@ ENV/
 data/config.json
 data/youtube-cookies*.txt
 data/seen.json
+data/video-inbox.json
 data/summaries/*.md
 data/subscribers.json
 data/mcp.secrets.json

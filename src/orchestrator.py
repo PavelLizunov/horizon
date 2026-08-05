@@ -484,14 +484,12 @@ class HorizonOrchestrator:
                 gn_scraper = GoogleNewsScraper(self.config.sources.google_news, client)
                 tasks.append(self._fetch_with_progress("Google News", gn_scraper, since))
 
-            # YouTube channels (RSS discovery + yt-dlp subtitle transcripts)
-            if (
-                self.config.sources.video.enabled
-                and self.config.sources.video.channels
-            ):
-                video_scraper = VideoScraper(
-                    self.config.sources.video, client, self.config.ai
-                )
+            # YouTube channels (RSS discovery + yt-dlp subtitle transcripts).
+            # In sidecar mode the work happened in a separate `horizon-video`
+            # process, so this host reads an inbox file and needs no channels.
+            video_cfg = self.config.sources.video
+            if video_cfg.enabled and (video_cfg.channels or video_cfg.mode == "sidecar"):
+                video_scraper = VideoScraper(video_cfg, client, self.config.ai)
                 tasks.append(self._fetch_with_progress("YouTube", video_scraper, since))
 
             # Fetch all concurrently

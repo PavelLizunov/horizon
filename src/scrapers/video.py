@@ -9,12 +9,16 @@ timestamped transcript that becomes the item content.
 import asyncio
 import base64
 import calendar
+import gc
+import importlib.util
+import json
 import logging
 import os
 import re
 import shutil
 import tempfile
-from datetime import datetime, timezone
+from dataclasses import asdict, dataclass, fields
+from datetime import datetime, timedelta, timezone
 from email.utils import parsedate_to_datetime
 from pathlib import Path
 from typing import List, Optional, Tuple
@@ -23,6 +27,7 @@ import feedparser
 import httpx
 
 from .base import BaseScraper
+from .._file_utils import _atomic_write_text
 from ..ai.tokens import record_usage
 from ..models import AIConfig, ContentItem, SourceType, VideoChannelConfig, VideoConfig
 
@@ -34,6 +39,138 @@ TS_RE = re.compile(
     r"(\d{2}):(\d{2}):(\d{2})[.,](\d{3})\s+-->\s+(\d{2}):(\d{2}):(\d{2})[.,](\d{3})"
 )
 TAG_RE = re.compile(r"<[^>]+>")
+VIDEO_ID_RE = re.compile(r"(?:v=|/shorts/|/live/|youtu\.be/)([0-9A-Za-z_-]{11})")
+
+# live_status values that mean "there is nothing to transcribe yet".
+UNREADY_LIVE_STATUS = {"is_upcoming", "is_live"}
+
+
+@dataclass
+class VideoRunStats:
+    """Per-run outcome counters.
+
+    The scraper degrades instead of raising, so a broken cookie jar or a
+    YouTube change looks exactly like "a quiet week" in the digest. These
+    counters make the difference visible — see `summary()` and the WARNING
+    emitted by `_log_run_summary`.
+    """
+
+    videos: int = 0
+    subtitles: int = 0
+    asr: int = 0
+    vision: int = 0
+    description_only: int = 0
+    skipped: int = 0
+    failed: int = 0
+    # yt-dlp calls rejected with "Sign in to confirm you're not a bot". Counted
+    # separately because it has exactly one cause and one fix (re-export the
+    # cookies), and because it can hit every stage of a single video.
+    bot_gated: int = 0
+
+    @property
+    def graded(self) -> int:
+        """Videos that were actually expected to produce text."""
+        return self.videos - self.skipped
+
+    @property
+    def with_text(self) -> int:
+        return self.subtitles + self.asr + self.vision
+
+    @property
+    def transcript_rate(self) -> float:
+        return self.with_text / self.graded if self.graded else 1.0
+
+    def summary(self) -> str:
+        text = (
+            f"{self.videos} videos: {self.subtitles} subtitles, {self.asr} ASR, "
+            f"{self.vision} vision, {self.description_only} description-only, "
+            f"{self.skipped} skipped, {self.failed} failed"
+        )
+        if self.bot_gated:
+            text += f", {self.bot_gated} bot-gated"
+        return text
+
+
+def _is_bot_gate(error: object) -> bool:
+    """Detect YouTube's "Sign in to confirm you're not a bot" rejection.
+
+    This is the single most common way the source dies: cookies expire, every
+    yt-dlp call is refused, and every video quietly degrades to description
+    only. String matching is fragile in general, but this message has been
+    stable for years and the alternative is not noticing for weeks.
+    """
+    text = str(error).lower()
+    return "sign in to confirm" in text or "not a bot" in text
+
+
+# Bumped when the on-disk shape changes; a mismatch is ignored rather than
+# guessed at, so an old sidecar cannot feed garbage into a new pipeline.
+INBOX_VERSION = 1
+
+
+def write_inbox(path: Path, items: List[ContentItem], stats: VideoRunStats) -> None:
+    """Persist scraped items for a later pipeline run (sidecar mode).
+
+    Written atomically: the digest job may read this file at any moment, and a
+    half-written inbox would look like corruption rather than a missed run.
+    """
+    payload = {
+        "version": INBOX_VERSION,
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "stats": asdict(stats),
+        "items": [item.model_dump(mode="json") for item in items],
+    }
+    path.parent.mkdir(parents=True, exist_ok=True)
+    _atomic_write_text(path, json.dumps(payload, ensure_ascii=False, indent=2))
+
+
+def _module_available(name: str) -> bool:
+    """Check importability without importing (mlx pulls in Metal on import)."""
+    try:
+        return importlib.util.find_spec(name) is not None
+    except Exception:
+        return False
+
+
+def _video_id_from_url(url: str) -> str:
+    """Best-effort video id for watch/shorts/live/youtu.be URLs."""
+    match = VIDEO_ID_RE.search(url)
+    return match.group(1) if match else url.rstrip("/").rsplit("/", 1)[-1]
+
+
+def _skip_reason(info: dict, video_cfg: VideoConfig) -> Optional[str]:
+    """Return why a video should not become an item, or None to keep it.
+
+    Fails open: missing metadata never skips, so a yt-dlp change that drops a
+    field cannot silently empty the digest.
+    """
+    live_status = info.get("live_status")
+    if live_status in UNREADY_LIVE_STATUS:
+        return f"live_status={live_status}"
+    duration = info.get("duration")
+    if (
+        video_cfg.min_duration_sec
+        and isinstance(duration, (int, float))
+        and 0 < duration < video_cfg.min_duration_sec
+    ):
+        return f"duration {int(duration)}s < min_duration_sec {video_cfg.min_duration_sec}"
+    return None
+
+
+def _sample_frames(frames: List[str], limit: int) -> List[str]:
+    """Spread the frame budget over the whole video instead of its opening.
+
+    Storyboards are chronological, so taking the first N grids describes only
+    the intro of a long video.
+    """
+    if limit <= 0:
+        return []
+    if len(frames) <= limit:
+        return frames
+    if limit == 1:
+        return [frames[0]]
+    step = (len(frames) - 1) / (limit - 1)
+    return [frames[round(i * step)] for i in range(limit)]
 
 
 def _to_seconds(h: str, m: str, s: str, ms: str) -> float:
@@ -162,19 +299,229 @@ class VideoScraper(BaseScraper):
         super().__init__({"video": config}, http_client)
         self._ai_config = ai_config
         self._channel_id_cache: dict[str, Optional[str]] = {}
+        self._asr_loaded = False
+        self.last_run_stats = VideoRunStats()
 
     async def fetch(self, since: datetime) -> List[ContentItem]:
         video_cfg: VideoConfig = self.config["video"]
+        self.last_run_stats = VideoRunStats()
+        if video_cfg.mode == "sidecar":
+            # No preflight here on purpose: the digest host is allowed to have
+            # no node, no ffmpeg and no mlx — that is the point of the split.
+            items = self._read_inbox(since, video_cfg)
+            self._log_run_summary(video_cfg)
+            return items
+        for problem in self._preflight(video_cfg):
+            logger.warning("Video preflight: %s", problem)
         items: List[ContentItem] = []
-        for channel in video_cfg.channels:
-            if not channel.enabled:
-                continue
-            try:
-                async with asyncio.timeout(900):
-                    items.extend(await self._fetch_channel(channel, video_cfg, since))
-            except Exception as e:
-                logger.warning("Video channel %s failed: %s", channel.channel, e)
+        try:
+            for channel in video_cfg.channels:
+                if not channel.enabled:
+                    continue
+                try:
+                    async with asyncio.timeout(900):
+                        items.extend(
+                            await self._fetch_channel(channel, video_cfg, since)
+                        )
+                except Exception as e:
+                    logger.warning("Video channel %s failed: %s", channel.channel, e)
+        finally:
+            self._release_asr()
+            self._log_run_summary(video_cfg)
         return items
+
+    def _read_inbox(self, since: datetime, video_cfg: VideoConfig) -> List[ContentItem]:
+        """Load items produced by a previous `horizon-video` run.
+
+        Every failure here returns an empty list rather than raising: a missing
+        or broken inbox must cost the digest its video section, not the run.
+        """
+        path = Path(video_cfg.inbox_file).expanduser()
+        if not path.is_file():
+            logger.warning(
+                "Video sidecar inbox %s does not exist — is the horizon-video job running?",
+                path,
+            )
+            return []
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except Exception as e:
+            logger.warning("Video sidecar inbox %s is unreadable: %s", path, e)
+            return []
+        if not isinstance(payload, dict) or payload.get("version") != INBOX_VERSION:
+            logger.warning(
+                "Video sidecar inbox %s has version %s, expected %s — ignoring it; "
+                "re-run horizon-video after upgrading",
+                path,
+                payload.get("version") if isinstance(payload, dict) else "?",
+                INBOX_VERSION,
+            )
+            return []
+
+        self._warn_if_stale(payload, path, video_cfg)
+        # Carry the sidecar's own counters through, so the degradation warning
+        # still reaches the digest log even though the work happened elsewhere.
+        known = {f.name for f in fields(VideoRunStats)}
+        raw_stats = payload.get("stats")
+        if isinstance(raw_stats, dict):
+            self.last_run_stats = VideoRunStats(
+                **{k: v for k, v in raw_stats.items() if k in known and isinstance(v, int)}
+            )
+
+        items: List[ContentItem] = []
+        rejected = 0
+        for raw in payload.get("items") or []:
+            try:
+                item = ContentItem.model_validate(raw)
+            except Exception:
+                rejected += 1
+                continue
+            if item.published_at >= since:
+                items.append(item)
+        if rejected:
+            logger.warning(
+                "Video sidecar inbox %s: %d item(s) failed validation and were dropped",
+                path,
+                rejected,
+            )
+        logger.info("Video sidecar: %d item(s) read from %s", len(items), path)
+        return items
+
+    @staticmethod
+    def _warn_if_stale(payload: dict, path: Path, video_cfg: VideoConfig) -> None:
+        """Flag an inbox the sidecar stopped refreshing."""
+        if not video_cfg.inbox_max_age_hours:
+            return
+        try:
+            generated = datetime.fromisoformat(payload["generated_at"])
+        except Exception:
+            logger.warning("Video sidecar inbox %s has no usable generated_at", path)
+            return
+        if generated.tzinfo is None:
+            generated = generated.replace(tzinfo=timezone.utc)
+        age = datetime.now(timezone.utc) - generated
+        if age > timedelta(hours=video_cfg.inbox_max_age_hours):
+            logger.warning(
+                "Video sidecar inbox %s is %.1fh old (limit %dh) — the horizon-video "
+                "job has probably stopped running",
+                path,
+                age.total_seconds() / 3600,
+                video_cfg.inbox_max_age_hours,
+            )
+
+    def _preflight(self, video_cfg: VideoConfig) -> List[str]:
+        """Report missing runtime prerequisites before they cause silent misses.
+
+        Each of these degrades to "no transcript" deep inside yt-dlp or whisper,
+        where the cause is unrecoverable from the log line alone.
+        """
+        problems: List[str] = []
+        if not shutil.which("node"):
+            problems.append(
+                "node is not on PATH — yt-dlp cannot solve the JS challenge, "
+                "so audio formats stay hidden and ASR yields nothing"
+            )
+        for label in ("cookies_file", "audio_cookies_file"):
+            path = getattr(video_cfg, label)
+            if path and not Path(path).expanduser().is_file():
+                problems.append(f"{label} points at a missing file: {path}")
+        if video_cfg.asr == "local":
+            if not shutil.which("ffmpeg"):
+                problems.append(
+                    "ffmpeg is not on PATH — mlx-whisper cannot decode audio, ASR will fail"
+                )
+            if not _module_available("mlx_whisper"):
+                problems.append(
+                    'mlx-whisper is not installed — ASR disabled (set video.asr to "off" '
+                    'to silence, or install the "asr" extra on Apple Silicon)'
+                )
+        if video_cfg.vision_fallback and self._ai_config is None:
+            problems.append(
+                "vision_fallback is on but the scraper got no AI config — vision rung disabled"
+            )
+        return problems
+
+    def _log_run_summary(self, video_cfg: VideoConfig) -> None:
+        """Emit the run outcome, loudly when text extraction is degraded."""
+        stats = self.last_run_stats
+        if not stats.videos and not stats.bot_gated:
+            logger.info("Video run: no new videos in window")
+            return
+        # Three independent triggers. The rate check needs a few videos to mean
+        # anything, but total extraction failure and a bot gate are conclusive
+        # on their own — a curated channel set often yields only 1-2 videos a
+        # day, which would otherwise keep the rate check permanently silent.
+        degraded = (
+            stats.bot_gated
+            or (stats.graded >= 1 and stats.with_text == 0)
+            or (
+                video_cfg.min_transcript_rate > 0
+                and stats.graded >= 3
+                and stats.transcript_rate < video_cfg.min_transcript_rate
+            )
+        )
+        if degraded:
+            rate = (
+                f" (transcript rate {stats.transcript_rate:.0%})" if stats.graded else ""
+            )
+            logger.warning(
+                "Video run degraded — %s%s; %s",
+                stats.summary(),
+                rate,
+                "re-export the YouTube cookies, they are being rejected"
+                if stats.bot_gated
+                else "check cookie freshness, node on PATH, and the yt-dlp version",
+            )
+        else:
+            logger.info("Video run: %s", stats.summary())
+
+    def _release_asr(self) -> None:
+        """Free the whisper weights once a run is done.
+
+        mlx-whisper memoizes the loaded model in an lru_cache and MLX keeps its
+        own buffer pool, so ~1.6 GB (large-v3-turbo) stays resident for the rest
+        of the pipeline — through analysis, enrichment and digest — unless both
+        are dropped explicitly.
+        """
+        if not self._asr_loaded:
+            return
+        self._asr_loaded = False
+        # The lru_cache has lived in both mlx_whisper.transcribe and
+        # mlx_whisper.load_models across releases; clear whichever exposes it
+        # rather than pinning one layout.
+        cleared = 0
+        for module_name in ("mlx_whisper.transcribe", "mlx_whisper.load_models"):
+            try:
+                module = importlib.import_module(module_name)
+            except Exception:
+                continue
+            cache_clear = getattr(
+                getattr(module, "load_model", None), "cache_clear", None
+            )
+            if cache_clear:
+                try:
+                    cache_clear()
+                    cleared += 1
+                except Exception as e:  # pragma: no cover - mlx internals
+                    logger.debug("mlx-whisper cache_clear failed: %s", e)
+        if not cleared:
+            logger.warning(
+                "Could not drop the mlx-whisper model cache — the whisper weights "
+                "(~1.6 GB) stay resident for the rest of the run; mlx-whisper may "
+                "have moved its load_model cache"
+            )
+        gc.collect()
+        try:
+            import mlx.core as mx
+
+            # mx.clear_cache() on MLX >= 0.21, mx.metal.clear_cache() before it.
+            clear = getattr(mx, "clear_cache", None) or getattr(
+                getattr(mx, "metal", None), "clear_cache", None
+            )
+            if clear:
+                clear()
+        except Exception as e:  # pragma: no cover - depends on mlx internals
+            logger.debug("Could not clear the MLX buffer cache: %s", e)
 
     async def _fetch_channel(
         self, channel: VideoChannelConfig, video_cfg: VideoConfig, since: datetime
@@ -200,11 +547,13 @@ class VideoScraper(BaseScraper):
 
         items: List[ContentItem] = []
         for entry, published in fresh:
+            self.last_run_stats.videos += 1
             try:
                 item = await self._build_item(entry, published, channel, video_cfg)
                 if item:
                     items.append(item)
             except Exception as e:
+                self.last_run_stats.failed += 1
                 logger.warning("Video item failed (%s): %s", entry.get("link"), e)
         return items
 
@@ -246,7 +595,7 @@ class VideoScraper(BaseScraper):
         try:
             channel_id = await asyncio.to_thread(_resolve)
         except Exception as e:
-            logger.warning("Channel resolve failed for %s: %s", channel_ref, e)
+            self._note_ytdlp_error("channel resolve", channel_ref, e)
             channel_id = None
         self._channel_id_cache[channel_ref] = channel_id
         return channel_id
@@ -260,17 +609,46 @@ class VideoScraper(BaseScraper):
     ) -> Optional[ContentItem]:
         url = entry.get("link", "")
         title = entry.get("title", "Untitled")
-        video_id = entry.get("yt_videoid") or url.rsplit("=", 1)[-1]
+        video_id = entry.get("yt_videoid") or _video_id_from_url(url)
+        stats = self.last_run_stats
 
-        transcript, full_desc = await self._fetch_transcript(url, video_cfg)
-        description = full_desc or (getattr(entry, "media_description", "") or "")
+        transcript, info = await self._fetch_transcript(url, video_cfg)
 
+        skip = _skip_reason(info, video_cfg)
+        if skip:
+            stats.skipped += 1
+            logger.info("Skipping video %s (%s)", url, skip)
+            return None
+
+        source = "subtitles" if transcript else None
         if not transcript and video_cfg.asr == "local":
-            transcript = await self._asr_local(url)
+            duration = info.get("duration")
+            too_long = (
+                video_cfg.asr_max_duration_sec
+                and isinstance(duration, (int, float))
+                and duration > video_cfg.asr_max_duration_sec
+            )
+            if too_long:
+                logger.info(
+                    "Skipping ASR for %s: %ds exceeds asr_max_duration_sec %ds",
+                    url,
+                    int(duration),
+                    video_cfg.asr_max_duration_sec,
+                )
+            else:
+                transcript = await self._asr_local(url)
+                if transcript:
+                    source = "asr"
 
         vision_summary = None
         if not transcript and video_cfg.vision_fallback and self._ai_config:
             vision_summary = await self._vision_fallback(url, video_cfg)
+            if vision_summary:
+                source = "vision"
+
+        description = (info.get("description") or "").strip() or (
+            getattr(entry, "media_description", "") or ""
+        )
 
         parts = []
         if description.strip():
@@ -282,7 +660,19 @@ class VideoScraper(BaseScraper):
         content = "\n\n".join(parts)[: video_cfg.transcript_max_chars]
 
         if not content:
+            stats.failed += 1
+            logger.warning("No usable content for %s (no description, transcript or frames)", url)
             return None
+
+        if source == "subtitles":
+            stats.subtitles += 1
+        elif source == "asr":
+            stats.asr += 1
+        elif source == "vision":
+            stats.vision += 1
+        else:
+            source = "description"
+            stats.description_only += 1
 
         return ContentItem(
             id=self._generate_id("video", "youtube", video_id),
@@ -297,16 +687,22 @@ class VideoScraper(BaseScraper):
                 "channel": channel.name or channel.channel,
                 "category": channel.category,
                 "has_transcript": bool(transcript),
+                # Which rung of the extraction ladder produced the text; the
+                # only way to tell a real transcript from a description in the
+                # stored item afterwards.
+                "content_source": source,
+                "duration": info.get("duration"),
             },
         )
 
     async def _fetch_transcript(
         self, video_url: str, video_cfg: VideoConfig
-    ) -> Tuple[Optional[str], Optional[str]]:
-        """Return (timestamped transcript, full description from yt-dlp).
+    ) -> Tuple[Optional[str], dict]:
+        """Return (timestamped transcript, yt-dlp info dict).
 
-        The channel RSS only carries a truncated description; the yt-dlp
-        metadata call we make anyway yields the full one for free.
+        The channel RSS carries only a truncated description and no duration or
+        live status; the yt-dlp metadata call we make anyway yields all of it
+        for free, so no extra request is needed to filter Shorts and premieres.
         """
         vtt_path, info = await asyncio.to_thread(
             self._download_subtitles,
@@ -315,18 +711,30 @@ class VideoScraper(BaseScraper):
             video_cfg.cookies_from_browser,
             video_cfg.cookies_file,
         )
-        description = (info.get("description") or "").strip() or None
         if not vtt_path:
-            return None, description
+            return None, info
         try:
             segments = parse_vtt(vtt_path)
             transcript = format_transcript(segments) if segments else None
-            return transcript, description
+            return transcript, info
         finally:
             shutil.rmtree(vtt_path.parent, ignore_errors=True)
 
-    @staticmethod
+    def _note_ytdlp_error(self, stage: str, video_url: str, error: object) -> None:
+        """Log a yt-dlp failure, naming the cause when it is the bot gate."""
+        if _is_bot_gate(error):
+            self.last_run_stats.bot_gated += 1
+            logger.warning(
+                "YouTube rejected the %s request for %s as a bot — the cookies are "
+                "no longer valid; re-export them (see docs/video-source.md)",
+                stage,
+                video_url,
+            )
+            return
+        logger.warning("%s failed for %s: %s", stage.capitalize(), video_url, error)
+
     def _download_subtitles(
+        self,
         video_url: str,
         langs: List[str],
         cookies_browser: Optional[str],
@@ -365,7 +773,7 @@ class VideoScraper(BaseScraper):
             with yt_dlp.YoutubeDL(opts) as ydl:
                 info = ydl.extract_info(video_url, download=True) or {}
         except Exception as e:
-            logger.warning("yt-dlp subtitle fetch failed for %s: %s", video_url, e)
+            self._note_ytdlp_error("subtitle fetch", video_url, e)
 
         candidates = sorted(tmp.glob("*.vtt"))
         if not candidates:
@@ -385,6 +793,9 @@ class VideoScraper(BaseScraper):
             return None
         try:
             model = self.config["video"].asr_model
+            # Marks the weights as resident so fetch() knows to free them; the
+            # model stays cached across videos within one run on purpose.
+            self._asr_loaded = True
             return await asyncio.to_thread(self._transcribe, audio, model)
         except ImportError:
             logger.warning("mlx-whisper not installed; skipping local ASR")
@@ -431,7 +842,7 @@ class VideoScraper(BaseScraper):
             with yt_dlp.YoutubeDL(opts) as ydl:
                 ydl.extract_info(video_url, download=True)
         except Exception as e:
-            logger.warning("Audio download failed for %s: %s", video_url, e)
+            self._note_ytdlp_error("audio download", video_url, e)
         audio_exts = {".m4a", ".mp3", ".opus", ".webm", ".aac", ".mp4", ".ogg"}
         files = [f for f in tmp.iterdir() if f.suffix.lower() in audio_exts]
         if not files:
@@ -469,7 +880,7 @@ class VideoScraper(BaseScraper):
         frames = await asyncio.to_thread(self._fetch_storyboard, video_url)
         if not frames:
             return None
-        frames = frames[: video_cfg.vision_max_frames]
+        frames = _sample_frames(frames, video_cfg.vision_max_frames)
         try:
             return await self._vision_summarize(frames)
         except Exception as e:
@@ -501,7 +912,7 @@ class VideoScraper(BaseScraper):
             with yt_dlp.YoutubeDL(opts) as ydl:
                 ydl.extract_info(video_url, download=True)
         except Exception as e:
-            logger.warning("Storyboard download failed for %s: %s", video_url, e)
+            self._note_ytdlp_error("storyboard download", video_url, e)
         files = sorted(tmp.glob("*.mhtml"))
         frames: List[str] = []
         if files:
@@ -560,7 +971,12 @@ class VideoScraper(BaseScraper):
                     continue
             if field in entry:
                 try:
-                    return parsedate_to_datetime(entry[field])
+                    parsed = parsedate_to_datetime(entry[field])
                 except Exception:
                     continue
+                # A naive datetime here would raise on the `published < since`
+                # comparison and take the whole channel down with it.
+                if parsed.tzinfo is None:
+                    parsed = parsed.replace(tzinfo=timezone.utc)
+                return parsed
         return None
