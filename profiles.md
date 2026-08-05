@@ -295,6 +295,19 @@ the compact behavior used by news profiles. Head-middle-tail sampling keeps the
 opening, a middle excerpt, and the conclusion of long-form content. Both limits
 must be between 500 and 100000 characters.
 
+Three more optional budgets cover the inputs that were previously fixed. They
+default to the values that were hardcoded, so omitting them changes nothing:
+
+| Field | Default | Applies to |
+| --- | --- | --- |
+| `classification_max_chars` | 2000 | Content excerpt sent to profile routing. Routing happens before a profile is chosen, so the **default profile's** value is the one used. |
+| `analysis_comments_max_chars` | 1500 | Community comments sent to the analysis stage. |
+| `enrichment_comments_max_chars` | 2000 | Community comments sent to the enrichment stage. |
+
+Raise the comment budgets for discussion-heavy sources such as Reddit and Hacker
+News, where the thread often carries more signal than the linked post. All three
+follow the same 500–100000 bounds and are truncated by prefix, not sampled.
+
 ## Topic Deduplication
 
 AI topic deduplication is also a runtime preference. Disable it for profiles
