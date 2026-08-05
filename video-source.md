@@ -258,18 +258,36 @@ field must not silently empty the digest.
 - A 20-minute video transcribes in roughly a minute on an M4.
 - Videos longer than `asr_max_duration_sec` skip ASR and fall through to the
   vision rung or description.
-- **Memory.** MLX keeps a Metal buffer pool that outlives the last
-  `transcribe()` call, so whisper's working set would stay resident through
-  analysis, enrichment and digest generation. `fetch()` releases it in a
-  `finally` block (`_release_asr`). Measured on an M4 with `large-v3-turbo`:
-  **1540 MB peak during the run, 378 MB after** — the pool is what actually
-  holds the memory, and `mx.clear_cache()` is what returns it.
+- **Memory.** Measured on an M4 with `large-v3-turbo`, using MLX's own counters
+  (`mx.get_active_memory()` / `mx.get_cache_memory()` — RSS is unreliable here,
+  the allocator holds pages after a free):
 
-  mlx-whisper 0.4.3 reloads the model on every call and memoises nothing, so
-  there is no model cache to drop and none is expected; some releases have
-  carried an `lru_cache` on `load_model`, which `_release_asr` clears when it
-  finds one. Its absence is normal and silent. What *does* warn is MLX not
-  exposing `clear_cache` at all — that is the case where memory really leaks.
+  | Point | active | cache |
+  |-------|--------|-------|
+  | baseline | 0 MB | 0 MB |
+  | after `transcribe()` | 1543 MB | 2566 MB |
+  | after `_release_asr()` | 1543 MB | **0 MB** |
+  | after a second transcribe | 1543 MB | 2560 MB |
+  | after the second release | 1543 MB | **0 MB** |
+
+  So `_release_asr` reliably returns the ~2.5 GB buffer pool, and that is the
+  larger number. It does **not** free the ~1.5 GB of model weights: those stay
+  live because `mlx_whisper.transcribe()` keeps a reference to the model after
+  it returns. The memory is not lost — loading the model directly and dropping
+  the reference (`del model; gc.collect(); mx.clear_cache()`) takes active back
+  to 0 MB — but there is no supported handle on the model that `transcribe()`
+  builds internally. Note the weights do not accumulate: a second transcription
+  in the same process still ends at 1543 MB, not 3 GB.
+
+  **If holding 1.5 GB through the LLM stages matters, use sidecar mode.**
+  `horizon-video` exits when it is done, so the OS reclaims everything and the
+  digest process never loads whisper at all. That is the only complete answer;
+  no in-process cleanup beats process exit.
+
+  mlx-whisper 0.4.3 memoises nothing on `load_model`, so there is no model cache
+  to drop and none is expected; some releases have carried an `lru_cache` there,
+  which `_release_asr` clears when it finds one. Its absence is normal and
+  silent. What *does* warn is MLX exposing no `clear_cache` at all.
 
 ## Debugging Scripts
 
