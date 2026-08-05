@@ -27,6 +27,7 @@ import feedparser
 import httpx
 
 from .base import BaseScraper
+from ..processing.content import select_content
 from .._file_utils import _atomic_write_text
 from ..ai.tokens import record_usage
 from ..models import AIConfig, ContentItem, SourceType, VideoChannelConfig, VideoConfig
@@ -62,6 +63,8 @@ class VideoRunStats:
     description_only: int = 0
     skipped: int = 0
     failed: int = 0
+    # Transcripts whose last timestamp falls well short of the runtime.
+    partial: int = 0
     # yt-dlp calls rejected with "Sign in to confirm you're not a bot". Counted
     # separately because it has exactly one cause and one fix (re-export the
     # cookies), and because it can hit every stage of a single video.
@@ -86,9 +89,34 @@ class VideoRunStats:
             f"{self.vision} vision, {self.description_only} description-only, "
             f"{self.skipped} skipped, {self.failed} failed"
         )
+        if self.partial:
+            text += f", {self.partial} partial"
         if self.bot_gated:
             text += f", {self.bot_gated} bot-gated"
         return text
+
+
+LAST_TS_RE = re.compile(r"\[(\d+):(\d{2})\]")
+
+
+def transcript_coverage(transcript: str, duration: object) -> Optional[float]:
+    """How far into the video the transcript's last timestamp reaches.
+
+    Subtitles can be published for only part of a video and an interrupted ASR
+    pass returns what it managed — both look like a perfectly good transcript
+    downstream. Comparing the last cue against the known duration is the only
+    cheap way to tell a complete transcript from a truncated one.
+
+    Returns None when it cannot be determined, which never counts as a fault.
+    """
+    if not transcript or not isinstance(duration, (int, float)) or duration <= 0:
+        return None
+    stamps = LAST_TS_RE.findall(transcript)
+    if not stamps:
+        return None
+    minutes, seconds = stamps[-1]
+    reached = int(minutes) * 60 + int(seconds)
+    return min(reached / duration, 1.0)
 
 
 def _is_bot_gate(error: object) -> bool:
@@ -654,10 +682,29 @@ class VideoScraper(BaseScraper):
             getattr(entry, "media_description", "") or ""
         )
 
+        coverage = transcript_coverage(transcript or "", info.get("duration"))
+        if coverage is not None and coverage < video_cfg.min_transcript_coverage:
+            stats.partial += 1
+            logger.warning(
+                "Transcript for %s covers only %.0f%% of its %ds runtime — "
+                "subtitles may be partial or the ASR pass was cut short",
+                url,
+                coverage * 100,
+                int(info.get("duration") or 0),
+            )
+
         parts = []
         if description.strip():
             parts.append(description.strip())
         if transcript:
+            # Sample rather than prefix-cut: a raw slice drops the back of a
+            # long video entirely, and the analyzer's head-middle-tail
+            # sampling runs downstream — it cannot recover text the scraper
+            # already threw away.
+            budget = video_cfg.transcript_max_chars - len(description.strip()) - 64
+            transcript = select_content(
+                transcript, max(budget, 500), "head-middle-tail"
+            )
             parts.append("Transcript:\n" + transcript)
         if vision_summary:
             parts.append("Visual summary (AI from storyboard frames):\n" + vision_summary)
@@ -696,6 +743,9 @@ class VideoScraper(BaseScraper):
                 # stored item afterwards.
                 "content_source": source,
                 "duration": info.get("duration"),
+                "transcript_coverage": (
+                    round(coverage, 3) if coverage is not None else None
+                ),
             },
         )
 

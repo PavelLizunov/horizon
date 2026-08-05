@@ -321,6 +321,10 @@ class VideoConfig(BaseModel):
     # before the run is considered healthy. Below it the scraper logs a WARNING
     # instead of degrading silently. 0 disables the check.
     min_transcript_rate: float = Field(default=0.5, ge=0.0, le=1.0)
+    # A transcript whose last timestamp falls short of this fraction of the
+    # runtime is flagged: partial subtitles and an ASR pass that died halfway
+    # both look like a perfectly good transcript to everything downstream.
+    min_transcript_coverage: float = Field(default=0.75, ge=0.0, le=1.0)
 
 
 class RedditSubredditConfig(BaseModel):

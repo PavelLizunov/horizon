@@ -133,7 +133,10 @@
     },
     "twitter": {
       "enabled": false,
-      "users": ["karpathy", "ylecun"],
+      "users": [
+        "karpathy",
+        "ylecun"
+      ],
       "fetch_limit": 10,
       "fetch_reply_text": false,
       "max_replies_per_tweet": 3,
@@ -152,7 +155,15 @@
           "provider": "yfinance",
           "fetch_limit": 20,
           "category": "equities",
-          "symbols": ["AAPL", "MSFT", "NVDA", "GOOGL", "AMZN", "META", "TSLA"],
+          "symbols": [
+            "AAPL",
+            "MSFT",
+            "NVDA",
+            "GOOGL",
+            "AMZN",
+            "META",
+            "TSLA"
+          ],
           "profile": "tech-news"
         }
       ]
@@ -160,7 +171,11 @@
     "ossinsight": {
       "enabled": false,
       "period": "past_24_hours",
-      "languages": ["All", "Python", "TypeScript"],
+      "languages": [
+        "All",
+        "Python",
+        "TypeScript"
+      ],
       "keywords": [],
       "min_stars": 10,
       "max_items": 30,
@@ -173,7 +188,10 @@
           "channel": "zaihuapd",
           "enabled": true,
           "fetch_limit": 20,
-          "profile": ["tech-news", "finance-news"]
+          "profile": [
+            "tech-news",
+            "finance-news"
+          ]
         }
       ]
     },
@@ -217,7 +235,10 @@
           "profile": "video"
         }
       ],
-      "subtitle_langs": ["en.*", "ru.*"],
+      "subtitle_langs": [
+        "en.*",
+        "ru.*"
+      ],
       "transcript_max_chars": 12000,
       "cookies_from_browser": null,
       "cookies_file": null,
@@ -231,7 +252,8 @@
       "asr_model": "mlx-community/whisper-large-v3-turbo",
       "asr_max_duration_sec": 5400,
       "min_duration_sec": 120,
-      "min_transcript_rate": 0.5
+      "min_transcript_rate": 0.5,
+      "min_transcript_coverage": 0.75
     }
   },
   "collection": {

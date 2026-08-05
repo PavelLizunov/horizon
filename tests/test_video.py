@@ -25,6 +25,7 @@ from src.scrapers.video import (
     _skip_reason,
     _trim_overlap,
     _video_id_from_url,
+    transcript_coverage,
     format_transcript,
     parse_vtt,
     write_inbox,
@@ -419,6 +420,71 @@ def test_run_summary_warns_when_nothing_yielded_text(caplog) -> None:
         scraper._log_run_summary(scraper.config["video"])
 
     assert "degraded" in caplog.text
+
+
+def test_transcript_coverage_measures_reach_against_runtime() -> None:
+    full = "[00:00] start\n[09:58] end"
+    assert transcript_coverage(full, 600) == pytest.approx(0.9966, abs=1e-3)
+    # An ASR pass that died at minute three of a ten-minute video.
+    assert transcript_coverage("[00:00] a\n[03:00] b", 600) == pytest.approx(0.3)
+
+
+def test_transcript_coverage_returns_none_when_undecidable() -> None:
+    # Never fault a video just because metadata is missing.
+    assert transcript_coverage("[00:00] a", None) is None
+    assert transcript_coverage("[00:00] a", 0) is None
+    assert transcript_coverage("", 600) is None
+    assert transcript_coverage("no timestamps here", 600) is None
+
+
+def test_transcript_coverage_handles_hour_long_videos() -> None:
+    # format_transcript emits raw minutes, so 90 minutes renders as [90:00].
+    assert transcript_coverage("[00:00] a\n[90:00] b", 5400) == pytest.approx(1.0)
+
+
+def test_fetch_warns_about_a_partial_transcript(monkeypatch, tmp_path, caplog) -> None:
+    vtt = tmp_path / "abc123def45.vtt"
+    vtt.write_text(
+        "WEBVTT\n\n00:00:00.000 --> 00:00:02.000\nopening\n\n"
+        "00:01:00.000 --> 00:01:02.000\nstops early\n",
+        encoding="utf-8",
+    )
+    scraper = _make_scraper(
+        monkeypatch, vtt_path=vtt, info={"description": "d", "duration": 1200}
+    )
+
+    with caplog.at_level(logging.WARNING, logger="src.scrapers.video"):
+        items = asyncio.run(scraper.fetch(datetime(2026, 7, 1, tzinfo=timezone.utc)))
+
+    assert "covers only" in caplog.text
+    assert scraper.last_run_stats.partial == 1
+    # Last cue at [01:00] of a 1200s video.
+    assert items[0].metadata["transcript_coverage"] == pytest.approx(0.05, abs=1e-3)
+    assert "1 partial" in scraper.last_run_stats.summary()
+
+
+def test_long_transcripts_keep_their_ending(monkeypatch, tmp_path) -> None:
+    # A prefix cut would leave the digest reading only the opening minutes.
+    cues = "\n\n".join(
+        f"00:{m // 60:02d}:{m % 60:02d}.000 --> 00:{m // 60:02d}:{m % 60:02d}.500\n"
+        f"line {m} " + "padding " * 12
+        for m in range(0, 600, 2)
+    )
+    vtt = tmp_path / "abc123def45.vtt"
+    vtt.write_text("WEBVTT\n\n" + cues + "\n", encoding="utf-8")
+    scraper = _make_scraper(
+        monkeypatch,
+        vtt_path=vtt,
+        info={"description": "d", "duration": 600},
+        transcript_max_chars=4000,
+    )
+
+    items = asyncio.run(scraper.fetch(datetime(2026, 7, 1, tzinfo=timezone.utc)))
+
+    content = items[0].content
+    assert len(content) <= 4000
+    assert "[Closing excerpt]" in content
+    assert "line 598" in content  # the end of the video survived
 
 
 def test_is_bot_gate_matches_youtubes_wording() -> None:
