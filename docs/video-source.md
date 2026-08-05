@@ -103,10 +103,22 @@ do not remove them while "cleaning up".
 
 2. **SABR experiment.** Some (account, IP) pairs land in a streaming experiment
    that hides all audio formats. Two consequences:
-   - Audio downloads use `player_client: ["tv_embedded"]` **alone** — adding any
-     second client poisons the format merge back to SABR-only.
+   - Audio downloads set `player_client: ["tv_embedded"]`. **Measured on
+     2026-08-06 with yt-dlp 2026.07.04, this setting is now a no-op**: yt-dlp
+     answers `Skipping unsupported client "tv_embedded"` and falls back to its
+     defaults, and 12 https audio formats appear anyway. What actually earns
+     them is fresh cookies plus the JS runtime and EJS solver in point 3. The
+     setting is kept for older yt-dlp versions; do not treat it as load-bearing.
    - If the main account is in the experiment, export cookies from a *different*
-     Google account and point `audio_cookies_file` at them.
+     Google account and point `audio_cookies_file` at them. Note that when both
+     jars were re-exported, **both** worked for audio — the account split may no
+     longer be needed, it is kept as cheap insurance.
+
+   **Dubbed tracks.** Videos can carry an English dub alongside the original;
+   the reference video exposes `[ru] Russian original (default)` and `[en-US]`
+   variants of every audio format. `ba/bestaudio` selected the Russian original,
+   because yt-dlp prefers the track YouTube marks `(default)`. Worth knowing if
+   a transcript ever comes back in the wrong language.
 
 3. **JS challenge.** Audio extraction requires yt-dlp's JS runtime support:
    `js_runtimes={"node": {}}` (a dict, not a list — the Python API does not
@@ -280,7 +292,27 @@ field must not silently empty the digest.
   off with no error.
 - Model downloads on first use (~2 GB cache under `HF_HOME`, default
   `~/.cache/huggingface`). Language is auto-detected.
-- A 20-minute video transcribes in roughly a minute on an M4.
+- A 20-minute video transcribes in roughly a minute on an M4 (measured: 1264 s
+  of audio in ~90 s, 14× realtime).
+
+### Model choice — benchmarked, do not redo this blindly
+
+`whisper-large-v3-turbo` mangles English technical terms inside Russian speech:
+on the reference video "Claude Code" comes out as `код-код` (11×), "Codex" as
+`кодекс` (15×), and **neither term is ever written in Latin script**. Two
+alternatives were measured on 2026-08-06 and both were rejected:
+
+| Option | Result |
+|--------|--------|
+| **Parakeet** (`parakeet-tdt-0.6b-v3` via `parakeet-mlx`) | 2.2× faster, but `код-код` 11→12 and `промт` 1→3, and it keeps *fewer* Latin tokens overall (80 vs 91). Higher MLX peak memory at every workable chunk size, 2.39 GB on disk vs whisper's 1.54 GB, requires `chunk_duration` for long audio, and leaks literal `<unk>` tokens into the text. Handy's 478 MB figure is a quantized non-MLX build with no MLX equivalent. |
+| **`initial_prompt` glossary biasing** | Cosmetic gains (`код-код` 11→10, `кодекс` 15→14) and one clear regression: `промт` went 0→11 despite the glossary containing the correct "промпт". |
+
+Two independent architectures producing the same Cyrillic rendering at the same
+timestamps is strong evidence the cause is **acoustic** — the speaker pronounces
+these terms with Russian phonetics and both models faithfully transcribe what
+they hear. No ASR swap fixes it. If it needs fixing, the answer is a
+deterministic glossary post-pass over the finished transcript, which works
+identically on any model's output.
 - Videos longer than `asr_max_duration_sec` skip ASR and fall through to the
   vision rung or description.
 - **Memory.** Measured on an M4 with `large-v3-turbo`, using MLX's own counters

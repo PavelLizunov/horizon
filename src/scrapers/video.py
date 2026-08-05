@@ -883,9 +883,13 @@ class VideoScraper(BaseScraper):
             "remote_components": ["ejs:github"],
             "outtmpl": str(tmp / "%(id)s.%(ext)s"),
             "extractor_args": {
-                # tv_embedded ALONE: it escapes the SABR-only experiment that
-                # hides audio formats on datacenter IPs; adding other clients
-                # (tv/web) poisons the format merge back to SABR-only.
+                # STALE AS OF yt-dlp 2026.07.04, kept for older versions only:
+                # that release answers with `Skipping unsupported client
+                # "tv_embedded"` and falls back to its defaults. Measured on the
+                # deployment box — 12 https audio formats still appear, so what
+                # actually earns them is fresh cookies plus js_runtimes/node and
+                # the EJS solver below, NOT this client. Do not treat it as
+                # load-bearing; re-measure before adding clients here.
                 "youtube": {"player_client": ["tv_embedded"]}
             },
         }
