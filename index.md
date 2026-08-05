@@ -12,6 +12,7 @@ title: Home
 ## 文档
 
 - [配置指南](configuration) — AI 提供商、信息源、过滤规则与环境变量替换
+- [流水线地图](pipeline) — 七个阶段分别由哪个方法实现，以及如何新增信息源
 - [信息源采集器](scrapers) — Horizon 如何从 GitHub、Hacker News、RSS、Reddit、YouTube 采集内容
 - [视频源](video-source) — YouTube 频道视频转文字：字幕、本地 ASR、视觉兜底
 - [评分系统](scoring) — 基于 AI 的内容分析与 0-10 评分体系
@@ -38,6 +39,7 @@ Welcome to [Horizon](https://github.com/PavelLizunov/horizon), an AI-driven info
 ## Documentation
 
 - [Configuration Guide](configuration) — AI providers, information sources, filtering, and environment variable substitution
+- [Pipeline Map](pipeline) — which method owns each of the seven stages, and how to add a source
 - [Source Scrapers](scrapers) — How Horizon collects content from GitHub, Hacker News, RSS, Reddit, and YouTube
 - [Video Source](video-source) — YouTube channel videos turned into text: subtitles, local ASR, vision fallback
 - [Scoring System](scoring) — AI-based content analysis and the 0-10 scoring scale
