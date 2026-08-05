@@ -1,0 +1,49 @@
+{
+  "id": "video",
+  "name": "Video",
+  "display_names": {
+    "zh": "视频",
+    "ru": "Видео"
+  },
+  "content": {
+    "analysis_max_chars": 12000,
+    "enrichment_max_chars": 24000,
+    "sampling": "head-middle-tail"
+  },
+  "match": "match.md",
+  "analysis": "analysis.md",
+  "enrichment": {
+    "prompt": "enrichment.md",
+    "blocks": [
+      {
+        "id": "summary",
+        "type": "section",
+        "tools": [],
+        "primary": true
+      },
+      {
+        "id": "background",
+        "type": "section",
+        "tools": ["web_search"]
+      },
+      {
+        "id": "impact",
+        "type": "section",
+        "tools": ["web_search"],
+        "optional": true
+      },
+      {
+        "id": "fact_check",
+        "type": "section",
+        "tools": ["web_search"],
+        "optional": true
+      },
+      {
+        "id": "deep_dive",
+        "type": "section",
+        "tools": [],
+        "optional": true
+      }
+    ]
+  }
+}

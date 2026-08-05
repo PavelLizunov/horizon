@@ -24,6 +24,10 @@
       "finance-news": {
         "threshold": 7.0,
         "topic_dedup": true
+      },
+      "video": {
+        "threshold": 5.0,
+        "topic_dedup": false
       }
     }
   },
@@ -193,6 +197,35 @@
       "max_results": 100,
       "category": "news",
       "profile": "tech-news"
+    },
+    "video": {
+      "enabled": false,
+      "channels": [
+        {
+          "name": "Fireship",
+          "channel": "@Fireship",
+          "enabled": true,
+          "max_videos": 3,
+          "category": "dev",
+          "profile": "video"
+        },
+        {
+          "name": "Example Channel By Id",
+          "channel": "UCBJycsmduvYEL83R_U4JriQ",
+          "enabled": true,
+          "max_videos": 3,
+          "profile": "video"
+        }
+      ],
+      "subtitle_langs": ["en.*", "ru.*"],
+      "transcript_max_chars": 12000,
+      "cookies_from_browser": null,
+      "cookies_file": null,
+      "audio_cookies_file": null,
+      "vision_fallback": true,
+      "vision_max_frames": 8,
+      "asr": "local",
+      "asr_model": "mlx-community/whisper-large-v3-turbo"
     }
   },
   "collection": {
@@ -203,7 +236,8 @@
     "profile_order": [
       "tech-news",
       "tech-blog",
-      "finance-news"
+      "finance-news",
+      "video"
     ],
     "category_groups": {},
     "default_group": "other",

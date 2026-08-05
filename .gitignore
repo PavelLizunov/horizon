@@ -38,6 +38,7 @@ ENV/
 
 # Data files (keep structure, ignore content)
 data/config.json
+data/youtube-cookies*.txt
 data/seen.json
 data/summaries/*.md
 data/subscribers.json

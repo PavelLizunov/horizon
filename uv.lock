@@ -1114,6 +1114,7 @@ dependencies = [
     { name = "rich" },
     { name = "tenacity" },
     { name = "trafilatura" },
+    { name = "yt-dlp" },
 ]
 
 [package.optional-dependencies]
@@ -1154,6 +1155,7 @@ requires-dist = [
     { name = "rich", specifier = ">=13.9.0" },
     { name = "tenacity", specifier = ">=9.0.0" },
     { name = "trafilatura", specifier = ">=2.1.0" },
+    { name = "yt-dlp", specifier = ">=2026.7.4" },
 ]
 provides-extras = ["dev", "openbb", "twitter"]
 
@@ -3613,6 +3615,15 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/9b/fd/943a7d71ce98a40b9006daccba96a83837acadb8e55361f41c7a81873013/yfinance-1.3.0.tar.gz", hash = "sha256:42c4e64a889dab8eeaffd3a66d4ccf1baffd566910ca63fb6332283f8f9b8a40", size = 145297, upload-time = "2026-04-16T19:51:05.785Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/dc/bc/e46ed5dfb88c6f7af0f641ffb6227d32f484ea989a2987a52a9c35d17aa9/yfinance-1.3.0-py2.py3-none-any.whl", hash = "sha256:c89539f0cf6af026d570131189bd659a962e8fb942376ef8ff8913e77c9fca75", size = 133706, upload-time = "2026-04-16T19:51:04.298Z" },
+]
+
+[[package]]
+name = "yt-dlp"
+version = "2026.7.4"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/47/c5/9972af4b472b0d55badf841ebafd2f98944cb0ae0f46e11d01f363ea5b91/yt_dlp-2026.7.4.tar.gz", hash = "sha256:b094813404f87a9dd2186f00815231df32e5fd8a5403be0f807b3bb2d21a4432", size = 3049326, upload-time = "2026-07-04T22:42:14.837Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/f9/8a/cd4c9b02c10c563adfe78118310129641900e1cd6de888cfae2452072696/yt_dlp-2026.7.4-py3-none-any.whl", hash = "sha256:f11f2b11d5a8ac4059f9bdf29fa4407dc7c6bb00c5097e95ca22a7a9db518266", size = 3184705, upload-time = "2026-07-04T22:42:12.989Z" },
 ]
 
 [[package]]

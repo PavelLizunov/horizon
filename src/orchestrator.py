@@ -26,6 +26,7 @@ from .scrapers.openbb import OpenBBScraper
 from .scrapers.ossinsight import OSSInsightScraper
 from .scrapers.gdelt import GDELTScraper
 from .scrapers.google_news import GoogleNewsScraper
+from .scrapers.video import VideoScraper
 from .ai.client import create_ai_client
 from .ai.analyzer import ContentAnalyzer
 from .ai.summarizer import DailySummarizer
@@ -482,6 +483,16 @@ class HorizonOrchestrator:
             if self.config.sources.google_news and self.config.sources.google_news.enabled:
                 gn_scraper = GoogleNewsScraper(self.config.sources.google_news, client)
                 tasks.append(self._fetch_with_progress("Google News", gn_scraper, since))
+
+            # YouTube channels (RSS discovery + yt-dlp subtitle transcripts)
+            if (
+                self.config.sources.video.enabled
+                and self.config.sources.video.channels
+            ):
+                video_scraper = VideoScraper(
+                    self.config.sources.video, client, self.config.ai
+                )
+                tasks.append(self._fetch_with_progress("YouTube", video_scraper, since))
 
             # Fetch all concurrently
             outcomes = await asyncio.gather(*tasks)

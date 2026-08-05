@@ -20,6 +20,7 @@ class SourceType(str, Enum):
     OSSINSIGHT = "ossinsight"
     GDELT = "gdelt"
     GOOGLE_NEWS = "google_news"
+    VIDEO = "video"
 
 
 class SourceDefinition(NamedTuple):
@@ -41,6 +42,7 @@ SOURCE_REGISTRY = {
     SourceType.OSSINSIGHT.value: SourceDefinition("ossinsight"),
     SourceType.GDELT.value: SourceDefinition("gdelt"),
     SourceType.GOOGLE_NEWS.value: SourceDefinition("google_news"),
+    SourceType.VIDEO.value: SourceDefinition("video", item_fields=("channels",)),
 }
 
 ProfileRoute = Optional[Union[str, List[str]]]
@@ -262,6 +264,44 @@ class RSSSourceConfig(BaseModel):
     profile: ProfileRoute = None
 
 
+class VideoChannelConfig(BaseModel):
+    """Configuration for a monitored YouTube channel."""
+
+    name: Optional[str] = None
+    channel: str  # channel id (UC...), @handle, or channel URL
+    enabled: bool = True
+    max_videos: int = 5
+    category: Optional[str] = None
+    profile: ProfileRoute = None
+
+
+class VideoConfig(BaseModel):
+    """YouTube/video source configuration (transcript-based ingestion)."""
+
+    enabled: bool = False
+    channels: List[VideoChannelConfig] = Field(default_factory=list)
+    subtitle_langs: List[str] = Field(default_factory=lambda: ["en.*", "ru.*"])
+    transcript_max_chars: int = 12000
+    # Browser to read YouTube cookies from (edge/chrome/firefox/...) to bypass
+    # the "Sign in to confirm you're not a bot" gate. None = no cookies.
+    cookies_from_browser: Optional[str] = None
+    # Path to a Netscape-format cookies.txt export (preferred over browser
+    # cookies on modern Chromium, where DPAPI decryption is broken).
+    cookies_file: Optional[str] = None
+    # Separate cookies export from an ALT Google account for audio downloads:
+    # the main account may sit in the SABR experiment that blocks audio
+    # formats, while a different account gets plain https streams.
+    audio_cookies_file: Optional[str] = None
+    # When a video has no subtitles, download YouTube storyboard frames and
+    # let a vision model (ai.model) summarize the visual content.
+    vision_fallback: bool = True
+    vision_max_frames: int = 8
+    # Speech-to-text for videos without subtitles. "local" uses mlx-whisper
+    # (Apple Silicon); "off" disables ASR and relies on vision fallback.
+    asr: str = "local"
+    asr_model: str = "mlx-community/whisper-large-v3-turbo"
+
+
 class RedditSubredditConfig(BaseModel):
     """Configuration for monitoring a specific subreddit."""
 
@@ -449,6 +489,7 @@ class SourcesConfig(BaseModel):
     ossinsight: OSSInsightConfig = Field(default_factory=OSSInsightConfig)
     gdelt: Optional[GDELTConfig] = None
     google_news: Optional[GoogleNewsConfig] = None
+    video: VideoConfig = Field(default_factory=VideoConfig)
 
 
 class WebhookConfig(BaseModel):
