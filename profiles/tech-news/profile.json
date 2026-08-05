@@ -2,7 +2,8 @@
   "id": "tech-news",
   "name": "Technology News",
   "display_names": {
-    "zh": "科技新闻"
+    "zh": "科技新闻",
+    "ru": "Технологии"
   },
   "match": "match.md",
   "analysis": "analysis.md",
@@ -28,6 +29,18 @@
       },
       {
         "id": "community_discussion",
+        "type": "section",
+        "tools": [],
+        "optional": true
+      },
+      {
+        "id": "fact_check",
+        "type": "section",
+        "tools": ["web_search"],
+        "optional": true
+      },
+      {
+        "id": "deep_dive",
         "type": "section",
         "tools": [],
         "optional": true

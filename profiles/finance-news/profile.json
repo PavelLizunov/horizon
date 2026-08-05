@@ -2,7 +2,8 @@
   "id": "finance-news",
   "name": "Financial News",
   "display_names": {
-    "zh": "财经新闻"
+    "zh": "财经新闻",
+    "ru": "Финансы"
   },
   "match": "match.md",
   "analysis": "analysis.md",
@@ -27,6 +28,12 @@
       },
       {
         "id": "impact",
+        "type": "section",
+        "tools": ["web_search"],
+        "optional": true
+      },
+      {
+        "id": "fact_check",
         "type": "section",
         "tools": ["web_search"],
         "optional": true
