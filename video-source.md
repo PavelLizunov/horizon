@@ -258,13 +258,18 @@ field must not silently empty the digest.
 - A 20-minute video transcribes in roughly a minute on an M4.
 - Videos longer than `asr_max_duration_sec` skip ASR and fall through to the
   vision rung or description.
-- **Memory.** mlx-whisper memoizes the loaded model in an `lru_cache` and MLX
-  keeps its own buffer pool, so `large-v3-turbo` (~1.6 GB) would stay resident
-  through analysis, enrichment and digest generation. `fetch()` drops both in a
-  `finally` block (`_release_asr`), so the weights live only for the video
-  stage. The model deliberately stays cached *between videos within one run* —
-  reloading per video would cost seconds each. If mlx-whisper ever moves that
-  cache, `_release_asr` logs a WARNING rather than leaking quietly.
+- **Memory.** MLX keeps a Metal buffer pool that outlives the last
+  `transcribe()` call, so whisper's working set would stay resident through
+  analysis, enrichment and digest generation. `fetch()` releases it in a
+  `finally` block (`_release_asr`). Measured on an M4 with `large-v3-turbo`:
+  **1540 MB peak during the run, 378 MB after** — the pool is what actually
+  holds the memory, and `mx.clear_cache()` is what returns it.
+
+  mlx-whisper 0.4.3 reloads the model on every call and memoises nothing, so
+  there is no model cache to drop and none is expected; some releases have
+  carried an `lru_cache` on `load_model`, which `_release_asr` clears when it
+  finds one. Its absence is normal and silent. What *does* warn is MLX not
+  exposing `clear_cache` at all — that is the case where memory really leaks.
 
 ## Debugging Scripts
 
