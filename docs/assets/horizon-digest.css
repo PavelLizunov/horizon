@@ -1,0 +1,293 @@
+/* horizon-digest.css — minimal reading-first skin over Material.
+ *
+ * Direction (owner's words): the default Material formatting is rejected,
+ * cobalt.tools is the reference — monochrome, one accent, generous
+ * whitespace, nothing decorative. Built on Material's custom properties so
+ * both colour schemes stay coherent; no hard palette per scheme except the
+ * two background/text pairs.
+ */
+
+:root {
+  --hz-accent: #3d7eff;
+  --hz-radius: 12px;
+  --hz-measure: 68ch;
+}
+
+[data-md-color-scheme="default"] {
+  --md-primary-fg-color: #17181a;
+  --md-default-bg-color: #f6f7f8;
+  --md-default-fg-color: #17181a;
+  --md-typeset-color: #17181a;
+  --md-typeset-a-color: var(--hz-accent);
+  --hz-surface: #ffffff;
+  --hz-muted: #6b7280;
+  --hz-border: #e5e7eb;
+}
+
+[data-md-color-scheme="slate"] {
+  --md-primary-fg-color: #e8eaed;
+  --md-default-bg-color: #0f1115;
+  --md-default-fg-color: #e8eaed;
+  --md-typeset-color: #e8eaed;
+  --md-typeset-a-color: var(--hz-accent);
+  --hz-surface: #161a21;
+  --hz-muted: #9aa3b0;
+  --hz-border: #262c37;
+}
+
+body,
+input {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+    "Helvetica Neue", Arial, sans-serif;
+}
+
+/* --- Chrome: header bar only, no sidebars ------------------------------ */
+
+.md-header {
+  background: var(--md-default-bg-color);
+  color: var(--md-typeset-color);
+  box-shadow: none;
+  border-bottom: 1px solid var(--hz-border);
+}
+
+.md-header__title {
+  font-weight: 600;
+}
+
+/* The nav is three items; it lives in the header area, not a left rail. */
+.md-sidebar--primary {
+  display: none;
+}
+
+.md-main__inner {
+  margin-top: 0.5rem;
+}
+
+/* Reading measure, centred. */
+.md-content {
+  max-width: calc(var(--hz-measure) + 22rem); /* room for the TOC rail */
+  margin-inline: auto;
+}
+
+@media screen and (max-width: 960px) {
+  .md-content {
+    max-width: 100%;
+  }
+}
+
+.md-typeset {
+  font-size: 0.85rem;
+  line-height: 1.7;
+}
+
+.md-typeset h1 {
+  font-size: 1.75rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  margin-bottom: 0.6em;
+}
+
+.md-typeset h1 a {
+  color: var(--md-typeset-color);
+  text-decoration: none;
+}
+
+.md-typeset h2 {
+  font-size: 1.05rem;
+  font-weight: 700;
+  margin-top: 2.2em;
+}
+
+/* Section headings (Контекст / Суть / Вывод ...): small caps with an accent
+ * bar — the specific fix for "эти пункты выделены плохо". */
+.md-content .md-typeset h2:not(:first-child) {
+  padding-top: 1.1em;
+  border-top: 1px solid var(--hz-border);
+  text-transform: uppercase;
+  font-size: 0.78rem;
+  letter-spacing: 0.09em;
+  color: var(--hz-muted);
+}
+
+.md-content .md-typeset h2:not(:first-child)::before {
+  content: "";
+  display: inline-block;
+  width: 3px;
+  height: 0.9em;
+  margin-right: 0.55em;
+  vertical-align: -0.08em;
+  background: var(--hz-accent);
+  border-radius: 2px;
+}
+
+/* Permalink pilcrows are pure noise on a reading page. */
+.md-typeset .headerlink {
+  display: none;
+}
+
+/* --- Article header ------------------------------------------------------ */
+
+/* ⭐️ 8.0/10 badge (wrapped by the site publisher, see article_site_markup). */
+.hz-score {
+  display: inline-block;
+  font-size: 0.72rem;
+  font-weight: 600;
+  line-height: 1;
+  padding: 0.35em 0.7em;
+  margin-left: 0.4em;
+  vertical-align: middle;
+  color: var(--md-typeset-color);
+  background: var(--hz-surface);
+  border: 1px solid var(--hz-border);
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
+/* rss · author · date line under the title. */
+.md-typeset p.hz-byline,
+.md-typeset .hz-byline {
+  font-size: 0.75rem;
+  color: var(--hz-muted);
+  margin-top: -0.4em;
+  margin-bottom: 1.6em;
+}
+
+/* --- References block ---------------------------------------------------- */
+
+.md-typeset details {
+  margin-top: 2.2em;
+  padding: 0.9rem 1.1rem;
+  background: var(--hz-surface);
+  border: 1px solid var(--hz-border);
+  border-radius: var(--hz-radius);
+  box-shadow: none;
+}
+
+.md-typeset details summary {
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.09em;
+  color: var(--hz-muted);
+}
+
+.md-typeset details summary::after {
+  content: "";
+}
+
+/* Strip Material's admonition-blue from the references block. */
+.md-typeset details summary::before {
+  display: none;
+}
+
+.md-typeset details[open] > summary {
+  margin-bottom: 0.4em;
+  background: none;
+  border: none;
+}
+
+.md-typeset details > summary {
+  background: none;
+  padding: 0;
+}
+
+.md-typeset details ul {
+  margin: 0.6em 0 0;
+}
+
+.md-typeset details li {
+  margin-bottom: 0.3em;
+}
+
+/* --- Tags ---------------------------------------------------------------- */
+
+.md-typeset code {
+  background: var(--hz-surface);
+  border: 1px solid var(--hz-border);
+  border-radius: 999px;
+  padding: 0.15em 0.6em;
+  font-size: 0.72rem;
+  box-shadow: none;
+}
+
+/* --- Search page ---------------------------------------------------------- */
+
+.hz-search input[type="search"] {
+  width: 100%;
+  max-width: var(--hz-measure);
+  padding: 0.75rem 1rem;
+  font-size: 0.95rem;
+  color: var(--md-typeset-color);
+  background: var(--hz-surface);
+  border: 1px solid var(--hz-border);
+  border-radius: var(--hz-radius);
+  outline: none;
+}
+
+.hz-search input[type="search"]:focus {
+  border-color: var(--hz-accent);
+}
+
+.hz-search-status {
+  margin: 0.8rem 0;
+  font-size: 0.78rem;
+  color: var(--hz-muted);
+}
+
+.hz-search-results {
+  list-style: none;
+  margin: 0.6rem 0 0;
+  padding: 0;
+  max-width: var(--hz-measure);
+}
+
+.hz-search-results li {
+  padding: 0.9rem 0;
+  border-top: 1px solid var(--hz-border);
+}
+
+.hz-search-results a {
+  font-weight: 600;
+  font-size: 0.95rem;
+  text-decoration: none;
+}
+
+.hz-search-results a:hover {
+  text-decoration: underline;
+}
+
+.hz-search-meta {
+  font-size: 0.72rem;
+  color: var(--hz-muted);
+  margin-top: 0.15rem;
+}
+
+.hz-search-snippet {
+  font-size: 0.8rem;
+  margin-top: 0.3rem;
+}
+
+.hz-search-results mark,
+.md-typeset mark {
+  background: color-mix(in srgb, var(--hz-accent) 25%, transparent);
+  color: inherit;
+  border-radius: 3px;
+}
+
+/* --- Archive listing ------------------------------------------------------ */
+
+/* digest/index.md: mute the date-like listing a touch, keep it a clean list. */
+.md-content .md-typeset ul li {
+  margin-bottom: 0.35em;
+}
+
+/* Footer: the Material default is heavy for a three-page site. */
+.md-footer {
+  background: var(--md-default-bg-color);
+  color: var(--hz-muted);
+  border-top: 1px solid var(--hz-border);
+}
+
+.md-footer-meta {
+  display: none;
+}

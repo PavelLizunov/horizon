@@ -101,6 +101,29 @@ LABELS = {
             "3. 检查 AI 模型是否正常工作\n"
         ),
     },
+    "ru": {
+        # Header stays the brand name; everything the reader sees around the
+        # articles is Russian — the digest is written in ru, en fallback
+        # labels ("References", "Tags") read as a bug on the site.
+        "header": "Horizon Daily",
+        "source": "Источник",
+        "background": "Контекст",
+        "discussion": "Обсуждение",
+        "references": "Источники",
+        "tags": "Теги",
+        "selected_items": "Из {total} материалов отобрано {selected} важных.",
+        "empty_analyzed": "Проанализировано {total} материалов, но ни один не прошёл порог важности.",
+        "empty_body": (
+            "Сегодня без значимых событий. Возможные причины:\n"
+            "- тихий день в отслеживаемых источниках\n"
+            "- слишком высокий порог оценки\n"
+            "- набор источников стоит расширить\n\n"
+            "Что можно сделать:\n"
+            "1. Понизить порог в настройках профиля\n"
+            "2. Добавить больше источников\n"
+            "3. Проверить, что модель оценки работает\n"
+        ),
+    },
 }
 
 
@@ -111,6 +134,55 @@ class ArticlePage:
     slug: str
     title: str
     markdown: str
+
+
+# CJK corner brackets around block titles, e.g. **「Контекст」**. Non-raw
+# strings on purpose: re has no \u escape, the string parser resolves it.
+_BLOCK_TITLE_RE = re.compile("(?m)^\\*\\*\u300c([^\u300d]+)\u300d\\*\\*[ \t]*")
+_SCORE_IN_HEADING_RE = re.compile(" \u2b50\ufe0f ([0-9.]+|\\?)/10$")
+
+
+def article_site_markup(markdown: str) -> str:
+    """Restructure a rendered item for its own site page. Site-only.
+
+    The shared renderer emits one combined-document shape (bold-run block
+    titles, score glued to the heading, a trailing separator before the next
+    item). On a standalone page each of those reads wrong, so the page gets
+    restructured here instead of changing the renderer everyone else shares:
+
+    - ``**"X"** body`` becomes an ``## X`` section heading plus its body, so
+      labelled blocks are visually separate and land in the page TOC;
+    - the heading's trailing score becomes a ``span.hz-score`` badge;
+    - the byline paragraph (``rss · author · date``) gets ``hz-byline``;
+    - the trailing ``---`` that separates items in a combined page is dropped.
+    """
+    # Section headings. The block title may contain escaped markdown; it was
+    # escaped for inline bold context, and heading context accepts the same.
+    markdown = _BLOCK_TITLE_RE.sub(r"## \1\n\n", markdown)
+
+    lines = markdown.split("\n")
+    seen_h1 = False
+    byline_done = False
+    for i, line in enumerate(lines):
+        if not seen_h1 and line.startswith("# "):
+            seen_h1 = True
+            lines[i] = _SCORE_IN_HEADING_RE.sub(
+                ' <span class="hz-score">\u2b50\ufe0f \\1/10</span>', line
+            )
+            continue
+        if seen_h1 and not byline_done and line.strip():
+            if line.startswith(("## ", "<", "*", ">", "-", "|", "`")):
+                break  # past the intro paragraphs; nothing else qualifies
+            if " \u00b7 " in line:
+                # attr_list only decorates a paragraph from its own line.
+                lines[i] = line + "\n{: .hz-byline}"
+                byline_done = True
+
+    markdown = "\n".join(lines)
+    # The separator only made sense between items on a combined page. No re.M:
+    # only the trailing one may go — a --- inside block content must survive.
+    markdown = re.sub(r"\n---\s*$", "\n", markdown.rstrip() + "\n")
+    return markdown.rstrip() + "\n"
 
 
 @dataclass(frozen=True)
@@ -200,7 +272,11 @@ class DailySummarizer:
                     score_override=view_item.score,
                 )
                 pages.append(
-                    ArticlePage(slug=slug, title=view_item.title, markdown=body)
+                    ArticlePage(
+                        slug=slug,
+                        title=view_item.title,
+                        markdown=article_site_markup(body),
+                    )
                 )
                 index_lines.append(
                     f"- [{_escape_markdown(view_item.title)}]({slug}.md) "

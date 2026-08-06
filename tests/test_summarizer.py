@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 
 import markdown
 
-from src.ai.summarizer import DailySummarizer, _escape_markdown
+from src.ai.summarizer import DailySummarizer, _escape_markdown, article_site_markup
 from src.models import (
     ArtifactSource,
     ClassificationResult,
@@ -559,8 +559,80 @@ def test_build_article_pages_index_links_every_article():
 
 
 def test_build_article_pages_renders_title_as_h1():
-    # MkDocs takes the page title from the first H1; the anchor line precedes it.
+    # MkDocs takes the page title from the first H1; the anchor line precedes
+    # it, and the site markup turns the glued-on score into a badge span.
     summarizer = DailySummarizer()
     pages = summarizer.build_article_pages([_make_item(1)], "2026-08-06", language="en")
 
-    assert "# [Important Item 1](https://example.com/items/1) ⭐️ 8.0/10" in pages[0].markdown
+    assert (
+        '# [Important Item 1](https://example.com/items/1) '
+        '<span class="hz-score">\u2b50\ufe0f 8.0/10</span>'
+    ) in pages[0].markdown
+
+
+_ARTICLE_MD = (
+    '<a id="item-tech-news-1"></a>\n'
+    "# [Заголовок](https://example.com/1) ⭐️ 8.0/10\n"
+    "\n"
+    "Лид-абзац.\n"
+    "\n"
+    "rss · tester · Apr 25, 08:00\n"
+    "\n"
+    "**\u300cКонтекст\u300d** Текст контекста.\n"
+    "\n"
+    "**\u300cСуть\u300d** Текст сути.\n"
+    "\n"
+    "**Tags**: `#AI`\n"
+    "\n"
+    "---\n"
+)
+
+
+def test_article_site_markup_turns_block_titles_into_section_headings():
+    # The complaint that started this: bold-run titles rendered
+    # "visually indistinguishable from body text".
+    result = article_site_markup(_ARTICLE_MD)
+
+    assert "## Контекст\n\nТекст контекста." in result
+    assert "## Суть\n\nТекст сути." in result
+    assert "**\u300c" not in result
+
+
+def test_article_site_markup_wraps_the_score_in_a_badge_span():
+    result = article_site_markup(_ARTICLE_MD)
+    assert '# [Заголовок](https://example.com/1) <span class="hz-score">⭐️ 8.0/10</span>' in result
+
+
+def test_article_site_markup_marks_the_byline():
+    result = article_site_markup(_ARTICLE_MD)
+    assert "rss · tester · Apr 25, 08:00\n{: .hz-byline}" in result
+    # Only the byline gets the class, not the lead paragraph.
+    assert "Лид-абзац. {" not in result
+
+
+def test_article_site_markup_drops_the_trailing_separator():
+    result = article_site_markup(_ARTICLE_MD)
+    assert not result.rstrip().endswith("---")
+    # The block content itself must survive untouched.
+    assert "Текст сути." in result
+
+
+def test_ru_digest_uses_russian_chrome_labels():
+    # A ru digest falling back to en labels ("References", "Tags") reads as a
+    # bug on the site. The header stays the brand name.
+    item = _make_item(1)
+    item.processing.artifacts["ru"] = ContentArtifact(
+        language="ru",
+        title="Важный материал 1",
+        blocks=[
+            ContentBlock(id="summary", title="Суть", content="Суть материала.", primary=True)
+        ],
+        sources=[ArtifactSource(id="s1", title="Оригинал", url="https://example.com/items/1")],
+    )
+
+    summarizer = DailySummarizer()
+    result = _run_async(summarizer.generate_summary([item], "2026-04-25", 1, language="ru"))
+
+    assert "# Horizon Daily" in result
+    assert "Источники" in result and "References" not in result
+    assert "Теги" in result and "**Tags**" not in result
