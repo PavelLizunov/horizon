@@ -3,8 +3,8 @@ name: Deploy Docs
 # Superseded by the self-hosted MkDocs site (see PLAN.md / deploy/README.md).
 # Kept, not deleted, because this workflow is upstream's — and left on manual
 # dispatch so an accidental docs/ push cannot republish the stale Jekyll site.
-# NOTE: GitHub Pages must also be turned off in the repository settings;
-# otherwise the gh-pages branch keeps serving the old site regardless.
+# The gh-pages branch exists but Pages does not publish it (verified: the URL
+# 404s), so there is nothing to turn off in the repository settings.
 on:
   workflow_dispatch:
 

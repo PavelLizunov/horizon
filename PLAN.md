@@ -124,8 +124,11 @@ Two files must change anyway: `docs/index.md` (Liquid loops render as literal
 text and it is the site root, so it cannot be excluded) and
 `.github/workflows/deploy-docs.yml` (trigger → `workflow_dispatch`).
 
-**Turning off GitHub Pages is a manual repo-settings step** — otherwise the
-`gh-pages` branch keeps serving the stale Cayman site.
+**GitHub Pages needs no action.** Verified 2026-08-06: the `gh-pages` branch
+exists, but `https://pavellizunov.github.io/horizon/` returns 404 — Pages is not
+publishing it. An earlier note in this plan claimed the stale site would keep
+serving; that was assumed, not measured, and it was wrong. Deleting the branch
+is cosmetic.
 
 Do **not** use Material's blog plugin: it derives URLs from title slugs, and our
 Telegram deep links must be constructible before the page exists.
