@@ -174,7 +174,10 @@ AI_PROVIDER_DEFAULTS = {
         "base_url": "https://api.minimax.io/v1",
     },
     AIProvider.DEEPSEEK: {
-        "model": "deepseek-chat",
+        # "deepseek-chat" and "deepseek-reasoner" were retired 2026-07-24 and
+        # are no longer routed anywhere. Current direct-API models are
+        # deepseek-v4-flash and deepseek-v4-pro.
+        "model": "deepseek-v4-flash",
         "api_key_env": "DEEPSEEK_API_KEY",
         "base_url": "https://api.deepseek.com",
     },

@@ -195,16 +195,41 @@ Accept: a few-second **404 window** — today's page reaches the LXC only after
 Goal: decide with evidence whether to move Horizon's LLM work from
 `qwen3.8-max-preview` to DeepSeek. Not a migration — a measurement.
 
-**First, a real bug regardless of the outcome:** `AI_PROVIDER_DEFAULTS`
-(`src/models.py:176`) still defaults DeepSeek to `deepseek-chat`, which was
-**retired on 2026-07-24** — calls are no longer routed anywhere. Current models
-are `deepseek-v4-flash` and `deepseek-v4-pro`. Fix the default and note it in
-`CHANGELOG.md`.
+### [x] B0. Establish what is actually available — measured 2026-08-06
 
-Cost context, from the measured reference run (137 669 in / 122 273 out):
-V4-Flash at $0.14/1M input and $0.28/1M output ≈ **$0.053 per run**, ~$1.6/month.
-Verify current pricing before committing to it — this figure came from search
-results, not the vendor's own page.
+**DeepSeek is on the existing Alibaba Token Plan endpoint.** Queried
+`GET /compatible-mode/v1/models` against
+`token-plan.ap-southeast-1.maas.aliyuncs.com` with the existing
+`DASHSCOPE_API_KEY`: 11 models, including **`deepseek-v4-flash-0731`** and
+**`deepseek-v4-pro`**.
+
+This collapses the whole "migration" into a one-line config change —
+`ai.model`. Same provider (`ali`), same `base_url`, same key, same quota. No new
+billing relationship, no new provider class, no `provider_chain` work.
+
+Both probes returned normally (13 512 prompt / 2 output, then 24 / 2 001), so
+the model works through the existing client with no code changes.
+
+Also observed: **`qwen3.8-max-preview` is not in the model list** — only
+`qwen3.8-max`. The live config names the retired preview and is silently
+rerouted, which matches the known 2026-08-03 retirement.
+
+Fixed here: `AI_PROVIDER_DEFAULTS` (`src/models.py`) defaulted the *direct*
+DeepSeek API to `deepseek-chat`, retired 2026-07-24 and no longer routed
+anywhere. Now `deepseek-v4-flash`.
+
+**Blocked: the credit coefficient is unmeasured.** The comparison that matters
+is credits per token on the Token Plan, not dollars — Alibaba does not publish
+per-model coefficients. The existing measurement tool (`~/.qquota`, which
+produced the qwen figures of 612 credits/1M input and ~1 700 output) currently
+fails: an SSL handshake timeout, then `KeyError: 'per5HourPercentage'` from
+Alibaba's console usage API, whose response shape appears to have changed.
+Until that is repaired or the numbers are read from the console by hand, the
+**cost half of the A/B cannot be completed**. The quality half is not blocked.
+
+DeepSeek's own public pricing (V4-Flash, $0.14/1M in, $0.28/1M out ≈ $0.053 per
+reference run) is *not* the relevant number while the traffic goes through the
+Token Plan quota. Keep it only as an upper bound if the direct API is ever used.
 
 ### [ ] B1. Capture a replayable item set
 
