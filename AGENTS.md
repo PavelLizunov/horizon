@@ -46,6 +46,9 @@ docs/                # long-form docs; video-source.md is the video module deep 
                      #   pipeline.md maps orchestrator.py's seven stages
 CHANGELOG.md         # what this fork added and WHY — read before "fixing" something
                      #   that looks odd; several oddities are load-bearing
+PLAN.md              # WORK IN PROGRESS checklist — if it exists, start there:
+                     #   find the first unchecked box and continue. Mark steps
+                     #   done as you finish them. Delete the file when shipped.
 ```
 
 ## 3. Setup & Commands
