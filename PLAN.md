@@ -345,16 +345,20 @@ page). Verified rendered in a real browser, light scheme, desktop width.
 Committed. Dark scheme follows the same custom properties — re-check on the
 live site once deployed.
 
-### [ ] C4. Elasticsearch live
+### [x] C4. Elasticsearch live
 
-Code + offline tests done (`src/services/search.py`, orchestrator hook,
-`scripts/dev_reindex_archive.py`, `deploy/search/`). Remaining: docker compose
-up on the Mac, `search.enabled: true` in the Mac's config.json, backfill,
-Caddy `/api/search` proxy on the ingress, end-to-end check from the public
-URL.
+Code + offline tests (`src/services/search.py`, orchestrator hook,
+`scripts/dev_reindex_archive.py`, `deploy/search/`). Deployed 2026-08-07:
+ES 8.15.3 + search-api in Docker on the Mac (heap 512 MB, ES localhost-only),
+53 articles backfilled, Caddy proxies `/api/search` on the digest domain,
+public search verified live. Docker Desktop autoStart enabled so the index
+survives reboots.
 
-### [ ] C5. Ship it
+### [x] C5. Ship it
 
-Commit, bundle to the Mac, `git pull` + push to GitHub from the Mac, rebuild
-the site there, deploy to `/srv/digest.ninitux.com`, verify the next live run
-publishes per-article pages and Telegram links open them.
+Committed, bundled to the Mac, pushed to GitHub over SSH (the stored gh
+token is dead — `gh auth login` when convenient), site rebuilt and deployed
+to `/srv/digest.ninitux.com`, archive republished as per-article pages
+(`scripts/dev_republish_archive.py`), a real-headlines Telegram test sent
+with links that open the live article pages. The next scheduled run (17:00
+MSK) publishes and links natively.
