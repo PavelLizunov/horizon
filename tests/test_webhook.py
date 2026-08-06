@@ -3,6 +3,7 @@
 import asyncio
 import json
 import os
+import re
 import pytest
 from datetime import datetime, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -406,6 +407,81 @@ class TestExtractHeaders:
     def test_invalid_line(self):
         result = _extract_headers("NoColonHere\nValid: yes")
         assert result == {"Valid": "yes"}
+
+
+class TestHeadlineDelivery:
+    """Telegram rejects a message outright on any unsupported tag, so these
+    assertions are the difference between a red CI line and a silent day with
+    no digest."""
+
+    @staticmethod
+    def _item(idx: int, title: str) -> ContentItem:
+        return ContentItem(
+            id=f"rss:headline-{idx}",
+            source_type=SourceType.RSS,
+            title=title,
+            url=f"https://example.com/{idx}",
+            published_at=datetime(2026, 8, 6, tzinfo=timezone.utc),
+            profile="tech-news",
+            processing=ProcessingResult(
+                classification=ClassificationResult(
+                    profile="tech-news", method="source_override"
+                ),
+                analysis=ContentAnalysis(score=8.0, reason="r", summary="s", tags=[]),
+            ),
+        )
+
+    def _chunks(self, items, *, link_base="https://digest.example.com"):
+        config = WebhookConfig(enabled=False, delivery="headlines", link_base=link_base)
+        notifier = WebhookNotifier.__new__(WebhookNotifier)
+        notifier.config = config
+        view = DailySummarizer().build_view(items, "ru")
+        return notifier._build_headline_chunks(view, "2026-08-06", "ru")
+
+    def test_payload_uses_only_tags_telegram_accepts(self):
+        chunks = self._chunks([self._item(1, "Обычный заголовок")])
+        tags = set(re.findall(r"</?([a-zA-Z]+)", "".join(chunks)))
+        assert tags <= {"b", "a"}
+
+    def test_hostile_titles_cannot_break_the_message(self):
+        # Titles are model output over scraped text — a literal '<' would make
+        # Telegram reject the whole message.
+        chunks = self._chunks([self._item(1, '<script>alert(1)</script> & "q"')])
+        body = "".join(chunks)
+        assert "<script>" not in body
+        assert "&lt;script&gt;" in body and "&amp;" in body
+
+    def test_links_target_the_real_item_anchor(self):
+        items = [self._item(1, "A"), self._item(2, "B")]
+        body = "".join(self._chunks(items))
+        for index in (1, 2):
+            anchor = DailySummarizer._item_anchor("tech-news", index)
+            assert f"https://digest.example.com/2026-08-06-ru/#{anchor}" in body
+
+    def test_without_link_base_it_falls_back_to_the_item_url(self):
+        body = "".join(self._chunks([self._item(1, "A")], link_base=None))
+        assert "https://example.com/1" in body
+        assert "digest.example.com" not in body
+
+    def test_a_full_digest_is_chunked_and_loses_nothing(self):
+        items = [self._item(i, f"Заголовок {i} " + "ц" * 90) for i in range(1, 51)]
+        chunks = self._chunks(items)
+
+        assert len(chunks) >= 2, "50 items must not be crammed into one message"
+        assert all(len(chunk) <= 3900 for chunk in chunks)
+        body = "".join(chunks)
+        assert all(f"Заголовок {i} " in body for i in range(1, 51))
+
+    def test_headlines_delivery_respects_the_language_filter(self):
+        config = WebhookConfig(
+            enabled=False, delivery="headlines", languages=["en"], link_base="https://d"
+        )
+        notifier = WebhookNotifier.__new__(WebhookNotifier)
+        notifier.config = config
+
+        assert notifier.build_daily_summary_messages(
+            "summary", [self._item(1, "A")], 1, "2026-08-06", "ru", DailySummarizer()
+        ) == []
 
 
 class TestWebhookRedaction:

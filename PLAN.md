@@ -140,7 +140,7 @@ verifiable offline. Check three things: does `exclude_docs` work; is
 does `validation.anchors` fail the build over TOC links to `#item-*` that are not
 in `page.toc` (if so, drop `--strict` or set `validation: anchors: ignore`).
 
-### [ ] A5. Telegram headline delivery
+### [x] A5. Telegram headline delivery — code and tests done; live send needs a token
 
 **Do not add a platform.** `platform: "generic"` already handles Telegram's
 error shape, and `_render` builds the body from a dict template then

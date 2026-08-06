@@ -1,5 +1,6 @@
 """Webhook notification service for Horizon."""
 
+import html
 import json
 import logging
 import os
@@ -15,7 +16,7 @@ import httpx
 from ..ai.markdown_utils import clean_app_summary_markdown
 from ..console_icons import get_icons
 from ..models import ContentItem, WebhookConfig
-from ..ai.summarizer import DailySummarizer
+from ..ai.summarizer import DailySummarizer, _safe_url
 from ..url_security import UnsafeURLError, safe_request, validate_http_url
 
 logger = logging.getLogger(__name__)
@@ -51,6 +52,11 @@ class WebhookDeliveryResult:
 
 # Pattern: #{key} or #{key?param1=val1&param2=val2}
 _PLACEHOLDER_RE = re.compile(r"#\{(\w+)(\?\w+=[^}]+)?\}")
+# Telegram's documented cap is 4096 characters; budgeting on the raw string
+# with headroom costs at most one extra message, while guessing high costs the
+# whole day's digest — an over-limit message is rejected, not truncated.
+_TELEGRAM_CHUNK_CHARS = 3900
+
 _SENSITIVE_HEADER_RE = re.compile(
     r"(authorization|token|secret|signature|key|password)", re.IGNORECASE
 )
@@ -466,6 +472,52 @@ class WebhookNotifier:
             "headers": redact_headers(headers),
         }
 
+    def _build_headline_chunks(self, view, date: str, lang: str) -> List[str]:
+        """Render headlines as Telegram-safe HTML, split to fit the message cap.
+
+        Built from the view, never from the rendered markdown: `_format_item`
+        emits `<details>`, `<ul>`, `<li>`, headings and `<a id>`, none of which
+        Telegram accepts — and an unsupported tag makes it reject the *whole*
+        message rather than degrade it. Only `<b>` and `<a href>` are produced
+        here, so those tags cannot physically enter the payload.
+
+        Escaping is mandatory, not defensive: titles are model output over
+        scraped text, so a single literal `<` would drop the day's digest.
+        """
+        link_base = (getattr(self.config, "link_base", None) or "").rstrip("/")
+        chunks: List[str] = []
+        current: List[str] = []
+        size = 0
+
+        def flush() -> None:
+            nonlocal current, size
+            if current:
+                chunks.append("\n".join(current))
+                current, size = [], 0
+
+        for group in view.groups:
+            lines = [f"<b>{html.escape(group.name, quote=False)}</b>"]
+            for view_item in group.items:
+                if link_base:
+                    href = f"{link_base}/{date}-{lang}/#{view_item.anchor_id}"
+                else:
+                    # Works before the site exists: fall back to the source.
+                    href = _safe_url(view_item.item.url) or ""
+                # Cap the title so one pathological item cannot produce a line
+                # that no chunk can hold.
+                title = html.escape(str(view_item.title)[:200], quote=False)
+                label = f"<a href=\"{href}\">{title}</a>" if href else title
+                score = f" {view_item.score}/10" if view_item.score != "?" else ""
+                lines.append(f"{view_item.index}. {label}{score}")
+
+            for line in lines:
+                if size + len(line) + 1 > _TELEGRAM_CHUNK_CHARS:
+                    flush()
+                current.append(line)
+                size += len(line) + 1
+        flush()
+        return chunks
+
     def build_daily_summary_messages(
         self,
         summary: str,
@@ -572,6 +624,18 @@ class WebhookNotifier:
                 return list(reversed(item_messages)) + [overview_message]
 
             return [overview_message] + item_messages
+
+        if delivery == "headlines":
+            view = summarizer.build_view(important_items, lang)
+            return [
+                {
+                    **base_vars,
+                    "message_kind": "headlines",
+                    "message_title": f"Horizon {date}",
+                    "headlines": chunk,
+                }
+                for chunk in self._build_headline_chunks(view, date, lang)
+            ]
 
         return [
             {
