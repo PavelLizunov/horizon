@@ -5,6 +5,7 @@ from typing import cast
 import pytest
 from pathlib import Path
 import src._file_utils as file_utils
+import src.storage.manager as manager
 from src.storage.manager import StorageManager, ConfigError, _expand_env_vars, safe_output_path
 from src.models import AIConfig, Config
 from pydantic import ValidationError
@@ -192,6 +193,60 @@ def test_save_daily_summary_defensively_rejects_path_escape(tmp_path):
     with pytest.raises(ValueError, match="escapes intended root"):
         storage.save_daily_summary("2026-07-13", "secret", language="../../../../outside")
     assert not (tmp_path / "outside.md").exists()
+
+
+def test_publish_site_page_keeps_the_h1_and_excludes_from_search(tmp_path, monkeypatch):
+    monkeypatch.setattr(manager, "SITE_DIGEST_DIR", tmp_path / "digest")
+    storage = StorageManager(data_dir=str(tmp_path / "data"))
+
+    path = storage.publish_site_page("2026-08-06", "# Horizon Daily\n\nbody\n", language="ru")
+    written = path.read_text(encoding="utf-8")
+
+    assert path.name == "2026-08-06-ru.md"
+    # Excluding digests is what keeps search_index.json from growing without
+    # bound — a year of them measured 4.6 MB gzipped.
+    assert written.startswith("---\nsearch:\n  exclude: true\n---\n\n")
+    # MkDocs takes the page title from the H1, so it must survive verbatim.
+    assert "# Horizon Daily" in written
+    assert "body" in written
+
+
+def test_publish_site_page_refreshes_the_index_newest_first(tmp_path, monkeypatch):
+    monkeypatch.setattr(manager, "SITE_DIGEST_DIR", tmp_path / "digest")
+    storage = StorageManager(data_dir=str(tmp_path / "data"))
+
+    storage.publish_site_page("2026-08-05", "# a", language="ru")
+    storage.publish_site_page("2026-08-06", "# b", language="ru")
+    index = (tmp_path / "digest" / "index.md").read_text(encoding="utf-8")
+
+    assert index.index("2026-08-06-ru") < index.index("2026-08-05-ru")
+    assert "index.md" not in index  # the listing must not link to itself
+
+
+def test_publish_site_page_rejects_path_escape(tmp_path, monkeypatch):
+    monkeypatch.setattr(manager, "SITE_DIGEST_DIR", tmp_path / "digest")
+    storage = StorageManager(data_dir=str(tmp_path / "data"))
+
+    with pytest.raises(ValueError, match="escapes intended root"):
+        storage.publish_site_page("2026-08-06", "secret", language="../../../../outside")
+    assert not (tmp_path / "outside.md").exists()
+
+
+def test_publish_site_page_replace_failure_preserves_destination(tmp_path, monkeypatch):
+    monkeypatch.setattr(manager, "SITE_DIGEST_DIR", tmp_path / "digest")
+    storage = StorageManager(data_dir=str(tmp_path / "data"))
+    destination = storage.publish_site_page("2026-08-06", "# existing", language="ru")
+
+    def fail_replace(source, target):
+        raise OSError("replace failed")
+
+    monkeypatch.setattr(file_utils.os, "replace", fail_replace)
+
+    with pytest.raises(OSError, match="replace failed"):
+        storage.publish_site_page("2026-08-06", "# replacement", language="ru")
+
+    assert "# existing" in destination.read_text(encoding="utf-8")
+    assert list(destination.parent.glob(f".{destination.name}.*.tmp")) == []
 
 
 def test_safe_output_path_rejects_escape_from_other_output_roots(tmp_path):

@@ -12,7 +12,7 @@ from rich.console import Console
 
 from .console_icons import get_icons
 from .models import Config, ContentItem
-from .storage.manager import StorageManager, safe_output_path
+from .storage.manager import StorageManager
 from .services.email import EmailManager
 from .services.webhook import WebhookNotifier
 from .scrapers.github import GitHubScraper
@@ -308,46 +308,13 @@ class HorizonOrchestrator:
                     f"{self.icons['save']} Saved {lang.upper()} summary to: {summary_path}\n"
                 )
 
-                # Copy to docs/ for GitHub Pages
-                try:
-                    from pathlib import Path
-
-                    post_filename = f"{today}-summary-{lang}.md"
-                    posts_dir = Path("docs/_posts")
-                    posts_dir.mkdir(parents=True, exist_ok=True)
-
-                    dest_path = safe_output_path(posts_dir, post_filename)
-
-                    # Add Jekyll front matter
-                    front_matter = (
-                        "---\n"
-                        "layout: default\n"
-                        f"title: \"Horizon Summary: {today} ({lang.upper()})\"\n"
-                        f"date: {today}\n"
-                        f"lang: {lang}\n"
-                        "---\n\n"
-                    )
-
-                    # Strip leading H1 header to avoid duplication with Jekyll title
-                    summary_content = summary
-                    first_line = summary_content.strip().split("\n")[0]
-                    if first_line.startswith("# "):
-                        parts = summary_content.split("\n", 1)
-                        if len(parts) > 1:
-                            summary_content = parts[1].strip()
-
-                    with open(dest_path, "w", encoding="utf-8") as f:
-                        f.write(front_matter + summary_content)
-
-                    self.console.print(
-                        f"{self.icons['document']} Copied {lang.upper()} summary "
-                        f"to GitHub Pages: {dest_path}\n"
-                    )
-                except Exception as e:
-                    self.console.print(
-                        f"[yellow]{self.icons['warning']} Failed to copy "
-                        f"{lang.upper()} summary to docs/: {e}[/yellow]\n"
-                    )
+                # Publish as a page of the static site. Not guarded: the
+                # headline links sent below point at this page.
+                site_path = self.storage.publish_site_page(today, summary, language=lang)
+                self.console.print(
+                    f"{self.icons['document']} Published {lang.upper()} summary "
+                    f"to the site: {site_path}\n"
+                )
 
                 # Send email if configured
                 if self.email_manager and self.config.email and self.config.email.enabled:
@@ -1069,30 +1036,3 @@ class HorizonOrchestrator:
         analyzer = ContentAnalyzer(ai_client, self.profiles, console=self.console)
 
         return await analyzer.analyze_batch(items)
-
-    async def _generate_summary(
-        self,
-        items: List[ContentItem],
-        date: str,
-        total_fetched: int,
-        language: str = "en",
-    ) -> str:
-        """Generate daily summary.
-
-        Args:
-            items: Important items to include (already enriched with background/related)
-            date: Date string
-            total_fetched: Total items fetched
-            language: Output language ("en" or "zh")
-
-        Returns:
-            str: Markdown summary
-        """
-        self.console.print(f"{self.icons['summary']} Generating daily summary...")
-
-        summarizer = DailySummarizer(
-            profile_names=self.profiles.names,
-            profile_order=self.config.digest.profile_order,
-        )
-
-        return await summarizer.generate_summary(items, date, total_fetched, language=language)

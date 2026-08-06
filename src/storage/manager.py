@@ -18,6 +18,19 @@ from ..models import Config
 _ENV_VAR_PATTERN = re.compile(r"\$\{([A-Za-z_][A-Za-z0-9_]*)\}")
 
 
+# Site pages live in the repo tree, not under data/, because the static-site
+# generator reads from there. Anchored to this module rather than the working
+# directory: launchd sets WorkingDirectory, but deploy/README.md also documents
+# a crontab variant where a missing `cd` would silently relocate the whole site.
+_REPO_ROOT = Path(__file__).resolve().parents[2]
+SITE_DIGEST_DIR = _REPO_ROOT / "docs" / "digest"
+
+# Digest pages are excluded from the search index on purpose. A year of daily
+# digests measured 35 MB of search_index.json (4.6 MB gzipped) that every
+# visitor downloads on first search; documentation-only search keeps it flat.
+_SITE_FRONT_MATTER = "---\nsearch:\n  exclude: true\n---\n\n"
+
+
 def safe_output_path(root: Path, filename: str) -> Path:
     """Return an output path only when it resolves below root."""
     resolved_root = root.resolve()
@@ -128,6 +141,34 @@ class StorageManager:
         _atomic_write_text(filepath, markdown)
 
         return filepath
+
+    def publish_site_page(self, date: str, markdown: str, language: str = "en") -> Path:
+        """Write the digest as a page of the static site, and refresh the index.
+
+        The summary goes through verbatim — MkDocs takes the page title from the
+        leading H1, so stripping it would leave the page untitled. Deliberately
+        not wrapped in a try/except: once headline links point at this page, a
+        silent failure would ship links to a page that does not exist.
+        """
+        SITE_DIGEST_DIR.mkdir(parents=True, exist_ok=True)
+        filepath = safe_output_path(SITE_DIGEST_DIR, f"{date}-{language}.md")
+        _atomic_write_text(filepath, _SITE_FRONT_MATTER + markdown)
+
+        self._write_site_index()
+        return filepath
+
+    @staticmethod
+    def _write_site_index(limit: int = 60) -> None:
+        """Regenerate the digest listing; `nav` in mkdocs.yml never sees these."""
+        pages = sorted(
+            (p for p in SITE_DIGEST_DIR.glob("*.md") if p.name != "index.md"),
+            reverse=True,
+        )
+        lines = ["# Дайджесты", ""]
+        lines += [f"- [{p.stem}]({p.name})" for p in pages[:limit]]
+        _atomic_write_text(
+            SITE_DIGEST_DIR / "index.md", _SITE_FRONT_MATTER + "\n".join(lines) + "\n"
+        )
 
     def load_subscribers(self) -> list:
         """Loads the list of email subscribers."""

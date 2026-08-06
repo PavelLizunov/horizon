@@ -69,7 +69,7 @@ Telegram carries its token in the path. Worse: `_validate_url` formatted the raw
 URL into an exception that reaches `send_failure`, which posts it as an
 *outbound webhook body*. Both fixed.
 
-### [ ] A3. Publish the site page
+### [x] A3. Publish the site page — `StorageManager.publish_site_page`
 
 Delete the inline Jekyll block `src/orchestrator.py:311-350` (40 lines) and call
 a new `StorageManager.publish_site_page(date, summary, language)` instead.
