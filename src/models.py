@@ -290,12 +290,19 @@ class VideoConfig(BaseModel):
     # Where the sidecar writes and the pipeline reads (sidecar mode only).
     inbox_file: str = "data/video-inbox.json"
     # A sidecar that silently stopped running leaves a stale inbox behind.
-    # Past this age the scraper warns; items are still used, because seen.json
-    # already drops the ones a previous run consumed. 0 disables the check.
+    # Past this age the scraper warns; items are still used. Note there is NO
+    # cross-run dedup in this codebase — an earlier comment here claimed
+    # seen.json would drop already-consumed items, but that mechanism was
+    # removed upstream and no longer exists. What actually limits re-emission
+    # is the time-window filter applied when the inbox is read. 0 disables.
     inbox_max_age_hours: int = Field(default=48, ge=0)
     channels: List[VideoChannelConfig] = Field(default_factory=list)
     subtitle_langs: List[str] = Field(default_factory=lambda: ["en.*", "ru.*"])
-    transcript_max_chars: int = 12000
+    # Lower bound matters: the description is never truncated, so a cap below
+    # it slices the sampled transcript away entirely while metadata still says
+    # has_transcript. 2000 leaves room for a long YouTube description plus a
+    # usable transcript sample.
+    transcript_max_chars: int = Field(default=12000, ge=2000, le=100_000)
     # Browser to read YouTube cookies from (edge/chrome/firefox/...) to bypass
     # the "Sign in to confirm you're not a bot" gate. None = no cookies.
     cookies_from_browser: Optional[str] = None

@@ -695,13 +695,20 @@ class VideoScraper(BaseScraper):
 
         parts = []
         if description.strip():
-            parts.append(description.strip())
+            text = description.strip()
+            if transcript:
+                # The description used to be immune to the cap, so a long one
+                # could push the sampled transcript entirely past the final
+                # slice — leaving an item that says has_transcript while
+                # containing none. Both now share the budget.
+                text = text[: max(video_cfg.transcript_max_chars // 3, 500)]
+            parts.append(text)
         if transcript:
             # Sample rather than prefix-cut: a raw slice drops the back of a
             # long video entirely, and the analyzer's head-middle-tail
             # sampling runs downstream — it cannot recover text the scraper
             # already threw away.
-            budget = video_cfg.transcript_max_chars - len(description.strip()) - 64
+            budget = video_cfg.transcript_max_chars - len(parts[0] if parts else "") - 64
             transcript = select_content(
                 transcript, max(budget, 500), "head-middle-tail"
             )

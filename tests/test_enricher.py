@@ -597,6 +597,9 @@ def test_real_cjk_is_still_detected():
     from src.ai.localization import has_cjk_leak
 
     assert has_cjk_leak("содержит 中文", "ru") is True
+    # Ideographs alone would miss a purely syllabic Japanese or Korean leak.
+    assert has_cjk_leak("これはテストです", "ru") is True
+    assert has_cjk_leak("이것은 테스트", "ru") is True
     assert has_cjk_leak("ext-A 㐀", "ru") is True
     assert has_cjk_leak("compat 豈", "ru") is True
     # Chinese output is allowed to contain Chinese.

@@ -186,7 +186,7 @@ them raise:
 | unparsable JSON | warn (`unreadable`), no items |
 | `version` mismatch | warn, no items — re-run `horizon-video` after upgrading rather than guessing at an old shape |
 | one malformed item | drop that item, keep the rest, warn with the count |
-| older than `inbox_max_age_hours` | warn (`stopped running`) **and still use it** — stale beats empty, and `seen.json` already drops anything a previous run consumed |
+| older than `inbox_max_age_hours` | warn (`stopped running`) **and still use it** — stale beats empty. Note there is no cross-run dedup in this project; what limits re-emission is the time-window filter applied on read |
 
 Items older than the run's time window are filtered on read, so a large inbox
 never re-floods the digest. The sidecar's own `VideoRunStats` travel inside the

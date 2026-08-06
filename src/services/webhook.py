@@ -88,6 +88,10 @@ def _truncate(value: str, limit: int, split: str) -> str:
         kept.append(seg)
         current_chars += seg_chars
 
+    # Note: a first segment longer than `limit` is returned whole, on purpose —
+    # see test_single_segment_exceeds_limit_still_kept. Emitting something beats
+    # emitting nothing. The consequence is that `#{key?limit=N}` is a best-effort
+    # trim, not a hard cap: do not rely on it to satisfy a platform's size limit.
     return split.join(kept)
 
 
@@ -791,10 +795,16 @@ class WebhookNotifier:
         Slack ok=false).
         """
         status = response.status_code
+        # Parse the FULL body: platforms report failures as a 2xx with a JSON
+        # error code, and truncating first makes that JSON unparseable — the
+        # guard would then blind itself and report a rejected digest as sent.
+        # The cut is for logging only.
+        error_hint = (
+            self._check_body_error_code(response.text) if 200 <= status < 300 else None
+        )
         body = response.text[:500]
 
         if 200 <= status < 300:
-            error_hint = self._check_body_error_code(body)
             if error_hint:
                 logger.warning(
                     "Webhook 2xx but body contains error: URL=%s, status=%d, error=%s",

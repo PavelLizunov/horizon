@@ -463,6 +463,33 @@ def test_fetch_warns_about_a_partial_transcript(monkeypatch, tmp_path, caplog) -
     assert "1 partial" in scraper.last_run_stats.summary()
 
 
+def test_a_long_description_cannot_starve_the_transcript(monkeypatch, tmp_path) -> None:
+    """The description used to be immune to the content cap.
+
+    With a cap below the description length, the sampled transcript was pushed
+    entirely past the final slice — producing an item that claimed
+    has_transcript while containing none of it.
+    """
+    vtt = tmp_path / "abc123def45.vtt"
+    cue = "line one " * 200
+    vtt.write_text(
+        f"WEBVTT\n\n00:00:00.000 --> 00:00:02.000\n{cue}\n", encoding="utf-8"
+    )
+    scraper = _make_scraper(
+        monkeypatch,
+        vtt_path=vtt,
+        info={"description": "D" * 5000, "duration": 600},
+        transcript_max_chars=3000,
+    )
+
+    items = asyncio.run(scraper.fetch(datetime(2026, 7, 1, tzinfo=timezone.utc)))
+
+    content = items[0].content
+    assert items[0].metadata["has_transcript"] is True
+    assert "Transcript:" in content, "the transcript was sliced away entirely"
+    assert "line one" in content
+
+
 def test_long_transcripts_keep_their_ending(monkeypatch, tmp_path) -> None:
     # A prefix cut would leave the digest reading only the opening minutes.
     cues = "\n\n".join(

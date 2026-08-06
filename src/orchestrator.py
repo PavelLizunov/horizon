@@ -649,7 +649,15 @@ class HorizonOrchestrator:
             if not isinstance(group, list) or len(group) < 2:
                 continue
             primary_idx = group[0]
-            if primary_idx < 0 or primary_idx >= len(items):
+            # isinstance guard mirrors the one on dup_idx below. These indices
+            # come from model output: a quoted "0" would raise TypeError here,
+            # outside any handler, killing a run whose analysis is already paid
+            # for.
+            if (
+                not isinstance(primary_idx, int)
+                or primary_idx < 0
+                or primary_idx >= len(items)
+            ):
                 continue
             primary = items[primary_idx]
             for dup_idx in group[1:]:

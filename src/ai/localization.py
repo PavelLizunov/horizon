@@ -14,7 +14,12 @@ _TRADITIONAL_TO_SIMPLIFIED = OpenCC("t2s")
 #   U+3400–U+4DBF  CJK Unified Ideographs Extension A
 #   U+4E00–U+9FFF  CJK Unified Ideographs
 #   U+F900–U+FAFF  CJK Compatibility Ideographs
-_CJK_RE = re.compile("[㐀-䶿一-鿿豈-﫿]")
+#   U+3040–U+30FF  Hiragana + Katakana
+#   U+AC00–U+D7AF  Hangul Syllables
+# Kana and Hangul are included because ideographs alone miss a purely
+# syllabic Japanese or Korean leak. None of these ranges can match
+# Cyrillic or Latin, so they cannot reintroduce the false positives above.
+_CJK_RE = re.compile("[぀-ヿ㐀-䶿一-鿿가-힯豈-﫿]")
 
 
 def has_cjk_leak(text: str, language: str) -> bool:

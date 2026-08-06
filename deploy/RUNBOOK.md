@@ -78,7 +78,7 @@ it builds the scraper without an AI config, so the vision rung stays off).
 - `horizon` — a full pipeline run costs real LLM tokens (~260k on the reference
   deployment, i.e. a real bill).
 - Anything writing `data/config.json`, `data/youtube-cookies*.txt`, or
-  `data/seen.json` — config, credentials and dedup state.
+  `data/seen.json` (if present) — config, credentials and dedup state.
 - `launchctl load/unload`, `pmset` — scheduling and power behaviour.
 
 ## Health Check

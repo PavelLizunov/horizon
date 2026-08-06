@@ -34,9 +34,12 @@ def parse_json_response(response: str) -> Optional[dict]:
         except (json.JSONDecodeError, ValueError, IndexError):
             pass
 
-    # Strategy 4: find the first { ... } block using brace matching
+    # Strategy 4: brace matching, trying every candidate opening brace.
+    # Models often echo the contract from the prompt ahead of their answer —
+    # `Contract: {"score": 0-10}. Analysis: {"score": 8, ...}` — and stopping at
+    # the first unparseable block would discard the real object that follows.
     start = text.find("{")
-    if start != -1:
+    while start != -1:
         depth = 0
         for i in range(start, len(text)):
             if text[i] == "{":
@@ -48,6 +51,7 @@ def parse_json_response(response: str) -> Optional[dict]:
                         return json.loads(text[start : i + 1])
                     except (json.JSONDecodeError, ValueError):
                         break
+        start = text.find("{", start + 1)
 
     # Strategy 5: regex extraction as last resort
     match = re.search(r"\{[\s\S]*\}", text)
