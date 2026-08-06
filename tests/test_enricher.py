@@ -577,3 +577,27 @@ def test_persistent_language_leak_is_logged_once_and_artifact_still_shipped(capl
     assert "ru" in caplog.text
     # Degrade, do not drop: the best available artifact still ships.
     assert item.processing.artifacts["ru"].title == "新架构发布"
+
+def test_hyphens_are_not_cjk():
+    """The detector used to end its character class in "豈-".
+
+    A trailing hyphen inside a character class is a literal hyphen, not the
+    start of a range, so every ordinary dash counted as a CJK leak. Every
+    enriched artifact containing a hyphenated word was therefore regenerated
+    once for nothing, and the persistent-leak warning fired constantly while
+    shipped digests contained no CJK at all.
+    """
+    from src.ai.localization import has_cjk_leak
+
+    for text in ("health-check", "прайс-лист", "e-mail", "a - b", "a — b", "a – b"):
+        assert has_cjk_leak(text, "ru") is False, text
+
+
+def test_real_cjk_is_still_detected():
+    from src.ai.localization import has_cjk_leak
+
+    assert has_cjk_leak("содержит 中文", "ru") is True
+    assert has_cjk_leak("ext-A 㐀", "ru") is True
+    assert has_cjk_leak("compat 豈", "ru") is True
+    # Chinese output is allowed to contain Chinese.
+    assert has_cjk_leak("中文", "zh") is False
