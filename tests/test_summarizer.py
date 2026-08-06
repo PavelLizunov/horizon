@@ -520,3 +520,47 @@ def test_generate_summary_preserves_normal_http_links():
     assert "[Important Item 1](https://example.com/items/1)" in result
     assert "[Discussion](https://example.com/discuss?id=1#comments)" in result
     assert 'href="https://docs.example.com/path?q=one&amp;lang=en"' in result
+
+
+def test_build_article_pages_one_page_per_item_plus_index():
+    summarizer = DailySummarizer()
+    pages = summarizer.build_article_pages(
+        [_make_item(1), _make_item(2)], "2026-08-06", language="en"
+    )
+
+    slugs = [p.slug for p in pages]
+    assert slugs[-1] == "index"
+    assert len(pages) == 3  # two articles + the issue index
+
+
+def test_build_article_pages_slug_is_the_anchor_without_its_prefix():
+    # The deep-link contract: the Telegram headline builder derives the same
+    # slug from the same anchor, so one page per article stays one derivation.
+    summarizer = DailySummarizer()
+    pages = summarizer.build_article_pages([_make_item(1)], "2026-08-06", language="en")
+
+    anchor = DailySummarizer._item_anchor("tech-news", 1)
+    assert pages[0].slug == anchor.removeprefix("item-")
+    # The full anchor id survives inside the page, so nothing downstream that
+    # expects item-{profile}-{index} breaks.
+    assert f'id="{anchor}"' in pages[0].markdown
+
+
+def test_build_article_pages_index_links_every_article():
+    summarizer = DailySummarizer()
+    pages = summarizer.build_article_pages(
+        [_make_item(1), _make_item(2)], "2026-08-06", language="en"
+    )
+    index = pages[-1]
+
+    for page in pages[:-1]:
+        assert f"({page.slug}.md)" in index.markdown
+    assert "8.0/10" in index.markdown
+
+
+def test_build_article_pages_renders_title_as_h1():
+    # MkDocs takes the page title from the first H1; the anchor line precedes it.
+    summarizer = DailySummarizer()
+    pages = summarizer.build_article_pages([_make_item(1)], "2026-08-06", language="en")
+
+    assert "# [Important Item 1](https://example.com/items/1) ⭐️ 8.0/10" in pages[0].markdown

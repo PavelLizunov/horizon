@@ -451,12 +451,17 @@ class TestHeadlineDelivery:
         assert "<script>" not in body
         assert "&lt;script&gt;" in body and "&amp;" in body
 
-    def test_links_target_the_real_item_anchor(self):
+    def test_links_target_the_article_page_derived_from_the_item_anchor(self):
+        # One page per article: the slug is the anchor id without its `item-`
+        # prefix — the same derivation the site publisher uses, so the link
+        # contract is a single shared function of the anchor.
         items = [self._item(1, "A"), self._item(2, "B")]
         body = "".join(self._chunks(items))
         for index in (1, 2):
             anchor = DailySummarizer._item_anchor("tech-news", index)
-            assert f"https://digest.example.com/2026-08-06-ru/#{anchor}" in body
+            slug = anchor.removeprefix("item-")
+            assert f"https://digest.example.com/2026-08-06-ru/{slug}/" in body
+            assert f"#{anchor}" not in body
 
     def test_without_link_base_it_falls_back_to_the_item_url(self):
         body = "".join(self._chunks([self._item(1, "A")], link_base=None))

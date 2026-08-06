@@ -142,30 +142,38 @@ class StorageManager:
 
         return filepath
 
-    def publish_site_page(self, date: str, markdown: str, language: str = "en") -> Path:
-        """Write the digest as a page of the static site, and refresh the index.
+    def publish_site_pages(self, date: str, pages, language: str = "en") -> Path:
+        """Write one page per article under `digest/{date}-{language}/`.
 
-        The summary goes through verbatim — MkDocs takes the page title from the
-        leading H1, so stripping it would leave the page untitled. Deliberately
-        not wrapped in a try/except: once headline links point at this page, a
-        silent failure would ship links to a page that does not exist.
+        Each article gets its own URL so a link from a chat message opens that
+        article rather than dropping the reader into the middle of a long
+        combined page. Deliberately not wrapped in a try/except: headline links
+        point at these pages, so a silent failure would ship links to nothing.
         """
-        SITE_DIGEST_DIR.mkdir(parents=True, exist_ok=True)
-        filepath = safe_output_path(SITE_DIGEST_DIR, f"{date}-{language}.md")
-        _atomic_write_text(filepath, _SITE_FRONT_MATTER + markdown)
+        # The issue directory name carries the language code, which is config —
+        # validate it before mkdir, same as the page slugs below.
+        issue_dir = safe_output_path(SITE_DIGEST_DIR, f"{date}-{language}")
+        issue_dir.mkdir(parents=True, exist_ok=True)
+
+        written: list[Path] = []
+        for page in pages:
+            filepath = safe_output_path(issue_dir, f"{page.slug}.md")
+            _atomic_write_text(filepath, _SITE_FRONT_MATTER + page.markdown)
+            written.append(filepath)
 
         self._write_site_index()
-        return filepath
+        return issue_dir
 
     @staticmethod
     def _write_site_index(limit: int = 60) -> None:
-        """Regenerate the digest listing; `nav` in mkdocs.yml never sees these."""
-        pages = sorted(
-            (p for p in SITE_DIGEST_DIR.glob("*.md") if p.name != "index.md"),
+        """Regenerate the archive listing; `nav` in mkdocs.yml never sees these."""
+        issues = sorted(
+            (d for d in SITE_DIGEST_DIR.iterdir() if d.is_dir()),
+            key=lambda d: d.name,
             reverse=True,
         )
-        lines = ["# Дайджесты", ""]
-        lines += [f"- [{p.stem}]({p.name})" for p in pages[:limit]]
+        lines = ["# Архив выпусков", ""]
+        lines += [f"- [{d.name}]({d.name}/index.md)" for d in issues[:limit]]
         _atomic_write_text(
             SITE_DIGEST_DIR / "index.md", _SITE_FRONT_MATTER + "\n".join(lines) + "\n"
         )

@@ -312,10 +312,15 @@ class HorizonOrchestrator:
 
                 # Publish as a page of the static site. Not guarded: the
                 # headline links sent below point at this page.
-                site_path = self.storage.publish_site_page(today, summary, language=lang)
+                article_pages = summarizer.build_article_pages(
+                    important_items, today, language=lang
+                )
+                site_path = self.storage.publish_site_pages(
+                    today, article_pages, language=lang
+                )
                 self.console.print(
-                    f"{self.icons['document']} Published {lang.upper()} summary "
-                    f"to the site: {site_path}\n"
+                    f"{self.icons['document']} Published {len(article_pages) - 1} "
+                    f"{lang.upper()} article pages to the site: {site_path}\n"
                 )
 
                 # Send email if configured

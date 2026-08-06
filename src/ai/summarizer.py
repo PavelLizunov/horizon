@@ -105,6 +105,15 @@ LABELS = {
 
 
 @dataclass(frozen=True)
+class ArticlePage:
+    """One rendered page of the site: a single article, or an issue index."""
+
+    slug: str
+    title: str
+    markdown: str
+
+
+@dataclass(frozen=True)
 class SummaryItemView:
     item: ContentItem
     index: int
@@ -154,6 +163,59 @@ class DailySummarizer:
                 profile_id.replace("-", " ").replace("_", " ").title(),
             ),
         )
+
+    def build_article_pages(
+        self,
+        items: List[ContentItem],
+        date: str,
+        language: str = "en",
+    ) -> List["ArticlePage"]:
+        """Render one standalone page per item, plus the issue's index page.
+
+        The site used to publish a single page per issue with in-page anchors,
+        which meant a link from a chat message landed the reader in the middle
+        of a long document. One page per article gives each a URL of its own.
+
+        The slug is the existing anchor id without its `item-` prefix, so the
+        deep-link contract stays a single derivation shared with the summary's
+        table of contents and the chat headline builder.
+        """
+        labels = LABELS.get(language, LABELS["en"])
+        view = self.build_view(items, language)
+        pages: List[ArticlePage] = []
+        index_lines = [f"# {labels['header']} - {date}", ""]
+
+        for group in view.groups:
+            index_lines += [f"## {group.name}", ""]
+            for view_item in group.items:
+                slug = view_item.anchor_id.removeprefix("item-")
+                body = self._format_item(
+                    view_item.item,
+                    labels,
+                    language,
+                    view_item.index,
+                    heading_level=1,
+                    anchor_id=view_item.anchor_id,
+                    title_override=view_item.title,
+                    score_override=view_item.score,
+                )
+                pages.append(
+                    ArticlePage(slug=slug, title=view_item.title, markdown=body)
+                )
+                index_lines.append(
+                    f"- [{_escape_markdown(view_item.title)}]({slug}.md) "
+                    f"⭐️ {view_item.score}/10"
+                )
+            index_lines.append("")
+
+        pages.append(
+            ArticlePage(
+                slug="index",
+                title=f"{labels['header']} - {date}",
+                markdown="\n".join(index_lines).rstrip() + "\n",
+            )
+        )
+        return pages
 
     def build_view(
         self,

@@ -195,14 +195,21 @@ def test_save_daily_summary_defensively_rejects_path_escape(tmp_path):
     assert not (tmp_path / "outside.md").exists()
 
 
-def test_publish_site_page_keeps_the_h1_and_excludes_from_search(tmp_path, monkeypatch):
+def _pages(*pairs):
+    """(slug, markdown) pairs as minimal page objects for publish_site_pages."""
+    return [SimpleNamespace(slug=slug, markdown=markdown) for slug, markdown in pairs]
+
+
+def test_publish_site_pages_keeps_the_h1_and_excludes_from_search(tmp_path, monkeypatch):
     monkeypatch.setattr(manager, "SITE_DIGEST_DIR", tmp_path / "digest")
     storage = StorageManager(data_dir=str(tmp_path / "data"))
 
-    path = storage.publish_site_page("2026-08-06", "# Horizon Daily\n\nbody\n", language="ru")
-    written = path.read_text(encoding="utf-8")
+    issue_dir = storage.publish_site_pages(
+        "2026-08-06", _pages(("tech-news-1", "# Horizon Daily\n\nbody\n")), language="ru"
+    )
+    written = (issue_dir / "tech-news-1.md").read_text(encoding="utf-8")
 
-    assert path.name == "2026-08-06-ru.md"
+    assert issue_dir.name == "2026-08-06-ru"
     # Excluding digests is what keeps search_index.json from growing without
     # bound — a year of them measured 4.6 MB gzipped.
     assert written.startswith("---\nsearch:\n  exclude: true\n---\n\n")
@@ -211,31 +218,40 @@ def test_publish_site_page_keeps_the_h1_and_excludes_from_search(tmp_path, monke
     assert "body" in written
 
 
-def test_publish_site_page_refreshes_the_index_newest_first(tmp_path, monkeypatch):
+def test_publish_site_pages_refreshes_the_index_newest_first(tmp_path, monkeypatch):
     monkeypatch.setattr(manager, "SITE_DIGEST_DIR", tmp_path / "digest")
     storage = StorageManager(data_dir=str(tmp_path / "data"))
 
-    storage.publish_site_page("2026-08-05", "# a", language="ru")
-    storage.publish_site_page("2026-08-06", "# b", language="ru")
+    storage.publish_site_pages("2026-08-05", _pages(("a", "# a")), language="ru")
+    storage.publish_site_pages("2026-08-06", _pages(("b", "# b")), language="ru")
     index = (tmp_path / "digest" / "index.md").read_text(encoding="utf-8")
 
     assert index.index("2026-08-06-ru") < index.index("2026-08-05-ru")
-    assert "index.md" not in index  # the listing must not link to itself
+    # Each issue is linked through its own index page.
+    assert "2026-08-06-ru/index.md" in index
+    # The listing must not link to the top-level index it lives in.
+    assert "](index.md)" not in index
 
 
-def test_publish_site_page_rejects_path_escape(tmp_path, monkeypatch):
+def test_publish_site_pages_rejects_path_escape(tmp_path, monkeypatch):
     monkeypatch.setattr(manager, "SITE_DIGEST_DIR", tmp_path / "digest")
     storage = StorageManager(data_dir=str(tmp_path / "data"))
 
     with pytest.raises(ValueError, match="escapes intended root"):
-        storage.publish_site_page("2026-08-06", "secret", language="../../../../outside")
+        storage.publish_site_pages("2026-08-06", _pages(("a", "x")), language="../../../../outside")
     assert not (tmp_path / "outside.md").exists()
 
+    # The slug is validated the same way.
+    with pytest.raises(ValueError, match="escapes intended root"):
+        storage.publish_site_pages("2026-08-06", _pages(("../../../../outside", "x")), language="ru")
+    assert not (tmp_path / "outside").exists()
 
-def test_publish_site_page_replace_failure_preserves_destination(tmp_path, monkeypatch):
+
+def test_publish_site_pages_replace_failure_preserves_destination(tmp_path, monkeypatch):
     monkeypatch.setattr(manager, "SITE_DIGEST_DIR", tmp_path / "digest")
     storage = StorageManager(data_dir=str(tmp_path / "data"))
-    destination = storage.publish_site_page("2026-08-06", "# existing", language="ru")
+    issue_dir = storage.publish_site_pages("2026-08-06", _pages(("a", "# existing")), language="ru")
+    destination = issue_dir / "a.md"
 
     def fail_replace(source, target):
         raise OSError("replace failed")
@@ -243,7 +259,7 @@ def test_publish_site_page_replace_failure_preserves_destination(tmp_path, monke
     monkeypatch.setattr(file_utils.os, "replace", fail_replace)
 
     with pytest.raises(OSError, match="replace failed"):
-        storage.publish_site_page("2026-08-06", "# replacement", language="ru")
+        storage.publish_site_pages("2026-08-06", _pages(("a", "# replacement")), language="ru")
 
     assert "# existing" in destination.read_text(encoding="utf-8")
     assert list(destination.parent.glob(f".{destination.name}.*.tmp")) == []

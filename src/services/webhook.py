@@ -503,7 +503,10 @@ class WebhookNotifier:
             lines = [f"<b>{html.escape(group.name, quote=False)}</b>"]
             for view_item in group.items:
                 if link_base:
-                    href = f"{link_base}/{date}-{lang}/#{view_item.anchor_id}"
+                    # One page per article: the slug is the anchor id without
+                    # its `item-` prefix, the same derivation the site uses.
+                    slug = view_item.anchor_id.removeprefix("item-")
+                    href = f"{link_base}/{date}-{lang}/{slug}/"
                 else:
                     # Works before the site exists: fall back to the source.
                     href = _safe_url(view_item.item.url) or ""
