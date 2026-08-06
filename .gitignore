@@ -72,3 +72,6 @@ site/
 
 # A/B capture (regenerated on demand)
 data/ab-items.json
+
+# A/B results
+data/ab-results.json
