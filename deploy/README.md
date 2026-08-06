@@ -98,33 +98,45 @@ pulls ~30 transitive packages into a lockfile that is a prime upstream merge
 conflict, for something the runtime never imports:
 
 ```bash
-uv tool install mkdocs-material
+# mkdocs-material is a theme and ships no executable — the binary comes from
+# mkdocs itself. On a host where ~/.local is root-owned, point uv elsewhere.
+export XDG_DATA_HOME=$HOME/.uvdata UV_TOOL_BIN_DIR=$HOME/bin
+uv tool install mkdocs --with mkdocs-material
 ```
 
 Then, after each pipeline run:
 
 ```bash
-cd ~/horizon && mkdocs build && rsync -a --delete site/ USER@HOST:/srv/horizon/
+cd ~/horizon && mkdocs build
+cd site && tar czf - . | ssh USER@HOST 'rm -rf /srv/DOMAIN/* && tar xzf - -C /srv/DOMAIN'
 ```
+
+`tar` over ssh rather than `rsync`: a minimal ingress container often has no
+rsync, and installing packages on the edge proxy to copy static files is a poor
+trade. The site is fully regenerated each time, so replace-all is correct.
 
 Caddy on the target only needs a file server:
 
 ```
 digest.example.com {
-    root * /srv/horizon
-    file_server
-    try_files {path} {path}/ {path}.html
+    root * /srv/digest.example.com
     encode zstd gzip
+    try_files {path} {path}/ {path}.html
+    file_server
 }
 ```
 
-`encode` matters: the built pages are ~86 KB raw and ~23 KB gzipped.
+`encode` matters: the built pages are ~83 KB raw and ~23 KB gzipped.
 
-**Do not add this to an existing Caddy that fronts anything sensitive.** A
-separate container costs ten minutes and cannot disturb a working configuration.
+If you already run an ingress that serves static sites, add the site there
+rather than standing up a container for it — one more `conf.d/<domain>.caddy`
+next to the existing ones is less moving parts than a new host. Two precautions
+make that safe: run `caddy validate --config /etc/caddy/Caddyfile --adapter
+caddyfile` **before** reloading, and curl the neighbouring sites **after**, so a
+mistake surfaces immediately instead of at the next visitor.
 
 Known and accepted: a **404 window of a few seconds**. Today's page reaches the
-target only after `rsync`, which runs after the digest job has already sent its
+target only after the copy, which runs after the digest job has already sent its
 Telegram links. Only the current day's link is affected; pulling `mkdocs build`
 into the pipeline would couple it to a site toolchain for a few seconds of
 polish.

@@ -191,7 +191,18 @@ Note for the Telegram setup section: use `url_env`, **never**
 (`src/storage/manager.py:30-54`) expands at load and `save_config` (`:102`)
 writes the model back, so running `horizon-wizard` would bake the secret to disk.
 
-### [ ] A7. Infrastructure (needs owner access, not code) — materials prepared
+### [x] A7. Infrastructure — live at https://digest.ninitux.com/
+
+No new container was needed. The existing Caddy ingress (LXC 210) already serves
+static sites from `/srv/<domain>/` with a matching `conf.d/<domain>.caddy`;
+`digest.ninitux.com` follows that pattern, and DNS was already covered by a
+wildcard. Verified after reload: the new site returns 200 over TLS, and
+`gs.ninitux.com` and `ninitux.com` still return 200.
+
+Two things the plan got wrong, found by running it: `uv tool install
+mkdocs-material` fails — material is a theme with no executable, the binary
+comes from `mkdocs` — and the ingress has no `rsync`, so deployment uses `tar`
+over ssh instead. Both corrected in `deploy/README.md`.
 
 LXC on Proxmox + its own Caddy (`file_server` + `try_files`, four lines) + DNS
 for `digest.ninitux.com`. **Do not reuse the `cdn` Caddy** — it fronts the VPN
