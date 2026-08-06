@@ -415,6 +415,23 @@ class TestWebhookRedaction:
             == "https://example.com/hook"
         )
 
+    def test_redact_url_removes_a_bot_token_from_the_path(self):
+        # Telegram carries its token in the path, so stripping query and
+        # fragment is not enough. This message reaches the console and
+        # send_failure's outbound body.
+        redacted = redact_url(
+            "https://api.telegram.org/bot123456789:AAH-secret_token-xyz/sendMessage"
+        )
+        assert "AAH-secret_token-xyz" not in redacted
+        assert "123456789" not in redacted
+        assert redacted == "https://api.telegram.org/bot<redacted>/sendMessage"
+
+    def test_redact_url_keeps_other_platform_paths_debuggable(self):
+        assert (
+            redact_url("https://open.feishu.cn/open-apis/bot/v2/hook/abc-def")
+            == "https://open.feishu.cn/open-apis/bot/v2/hook/abc-def"
+        )
+
     def test_redact_headers_masks_sensitive_values(self):
         assert redact_headers({"Authorization": "Bearer secret", "X-Trace": "ok"}) == {
             "Authorization": "<redacted>",

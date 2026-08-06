@@ -12,14 +12,27 @@ from ..models import ContentItem
 
 _CJK = r"[\u4e00-\u9fff\u3400-\u4dbf]"
 _ASCII = r"[A-Za-z0-9]"
-_MARKDOWN_SPECIAL = re.compile(r"([\\`*_{}\[\]()<>#!|])")
+# `<` and `>` are absent on purpose: html.escape has already turned them into
+# entities by the time this runs. `|` is absent because Python-Markdown does not
+# list it in ESCAPED_CHARS, so a backslash before it survives into the output as
+# a literal backslash.
+_MARKDOWN_SPECIAL = re.compile(r"([\\`*_{}\[\]()#!])")
 _MARKDOWN_BLOCK_START = re.compile(r"(?m)^( {0,3})(>|[-+] |\d+[.)] )")
 _URL_SAFE_CHARS = ":/?#[]@!$&'*,;=~%+"
 
 
 def _escape_markdown(value: object) -> str:
-    """Render untrusted text literally while retaining its readable content."""
-    escaped = html.escape(str(value), quote=True)
+    """Render untrusted text literally while retaining its readable content.
+
+    `quote=False` matters: with `quote=True` an apostrophe becomes the numeric
+    reference `&#x27;`, and the very next line escapes the `#` *inside* that
+    reference, producing the dead `&\\#x27;`. The named entities left by
+    `quote=False` (`&amp;`, `&lt;`, `&gt;`) contain no character this regex
+    touches. Callers use the result in document body context only — never in an
+    HTML attribute — so dropping quote escaping is safe here; `_safe_url` and
+    the reference titles keep `quote=True`.
+    """
+    escaped = html.escape(str(value), quote=False)
     escaped = _MARKDOWN_SPECIAL.sub(r"\\\1", escaped)
     return _MARKDOWN_BLOCK_START.sub(r"\1\\\2", escaped)
 

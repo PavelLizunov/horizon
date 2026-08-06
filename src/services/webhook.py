@@ -228,15 +228,23 @@ def _extract_headers(headers_str: Optional[str]) -> dict:
     return headers
 
 
+# Telegram carries the bot token in the URL *path* (/bot<id>:<secret>/method),
+# so stripping query and fragment is not enough. Targeted at that one known
+# format rather than blanking every path, which would make Feishu and Slack
+# endpoints undebuggable in logs.
+_URL_PATH_SECRET_RE = re.compile(r"/bot\d+:[\w-]+")
+
+
 def redact_url(url: str) -> str:
-    """Return a log-safe URL without query strings or fragments."""
+    """Return a log-safe URL without query strings, fragments or path secrets."""
     try:
         parts = urlsplit(url)
     except ValueError:
         return "<invalid-url>"
     if not parts.scheme or not parts.netloc:
         return "<redacted-url>"
-    return urlunsplit((parts.scheme, parts.netloc, parts.path, "", ""))
+    path = _URL_PATH_SECRET_RE.sub("/bot<redacted>", parts.path)
+    return urlunsplit((parts.scheme, parts.netloc, path, "", ""))
 
 
 def redact_headers(headers: dict[str, str]) -> dict[str, str]:
@@ -274,8 +282,11 @@ class WebhookNotifier:
             validate_http_url(url)
             httpx.URL(url)
         except (httpx.InvalidURL, UnsafeURLError) as e:
+            # Redacted: this message reaches the console AND send_failure, which
+            # posts it as an outbound webhook body. A typo'd URL with a valid
+            # bot token would otherwise leak the token over the network.
             raise ValueError(
-                f"Webhook URL is structurally invalid: '{url}' — {e} "
+                f"Webhook URL is structurally invalid: '{redact_url(url)}' — {e} "
                 f"(env var '{self.config.url_env}')"
             ) from e
         return url

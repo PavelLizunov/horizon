@@ -1,9 +1,12 @@
 """Unit tests for daily summary rendering."""
 
 import asyncio
+import re
 from datetime import datetime, timezone
 
-from src.ai.summarizer import DailySummarizer
+import markdown
+
+from src.ai.summarizer import DailySummarizer, _escape_markdown
 from src.models import (
     ArtifactSource,
     ClassificationResult,
@@ -58,6 +61,54 @@ def _make_item(idx: int) -> ContentItem:
         ),
     )
     return item
+
+
+def test_escape_markdown_keeps_apostrophes_renderable():
+    # html.escape(quote=True) emitted &#x27;, and the markdown-special regex
+    # then escaped the # *inside* it, producing a dead &\#x27;. Live in the
+    # archived digest ("LLMs Can&\#x27;t Jump"), and fatal for Telegram HTML.
+    escaped = _escape_markdown("LLMs Can't Jump")
+
+    assert "&\\#" not in escaped
+    assert markdown.markdown(escaped) == "<p>LLMs Can't Jump</p>"
+
+
+def test_escape_markdown_still_neutralizes_html_and_markdown():
+    escaped = _escape_markdown('A & B <script>alert("x")</script> *bold* [link]')
+
+    assert "&amp;" in escaped and "&lt;script&gt;" in escaped
+    assert "\\*bold\\*" in escaped and "\\[link\\]" in escaped
+    assert "<script>" not in markdown.markdown(escaped)
+
+
+def test_escape_markdown_leaves_pipes_alone():
+    # `|` is not in Python-Markdown's ESCAPED_CHARS, so a backslash before it
+    # survives into the rendered output as a literal backslash.
+    assert "\\|" not in _escape_markdown("a | b")
+
+
+def test_summary_toc_anchors_survive_markdown_rendering():
+    """The contract that Telegram deep links depend on.
+
+    Each item emits a bare `<a id="item-{profile}-{index}"></a>` and the table
+    of contents links to it. If those ids ever stop surviving the markdown
+    render, every headline link would silently land at the top of the page
+    instead of the item.
+    """
+    items = [_make_item(idx) for idx in range(1, 4)]
+    summary = _run_async(
+        DailySummarizer().generate_summary(items, "2026-08-06", len(items), language="en")
+    )
+
+    targets = re.findall(r"\]\(#(item-[^)]+)\)", summary)
+    assert targets, "digest produced no anchor links to check"
+
+    rendered = markdown.markdown(summary, extensions=["toc", "md_in_html"])
+    rendered_ids = set(re.findall(r'id="([^"]+)"', rendered))
+
+    assert set(targets) <= rendered_ids, (
+        f"anchors lost in rendering: {sorted(set(targets) - rendered_ids)}"
+    )
 
 
 def test_generate_webhook_overview_lists_items_without_full_details():
