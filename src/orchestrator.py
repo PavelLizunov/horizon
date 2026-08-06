@@ -218,6 +218,8 @@ class HorizonOrchestrator:
             else None
         )
         self.last_fetch_report: Optional[FetchReport] = None
+        # Profiles already warned about for having no threshold (once each).
+        self._thresholdless_profiles: set[str] = set()
 
     async def run(self, force_hours: int = None) -> None:
         """Execute the complete workflow.
@@ -817,6 +819,21 @@ class HorizonOrchestrator:
         if effective_threshold is None and settings is not None:
             effective_threshold = settings.threshold
         if effective_threshold is None:
+            # Fail open, but say so. A profile with no profile_settings entry
+            # otherwise admits every item regardless of score — including 1/10 —
+            # and each one is then enriched at full cost with nothing in the log
+            # to explain where they came from.
+            # setdefault, not attribute access: several tests build this class
+            # with __new__ and never run __init__.
+            warned = self.__dict__.setdefault("_thresholdless_profiles", set())
+            if settings is None and profile_id not in warned:
+                warned.add(profile_id)
+                self.console.print(
+                    f"[yellow]{self.icons['warning']} Profile '{profile_id}' has no "
+                    "processing.profile_settings entry, so it has no score threshold: "
+                    "every item it classifies reaches the digest and is enriched at "
+                    "full cost. Add a threshold to filter it.[/yellow]"
+                )
             return True
         score = item.processing.analysis.score
         return score is not None and score >= effective_threshold
