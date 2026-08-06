@@ -41,6 +41,23 @@ def render_page(doc: dict) -> ArticlePage:
     return ArticlePage(slug=slug, title=doc["title"], markdown=article_site_markup("\n".join(lines) + "\n"))
 
 
+def _render_issue_index(date: str, documents: list[dict]) -> ArticlePage:
+    """The issue's index page, mirroring build_article_pages' listing."""
+    lines: list[str] = [f"# Horizon Daily - {date}", ""]
+    current_profile = None
+    for doc in documents:
+        if doc["profile"] != current_profile:
+            current_profile = doc["profile"]
+            lines += [f"## {current_profile}", ""]
+        slug = doc["id"].removeprefix(f"{doc['date']}-{doc['language']}-")
+        lines.append(f"- [{doc['title']}]({slug}.md) \u2b50\ufe0f {doc['score']:.1f}/10")
+    return ArticlePage(
+        slug="index",
+        title=f"Horizon Daily - {date}",
+        markdown="\n".join(lines).rstrip() + "\n",
+    )
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--dry-run", action="store_true")
@@ -54,6 +71,7 @@ def main() -> None:
         date, _, language = stem.rpartition("-")
         documents = parse_summary(path.read_text(encoding="utf-8"), date, language)
         pages = [render_page(doc) for doc in documents]
+        pages.append(_render_issue_index(date, documents))
         if args.dry_run:
             print(f"{path.name}: {len(pages)} pages (dry run)")
             continue
