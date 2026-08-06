@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+import re
 from pathlib import Path
 
 import pytest
@@ -122,6 +124,39 @@ def test_missing_artifact_raises(tmp_path: Path) -> None:
 
     with pytest.raises(FileNotFoundError, match="Artifact not found"):
         store.read_json(run_id, "does-not-exist.json")
+
+
+def test_timestamps_always_carry_microseconds(tmp_path: Path) -> None:
+    """list_runs compares these as strings, so the format must be uniform.
+
+    Plain isoformat() drops the fractional part when it is exactly zero, and
+    '+' sorts before '.', so a run written on an exact-microsecond boundary
+    would be ordered as older than everything written after it.
+    """
+    store = RunStore(tmp_path)
+    run_id = store.create_run("run-x")
+    created = json.loads((tmp_path / run_id / "meta.json").read_text(encoding="utf-8"))
+
+    assert re.fullmatch(r".*T.*\.\d{6}\+00:00", created["created_at"]), created["created_at"]
+
+
+def test_list_runs_orders_correctly_across_a_microsecond_boundary(tmp_path: Path) -> None:
+    store = RunStore(tmp_path)
+    store.create_run("older")
+    store.create_run("newer")
+
+    # Force the exact-zero-microsecond case that plain isoformat() would render
+    # without a fractional part.
+    for run_id, stamp in (
+        ("older", "2026-08-06T12:00:00.000000+00:00"),
+        ("newer", "2026-08-06T12:00:00.000001+00:00"),
+    ):
+        meta_path = tmp_path / run_id / "meta.json"
+        meta = json.loads(meta_path.read_text(encoding="utf-8"))
+        meta["updated_at"] = stamp
+        meta_path.write_text(json.dumps(meta), encoding="utf-8")
+
+    assert [r["run_id"] for r in store.list_runs(limit=10)] == ["newer", "older"]
 
 
 def test_list_runs_returns_desc_order(tmp_path: Path) -> None:

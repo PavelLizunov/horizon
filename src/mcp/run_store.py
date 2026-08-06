@@ -202,4 +202,8 @@ class RunStore:
 
     @staticmethod
     def _utc_now() -> str:
-        return datetime.now(timezone.utc).isoformat()
+        # timespec="microseconds" is load-bearing: plain isoformat() omits the
+        # fractional part when it is exactly zero, and list_runs compares these
+        # as strings. "…:56+00:00" then sorts *before* "…:56.000001+00:00",
+        # because '+' < '.', silently inverting run order.
+        return datetime.now(timezone.utc).isoformat(timespec="microseconds")
