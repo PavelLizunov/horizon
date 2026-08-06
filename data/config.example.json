@@ -313,5 +313,10 @@
     },
     "headers": "",
     "link_base": null
+  },
+  "search": {
+    "enabled": false,
+    "url": "http://127.0.0.1:9200",
+    "index": "horizon-articles"
   }
 }

@@ -598,6 +598,19 @@ class WebhookConfig(BaseModel):
         return v
 
 
+class SearchConfig(BaseModel):
+    """Elasticsearch archive search configuration.
+
+    The URL is not a secret (the index is only reachable inside the LAN and
+    through a read-only proxy path), so it is stored plainly, unlike the
+    *_env secret fields.
+    """
+
+    enabled: bool = False
+    url: str = "http://127.0.0.1:9200"
+    index: str = "horizon-articles"
+
+
 class EmailConfig(BaseModel):
     """Email configuration for updates/subscriptions."""
 
@@ -693,3 +706,4 @@ class Config(BaseModel):
     extractors: Dict[str, ExtractorConfig] = Field(default_factory=dict)
     email: Optional[EmailConfig] = None
     webhook: Optional[WebhookConfig] = None
+    search: SearchConfig = Field(default_factory=SearchConfig)

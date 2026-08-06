@@ -15,6 +15,7 @@ from .models import Config, ContentItem
 from .storage.manager import StorageManager
 from .services.email import EmailManager
 from .services.webhook import WebhookNotifier
+from .services.search import SearchIndexer, build_search_documents
 from .scrapers.github import GitHubScraper
 from .scrapers.hackernews import HackerNewsScraper
 from .scrapers.rss import RSSScraper
@@ -322,6 +323,29 @@ class HorizonOrchestrator:
                     f"{self.icons['document']} Published {len(article_pages) - 1} "
                     f"{lang.upper()} article pages to the site: {site_path}\n"
                 )
+
+                # Index the articles for archive search. Guarded, unlike the
+                # site publish: a dead search backend must not stop delivery,
+                # the pipeline degrades rather than fails.
+                if self.config.search.enabled:
+                    try:
+                        async with SearchIndexer(self.config.search) as indexer:
+                            await indexer.ensure_index()
+                            documents = build_search_documents(
+                                summarizer.build_view(important_items, lang),
+                                today,
+                                lang,
+                            )
+                            indexed = await indexer.index_documents(documents)
+                        self.console.print(
+                            f"{self.icons['detail']} Indexed {indexed} "
+                            f"{lang.upper()} articles for search\n"
+                        )
+                    except Exception as search_error:
+                        self.console.print(
+                            f"{self.icons['warning']} Search indexing failed, "
+                            f"continuing without it: {search_error}\n"
+                        )
 
                 # Send email if configured
                 if self.email_manager and self.config.email and self.config.email.enabled:

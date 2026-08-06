@@ -1,0 +1,49 @@
+# Archive search for digest.ninitux.com: Elasticsearch + a read-only shaping
+# API. Elasticsearch is bound to localhost only; the Mac's pipeline indexes
+# through 127.0.0.1:9200, and the public path goes Caddy -> search-api -> ES,
+# so the browser can never reach index administration.
+#
+#   docker compose up -d          # first start
+#   docker compose ps             # health
+#
+# Heap is pinned to 512 MB: the archive is a few hundred small documents,
+# and ES defaults would eat gigabytes for nothing.
+
+services:
+  es:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.15.3
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - xpack.ml.enabled=false
+      - ES_JAVA_OPTS=-Xms512m -Xmx512m
+    ports:
+      - "127.0.0.1:9200:9200"
+    volumes:
+      - esdata:/usr/share/elasticsearch/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "curl -s http://127.0.0.1:9200/_cluster/health | grep -qE '\"status\":\"(green|yellow)\"'"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  search-api:
+    image: python:3.12-slim
+    command: python /app/search_api.py
+    volumes:
+      - ./search_api.py:/app/search_api.py:ro
+    environment:
+      - ES_URL=http://es:9200
+    # LAN-facing on purpose: the Caddy ingress on 192.168.0.210 proxies
+    # /api/search here. The endpoint is read-only and returns digest content
+    # only, so LAN exposure is harmless on a home network.
+    ports:
+      - "8788:8788"
+    depends_on:
+      es:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  esdata:

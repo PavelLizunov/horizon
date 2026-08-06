@@ -314,3 +314,47 @@ against 40 000/week). Moving it off qwen frees 2.6 % of a quota that interactive
 work already overruns several-fold. The case for switching should rest on
 quality-per-dollar or on freeing the quota entirely, not on the digest's own
 cost — that is small either way.
+
+---
+
+## Phase C — per-article pages, site redesign, Elasticsearch search
+
+Owner feedback after live use (2026-08-06): a headline link must open the
+article itself, not the middle of a combined page; the site carries too much
+non-digest material; the formatting is rejected; the archive must be
+searchable by keyword (Elasticsearch was named explicitly).
+
+### [x] C1. One page per article + Telegram links to them
+
+`build_article_pages()` + `publish_site_pages()`; headline href is
+`{link_base}/{date}-{lang}/{slug}/` where slug = anchor minus `item-`.
+Path-traversal check restored for the issue directory. Tests updated and
+added. Committed.
+
+### [x] C2. Site is the digest only
+
+Documentation pages excluded from the published site (`exclude_docs`), nav
+reduced to Главная / Дайджесты / Поиск, landing rewritten to two buttons.
+Committed.
+
+### [x] C3. Reading-first redesign
+
+`docs/assets/horizon-digest.css` + `article_site_markup()` (site-only
+restructure) + `LABELS["ru"]` + `font: false` (Google Fonts link blanked the
+page). Verified rendered in a real browser, light scheme, desktop width.
+Committed. Dark scheme follows the same custom properties — re-check on the
+live site once deployed.
+
+### [ ] C4. Elasticsearch live
+
+Code + offline tests done (`src/services/search.py`, orchestrator hook,
+`scripts/dev_reindex_archive.py`, `deploy/search/`). Remaining: docker compose
+up on the Mac, `search.enabled: true` in the Mac's config.json, backfill,
+Caddy `/api/search` proxy on the ingress, end-to-end check from the public
+URL.
+
+### [ ] C5. Ship it
+
+Commit, bundle to the Mac, `git pull` + push to GitHub from the Mac, rebuild
+the site there, deploy to `/srv/digest.ninitux.com`, verify the next live run
+publishes per-article pages and Telegram links open them.

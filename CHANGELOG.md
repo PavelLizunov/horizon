@@ -9,6 +9,42 @@ recoverable by reading the code.
 
 ## Unreleased
 
+### Per-article pages, reading-first site, Elasticsearch search
+
+Follow-up to the site/Telegram split, driven by live use: a headline link
+landed readers in the middle of one long combined page, and the Material
+default formatting was rejected as cluttered.
+
+- **One page per article.** `DailySummarizer.build_article_pages()` renders
+  each item under `digest/{date}-{lang}/{slug}.md` plus an issue index. The
+  slug is the existing `item-{profile}-{index}` anchor minus its prefix —
+  one derivation shared by the site, the TOC and the Telegram headline
+  links, so the deep-link contract cannot drift. `publish_site_pages()`
+  replaces `publish_site_page()`.
+- **Site is the digest, nothing else.** The documentation pages (Telegram
+  delivery, profiles, cookies, scoring…) are excluded from the published
+  site via `exclude_docs`; they stay in the repo for GitHub. The owner's
+  words: that material on the public site is "куча дополнительной ненужной
+  информации".
+- **Reading-first skin** (`docs/assets/horizon-digest.css`): system fonts,
+  monochrome + one accent, 68ch measure, no sidebars. `article_site_markup()`
+  restructures article pages site-only (the shared renderer is untouched):
+  `**「Контекст」**` bold runs become `##` section headings, the glued-on score
+  becomes a badge span, the byline is muted, the inter-item `---` is dropped.
+- **No Google Fonts.** Material's default stylesheet link is render-blocking;
+  with the CDN unreachable the page rendered blank. `font: false` + system
+  stack.
+- **ru chrome labels.** A ru digest fell back to the en label table
+  ("References", "Tags"); it read as a bug. `LABELS["ru"]` added.
+- **Elasticsearch archive search.** `src/services/search.py` (httpx, no
+  client library) upserts one document per delivered article per run;
+  `deploy/search/` runs single-node ES (512 MB heap, localhost-only) plus a
+  stdlib read-only shaping API that Caddy proxies at `/api/search`. The
+  browser never reaches ES. `scripts/dev_reindex_archive.py` backfills the
+  pre-search history from `data/summaries/` with the same issue-scoped ids,
+  so reindexing is idempotent. Indexing failure degrades the run with a
+  warning — it never stops delivery.
+
 ### Publishing: static site + Telegram headlines
 
 The digest is 38 461 characters and Telegram's cap is 4 096, so the full text
