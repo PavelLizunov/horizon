@@ -54,7 +54,19 @@ instead of twelve.
 
 ### The token
 
-Put it in `.env` and reference the variable **name** from config:
+Use the setup script. It reads the token from a hidden prompt, so the value
+never lands in shell history, a command line, or an agent transcript:
+
+```bash
+ssh -t <host> 'cd ~/horizon && .venv/bin/python scripts/setup_telegram.py'
+```
+
+The `-t` matters — the prompt needs a TTY. The script validates the token with
+`getMe`, prints the bot's username (not the token), lists `chat_id` candidates
+from `getUpdates`, and writes `TELEGRAM_WEBHOOK_URL` into `.env` with mode 600,
+replacing any previous value in place.
+
+Doing it by hand is the same thing:
 
 ```bash
 TELEGRAM_WEBHOOK_URL=https://api.telegram.org/bot<TOKEN>/sendMessage
