@@ -93,7 +93,24 @@ Tests: front matter shape, H1 preserved, path traversal rejected (mirror
 `tests/test_storage.py:190`), atomic-replace failure preserves the destination
 (`:202`).
 
-### [ ] A4. MkDocs configuration
+### [x] A4. MkDocs configuration — verified with a real `--strict` build
+
+All three offline-unverifiable questions answered by an actual build:
+`exclude_docs` keeps the upstream Jekyll files out; `search: exclude: true`
+works (9 documentation pages indexed, digest pages absent);
+`validation: anchors: ignore` lets `--strict` pass while the raw
+`id="item-tech-news-1"` anchor survives into the rendered HTML. Build 0.44 s.
+
+Two pre-existing warnings had to be fixed to pass `--strict`:
+`twitter-cookies.md` was in no nav, and `configuration.md` linked to
+`../src/mcp/*.md`, which are source files rather than documentation pages —
+now absolute GitHub links.
+
+Note for whoever comes next: Material prints a banner warning that **MkDocs 2.0
+will break all plugins and theme overrides with no migration path**. That is
+Material's position on upstream MkDocs 2.0, not a problem with this setup today.
+It reinforces the existing rule — keep customization in `mkdocs.yml` and CSS,
+avoid theme overrides.
 
 `mkdocs.yml` at repo root: material theme, `language: ru`, light/dark palette,
 `pymdownx.details`, `toc` with `permalink`, explicit `nav`, `not_in_nav: digest/*`.

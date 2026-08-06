@@ -66,3 +66,6 @@ todo.txt
 .pytest_cache
 # Static site pages generated from digests (regenerated every run)
 docs/digest/
+
+# mkdocs build output
+site/

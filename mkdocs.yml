@@ -1,0 +1,74 @@
+site_name: Horizon Daily
+site_description: AI-curated daily digest of tech and research news
+site_url: https://digest.ninitux.com/
+docs_dir: docs
+site_dir: site
+
+theme:
+  name: material
+  language: ru
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: indigo
+      toggle: {icon: material/weather-night, name: Тёмная тема}
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: indigo
+      toggle: {icon: material/weather-sunny, name: Светлая тема}
+  features:
+    - navigation.top
+    - navigation.tracking
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+    - toc.follow
+
+plugins:
+  - search:
+      lang: ru
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - md_in_html          # digests embed <details><ul> blocks in markdown
+  - pymdownx.details
+  - pymdownx.superfences
+  - tables
+  - toc:
+      permalink: true
+
+# The Jekyll site that used to live here belongs to upstream. Deleting those
+# files would mean resolving a merge conflict every time upstream touches its
+# own site, so they are excluded from the build instead.
+exclude_docs: |
+  _config.yml
+  _includes/
+  _posts/
+  feed-*.xml
+  assets/js/horizon.js
+  assets/css/horizon.css
+
+# Digest pages are generated per run and gitignored; they must not be listed
+# individually in the nav, and MkDocs would otherwise warn about each one.
+not_in_nav: |
+  digest/*
+
+# The digest table of contents links to raw `<a id="item-...">` anchors, which
+# are not heading ids and therefore not in page.toc. That is deliberate — the
+# ids are the deep-link contract with Telegram — so anchor validation must not
+# fail the build over them.
+validation:
+  anchors: ignore
+
+nav:
+  - Главная: index.md
+  - Дайджесты: digest/index.md
+  - Настройка: configuration.md
+  - Пайплайн: pipeline.md
+  - Источники: scrapers.md
+  - Видео: video-source.md
+  - Профили: profiles.md
+  - Скоринг: scoring.md
+  - Экстракторы: extractors.md
+  - Куки Twitter/X: twitter-cookies.md
