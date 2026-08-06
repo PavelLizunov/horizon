@@ -1,0 +1,65 @@
+"""Republish the frozen archive as per-article site pages (dev utility).
+
+Runs before per-article publishing existed produced one combined page per
+issue; the site index now lists issue directories only. This rebuilds the
+old issues in the current shape from `data/summaries/`, reusing the archive
+parser so ids match what `dev_reindex_archive.py` indexed. Old combined
+files are left in place: Telegram messages of those days still deep-link
+into their anchors.
+
+    uv run python scripts/dev_republish_archive.py
+"""
+
+import argparse
+from pathlib import Path
+
+from dotenv import load_dotenv
+
+try:  # runnable both as `python scripts/...` and as a package import
+    from scripts.dev_reindex_archive import SUMMARIES_DIR, parse_summary
+except ImportError:
+    from dev_reindex_archive import SUMMARIES_DIR, parse_summary
+
+from src.ai.summarizer import ArticlePage, article_site_markup
+from src.storage.manager import StorageManager
+
+
+def render_page(doc: dict) -> ArticlePage:
+    # id = {date}-{language}-{slug}; the slug is the anchor minus its prefix,
+    # the same derivation the live publisher uses.
+    slug = doc["id"].removeprefix(f"{doc['date']}-{doc['language']}-")
+    lines = [
+        f'<a id="item-{slug}"></a>',
+        f'# [{doc["title"]}]({doc["url"]}) '
+        f'<span class="hz-score">\u2b50\ufe0f {doc["score"]:.1f}/10</span>',
+        "",
+        doc["lead"],
+    ]
+    for title, text in doc["blocks"]:
+        if text:
+            lines += ["", f"## {title}", "", text]
+    return ArticlePage(slug=slug, title=doc["title"], markdown=article_site_markup("\n".join(lines) + "\n"))
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--dry-run", action="store_true")
+    args = parser.parse_args()
+
+    load_dotenv()
+    storage = StorageManager()
+
+    for path in sorted(SUMMARIES_DIR.glob("horizon-*.md")):
+        stem = path.name[len("horizon-") : -len(".md")]
+        date, _, language = stem.rpartition("-")
+        documents = parse_summary(path.read_text(encoding="utf-8"), date, language)
+        pages = [render_page(doc) for doc in documents]
+        if args.dry_run:
+            print(f"{path.name}: {len(pages)} pages (dry run)")
+            continue
+        issue_dir = storage.publish_site_pages(date, pages, language=language)
+        print(f"{path.name}: {len(pages)} pages -> {issue_dir}")
+
+
+if __name__ == "__main__":
+    main()

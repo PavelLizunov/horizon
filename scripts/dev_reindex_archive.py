@@ -12,6 +12,7 @@ rather than duplicates.
 
 import argparse
 import asyncio
+import html
 import re
 from pathlib import Path
 
@@ -37,7 +38,37 @@ def _plain(markdown: str) -> str:
     text = _BLOCK_TITLE_RE.sub(r"\1: ", text)
     text = _MD_LINK_RE.sub(r"\1", text)
     text = re.sub(r"<[^>]+>", " ", text)
+    # The frozen archive predates the escaping fix and carries &#x27;-style
+    # entities; search text should be the words, not the entities.
+    text = html.unescape(text)
     return re.sub(r"\s+", " ", text).strip()
+
+
+def _paragraphs(text: str) -> str:
+    """Drop the byline line and collapse whitespace, keep paragraph breaks."""
+    text = _MD_LINK_RE.sub(r"\1", text)
+    text = re.sub(r"<[^>]+>", " ", text)
+    text = html.unescape(text)
+    kept = [
+        line
+        for line in text.split("\n")
+        if not (" · " in line and not line.rstrip().endswith("."))
+    ]
+    return re.sub(r"\n{3,}", "\n\n", "\n".join(kept)).strip()
+
+
+def _split_blocks(segment: str) -> tuple[str, list[tuple[str, str]]]:
+    """Lead paragraphs plus (block title, block text) pairs of one item."""
+    body = "\n".join(segment.lstrip("\n").split("\n")[1:])
+    body = _DETAILS_RE.sub(" ", body)
+    body = _TAGS_RE.sub(" ", body)
+    parts = _BLOCK_TITLE_RE.split(body)
+    lead = _paragraphs(parts[0])
+    blocks = [
+        (html.unescape(parts[i]), _paragraphs(parts[i + 1]))
+        for i in range(1, len(parts) - 1, 2)
+    ]
+    return lead, blocks
 
 
 def parse_summary(markdown: str, date: str, language: str) -> list[dict]:
@@ -51,11 +82,14 @@ def parse_summary(markdown: str, date: str, language: str) -> list[dict]:
         heading = _HEADING_RE.match(segment.lstrip("\n"))
         if not heading:
             continue  # unparseable item: skip loudly? no — the archive is frozen, skip
+        lead, blocks = _split_blocks(segment)
         documents.append(
             {
                 "id": f"{date}-{language}-{anchor.removeprefix('item-')}",
-                "title": heading.group("title").replace("\\", ""),
+                "title": html.unescape(heading.group("title").replace("\\", "")),
                 "content": _plain(segment),
+                "lead": lead,
+                "blocks": blocks,
                 "url": heading.group("url"),
                 "date": date,
                 "language": language,
