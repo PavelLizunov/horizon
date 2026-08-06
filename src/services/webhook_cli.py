@@ -187,7 +187,10 @@ async def _run_test(
             _preview_message(
                 notifier=notifier,
                 title=message["message_title"],
-                body=message["summary"],
+                # Not every message kind carries "summary": headline messages
+                # put their body in "headlines", deliberately kept out of the
+                # markdown flattener that "summary" goes through.
+                body=message.get("summary") or message.get("headlines", ""),
                 variables=message,
                 border_style="blue" if message["message_kind"] != "item" else "green",
             )
