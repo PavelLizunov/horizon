@@ -248,7 +248,7 @@ DeepSeek's own public pricing (V4-Flash, $0.14/1M in, $0.28/1M out ≈ $0.053 pe
 reference run) is *not* the relevant number while the traffic goes through the
 Token Plan quota. Keep it only as an upper bound if the direct API is ever used.
 
-### [ ] B1. Capture a replayable item set
+### [x] B1. Capture a replayable item set — `scripts/dev_capture_items.py`
 
 Both models must score the *same* items, or the comparison is worthless — a
 different day is different news. Fetch once, serialize `ContentItem`s to JSON,

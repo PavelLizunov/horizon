@@ -69,3 +69,6 @@ docs/digest/
 
 # mkdocs build output
 site/
+
+# A/B capture (regenerated on demand)
+data/ab-items.json
