@@ -9,6 +9,35 @@ recoverable by reading the code.
 
 ## Unreleased
 
+### Publishing: static site + Telegram headlines
+
+The digest is 38 461 characters and Telegram's cap is 4 096, so the full text
+can never be sent there — and every unsupported tag it contains (`<details>`,
+`<ul>`, `<li>`, headings, `<a id>`) makes Telegram reject the whole message
+rather than degrade it. The split: full digest to a **MkDocs Material** site,
+**headlines** to Telegram, deep-linked into it.
+
+- `StorageManager.publish_site_page()` replaces 40 lines of inline Jekyll copying
+  in `orchestrator.py` that **published nothing** — it wrote to a gitignored path
+  while the workflow only fired on committed changes.
+- Digest pages carry `search: exclude: true`. A year of them measured 35 MB of
+  `search_index.json` (4.6 MB gzipped) downloaded on first search; documentation
+  stays indexed, digests do not.
+- `mkdocs.yml` uses `exclude_docs` rather than deleting upstream's Jekyll files,
+  and `validation: anchors: ignore` — the digest TOC links to raw `<a id>`
+  anchors that are not heading ids, which is the deep-link contract itself.
+- `delivery: "headlines"` builds from `build_view()`, never from rendered
+  markdown, so unsupported tags are structurally impossible rather than filtered.
+  Chunked at 3 900 characters: an 11-item day fits one message, a real 30-item
+  digest needs two.
+
+*Why no `platform: "telegram"`?* `generic` already recognises Telegram's error
+shape. `delivery` is the axis that means "how many messages and what is in
+each"; `platform` is not.
+
+*Why not Material's blog plugin?* It derives page URLs from title slugs, and the
+headline links must be constructible before the page exists.
+
 ### AI layer — guards that now check their own outcome
 
 Three defects of one shape: a limit or a guard applied where its failure is

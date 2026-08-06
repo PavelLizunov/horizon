@@ -68,6 +68,7 @@ nav:
   - Пайплайн: pipeline.md
   - Источники: scrapers.md
   - Видео: video-source.md
+  - Доставка в Telegram: telegram-delivery.md
   - Профили: profiles.md
   - Скоринг: scoring.md
   - Экстракторы: extractors.md

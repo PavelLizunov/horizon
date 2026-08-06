@@ -176,7 +176,7 @@ equals `DailySummarizer._item_anchor(profile_id, index)` asserted against the
 real function; `link_base` unset falls back to the item URL; the `languages`
 filter still applies.
 
-### [ ] A6. Documentation
+### [x] A6. Documentation
 
 `data/config.example.json` (loaded by `tests/test_mcp_service_smoke.py:66`),
 `docs/configuration.md`, `README.md`, `CHANGELOG.md`, and a new
@@ -188,7 +188,7 @@ Note for the Telegram setup section: use `url_env`, **never**
 (`src/storage/manager.py:30-54`) expands at load and `save_config` (`:102`)
 writes the model back, so running `horizon-wizard` would bake the secret to disk.
 
-### [ ] A7. Infrastructure (needs owner access, not code)
+### [ ] A7. Infrastructure (needs owner access, not code) — materials prepared
 
 LXC on Proxmox + its own Caddy (`file_server` + `try_files`, four lines) + DNS
 for `digest.ninitux.com`. **Do not reuse the `cdn` Caddy** — it fronts the VPN

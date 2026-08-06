@@ -87,6 +87,48 @@ The template runs at 16:00, an hour ahead of the 17:00 digest. Only this job
 needs `node`, `ffmpeg` and `mlx-whisper` — the digest host just reads
 `data/video-inbox.json`. Details and failure behaviour: `docs/video-source.md`.
 
+## Publishing the digest site
+
+The pipeline writes `docs/digest/{date}-{lang}.md` on every run (gitignored —
+195 KB/day into git buys nothing). Building and shipping the site is a step
+after the run, not part of it.
+
+Install the toolchain as an isolated tool, **not** as a project dependency — it
+pulls ~30 transitive packages into a lockfile that is a prime upstream merge
+conflict, for something the runtime never imports:
+
+```bash
+uv tool install mkdocs-material
+```
+
+Then, after each pipeline run:
+
+```bash
+cd ~/horizon && mkdocs build && rsync -a --delete site/ USER@HOST:/srv/horizon/
+```
+
+Caddy on the target only needs a file server:
+
+```
+digest.example.com {
+    root * /srv/horizon
+    file_server
+    try_files {path} {path}/ {path}.html
+    encode zstd gzip
+}
+```
+
+`encode` matters: the built pages are ~86 KB raw and ~23 KB gzipped.
+
+**Do not add this to an existing Caddy that fronts anything sensitive.** A
+separate container costs ten minutes and cannot disturb a working configuration.
+
+Known and accepted: a **404 window of a few seconds**. Today's page reaches the
+target only after `rsync`, which runs after the digest job has already sent its
+Telegram links. Only the current day's link is affected; pulling `mkdocs build`
+into the pipeline would couple it to a site toolchain for a few seconds of
+polish.
+
 ## Linux via cron (sketch)
 
 ```cron
