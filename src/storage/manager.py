@@ -31,6 +31,20 @@ SITE_DIGEST_DIR = _REPO_ROOT / "docs" / "digest"
 _SITE_FRONT_MATTER = "---\nsearch:\n  exclude: true\n---\n\n"
 
 
+def _site_front_matter(title: str = "") -> str:
+    """Front matter for a site page, carrying an explicit title when known.
+
+    MkDocs derives a page title from its first H1, but an article's H1 is a
+    markdown link followed by the score badge's raw `<span>`; it cannot parse a
+    clean title out of that and silently falls back to the filename, so browser
+    tabs and link previews read "Tech news 1". json.dumps produces a
+    double-quoted scalar that is valid YAML whatever the title contains.
+    """
+    if not title:
+        return _SITE_FRONT_MATTER
+    return f"---\ntitle: {json.dumps(title, ensure_ascii=False)}\nsearch:\n  exclude: true\n---\n\n"
+
+
 def safe_output_path(root: Path, filename: str) -> Path:
     """Return an output path only when it resolves below root."""
     resolved_root = root.resolve()
@@ -158,7 +172,7 @@ class StorageManager:
         written: list[Path] = []
         for page in pages:
             filepath = safe_output_path(issue_dir, f"{page.slug}.md")
-            _atomic_write_text(filepath, _SITE_FRONT_MATTER + page.markdown)
+            _atomic_write_text(filepath, _site_front_matter(page.title) + page.markdown)
             written.append(filepath)
 
         self._write_site_index()

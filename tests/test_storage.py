@@ -197,7 +197,10 @@ def test_save_daily_summary_defensively_rejects_path_escape(tmp_path):
 
 def _pages(*pairs):
     """(slug, markdown) pairs as minimal page objects for publish_site_pages."""
-    return [SimpleNamespace(slug=slug, markdown=markdown) for slug, markdown in pairs]
+    return [
+        SimpleNamespace(slug=slug, markdown=markdown, title=f"Title {slug}")
+        for slug, markdown in pairs
+    ]
 
 
 def test_publish_site_pages_keeps_the_h1_and_excludes_from_search(tmp_path, monkeypatch):
@@ -212,8 +215,11 @@ def test_publish_site_pages_keeps_the_h1_and_excludes_from_search(tmp_path, monk
     assert issue_dir.name == "2026-08-06-ru"
     # Excluding digests is what keeps search_index.json from growing without
     # bound — a year of them measured 4.6 MB gzipped.
-    assert written.startswith("---\nsearch:\n  exclude: true\n---\n\n")
-    # MkDocs takes the page title from the H1, so it must survive verbatim.
+    assert "search:\n  exclude: true" in written.split("---")[1]
+    # An explicit title: MkDocs cannot parse one out of an H1 that is a link
+    # plus a score badge, and silently falls back to the filename.
+    assert '"Title tech-news-1"' in written
+    # The H1 itself must still survive verbatim.
     assert "# Horizon Daily" in written
     assert "body" in written
 
@@ -301,3 +307,26 @@ def test_save_subscribers_replace_failure_preserves_destination(tmp_path, monkey
 
     assert subscribers_path.read_text(encoding="utf-8") == '["old"]'
     assert list(tmp_path.glob(f".{subscribers_path.name}.*.tmp")) == []
+
+
+def test_article_pages_carry_an_explicit_title(tmp_path, monkeypatch):
+    """MkDocs cannot derive a title from an H1 that is a link plus a badge span.
+
+    Without this the page title falls back to the filename, so browser tabs and
+    link previews read "Tech news 1" instead of the article's headline.
+    """
+    monkeypatch.setattr(manager, "SITE_DIGEST_DIR", tmp_path / "digest")
+    storage = StorageManager(data_dir=str(tmp_path / "data"))
+    page = SimpleNamespace(
+        slug="tech-news-1",
+        title='Смена руководства: "кавычки" и двоеточие',
+        markdown="# [T](https://e.com) <span>9.0</span>\n",
+    )
+
+    storage.publish_site_pages("2026-08-06", [page], language="ru")
+    written = (tmp_path / "digest" / "2026-08-06-ru" / "tech-news-1.md").read_text(
+        encoding="utf-8"
+    )
+
+    assert written.startswith("---\ntitle: ")
+    assert "Смена руководства" in written.split("---")[1]
