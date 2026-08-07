@@ -142,6 +142,32 @@ _BLOCK_TITLE_RE = re.compile("(?m)^\\*\\*\u300c([^\u300d]+)\u300d\\*\\*[ \t]*")
 _SCORE_IN_HEADING_RE = re.compile(" \u2b50\ufe0f ([0-9.]+|\\?)/10$")
 
 
+def _score_markup(raw: str, *, lead: bool = True) -> str:
+    """Render a score per the design system's markup contract (§12 of the CSS).
+
+    The bare number said nothing — 9.0 and 4.0 were set identically. The CSS
+    encodes it twice, both monochrome: an ink tier and a meter whose width is
+    `--hz-score`. The meter is normalised to 5…10 because that is the range
+    scores actually occupy; against 0…10 the interesting differences vanish.
+
+    A missing score ("?") still gets the element so the layout does not jump,
+    but with no tier and an empty meter.
+    """
+    classes = "hz-score hz-score--lead" if lead else "hz-score"
+    try:
+        value = float(raw)
+    except ValueError:
+        return f'<span class="{classes}">{raw}</span>'
+
+    tier = "high" if value >= 8.5 else "mid" if value >= 7.0 else "low"
+    fill = min(max((value - 5.0) / 5.0, 0.04), 1.0)
+    scale = '<span class="hz-score__scale">/10</span>' if lead else ""
+    return (
+        f'<span class="{classes}" data-tier="{tier}" '
+        f'style="--hz-score:{fill:.2f}">{raw}{scale}</span>'
+    )
+
+
 def article_site_markup(markdown: str) -> str:
     """Restructure a rendered item for its own site page. Site-only.
 
@@ -163,20 +189,26 @@ def article_site_markup(markdown: str) -> str:
     lines = markdown.split("\n")
     seen_h1 = False
     byline_done = False
+    lede_done = False
     for i, line in enumerate(lines):
         if not seen_h1 and line.startswith("# "):
             seen_h1 = True
             lines[i] = _SCORE_IN_HEADING_RE.sub(
-                ' <span class="hz-score">\u2b50\ufe0f \\1/10</span>', line
+                lambda m: " " + _score_markup(m.group(1)), line
             )
             continue
-        if seen_h1 and not byline_done and line.strip():
+        if seen_h1 and not (byline_done and lede_done) and line.strip():
             if line.startswith(("## ", "<", "*", ">", "-", "|", "`")):
                 break  # past the intro paragraphs; nothing else qualifies
             if " \u00b7 " in line:
                 # attr_list only decorates a paragraph from its own line.
                 lines[i] = line + "\n{: .hz-byline}"
                 byline_done = True
+            elif not lede_done:
+                # First prose paragraph after the H1 is the lede: larger, and
+                # it sets the gap before the first numbered section.
+                lines[i] = line + "\n{: .hz-lede}"
+                lede_done = True
 
     markdown = "\n".join(lines)
     # The separator only made sense between items on a combined page. No re.M:

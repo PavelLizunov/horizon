@@ -566,7 +566,8 @@ def test_build_article_pages_renders_title_as_h1():
 
     assert (
         '# [Important Item 1](https://example.com/items/1) '
-        '<span class="hz-score">\u2b50\ufe0f 8.0/10</span>'
+        '<span class="hz-score hz-score--lead" data-tier="mid" '
+        'style="--hz-score:0.60">8.0<span class="hz-score__scale">/10</span></span>'
     ) in pages[0].markdown
 
 
@@ -598,16 +599,27 @@ def test_article_site_markup_turns_block_titles_into_section_headings():
     assert "**\u300c" not in result
 
 
-def test_article_site_markup_wraps_the_score_in_a_badge_span():
+def test_article_site_markup_renders_the_score_per_the_design_contract():
+    """The bare number said nothing — 9.0 and 4.0 were set identically.
+
+    The design system encodes it twice, both monochrome: an ink tier and a
+    meter whose width comes from --hz-score, normalised to the 5..10 range
+    scores actually occupy.
+    """
     result = article_site_markup(_ARTICLE_MD)
-    assert '# [Заголовок](https://example.com/1) <span class="hz-score">⭐️ 8.0/10</span>' in result
+
+    assert 'class="hz-score hz-score--lead"' in result
+    assert 'data-tier="mid"' in result          # 8.0 -> mid (7.0..8.4)
+    assert "--hz-score:0.60" in result          # (8.0 - 5) / 5
+    assert '<span class="hz-score__scale">/10</span>' in result
+    assert "⭐" not in result.encode("ascii", "backslashreplace").decode()
 
 
 def test_article_site_markup_marks_the_byline():
     result = article_site_markup(_ARTICLE_MD)
     assert "rss · tester · Apr 25, 08:00\n{: .hz-byline}" in result
-    # Only the byline gets the class, not the lead paragraph.
-    assert "Лид-абзац. {" not in result
+    # The lede is marked too — it sets the gap before the first section.
+    assert "{: .hz-lede}" in result
 
 
 def test_article_site_markup_drops_the_trailing_separator():

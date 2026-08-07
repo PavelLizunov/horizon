@@ -18,9 +18,10 @@
   <string>com.horizon.digest</string>
   <key>ProgramArguments</key>
   <array>
-    <string>/Users/YOURUSER/horizon/.venv/bin/horizon</string>
-    <string>--hours</string>
-    <string>24</string>
+    <!-- run-daily.sh, not `horizon` directly: the pipeline publishes markdown
+         but the site still has to be built and shipped. Scheduling only the
+         first step sent Telegram links to pages that did not exist. -->
+    <string>/Users/YOURUSER/horizon/deploy/run-daily.sh</string>
   </array>
   <key>WorkingDirectory</key>
   <string>/Users/YOURUSER/horizon</string>
