@@ -28,12 +28,21 @@ def render_page(doc: dict) -> ArticlePage:
     # id = {date}-{language}-{slug}; the slug is the anchor minus its prefix,
     # the same derivation the live publisher uses.
     slug = doc["id"].removeprefix(f"{doc['date']}-{doc['language']}-")
+    # Emit the score in the same bare form the live renderer produces and let
+    # article_site_markup turn it into the design system's element. Wrapping it
+    # here as well meant this script silently kept the pre-v2 markup: the
+    # regex looks for a bare score at end of line and never saw one.
     lines = [
         f'<a id="item-{slug}"></a>',
-        f'# [{doc["title"]}]({doc["url"]}) '
-        f'<span class="hz-score">\u2b50\ufe0f {doc["score"]:.1f}/10</span>',
+        f'# [{doc["title"]}]({doc["url"]}) \u2b50\ufe0f {doc["score"]:.1f}/10',
         "",
         doc["lead"],
+        "",
+        # The byline is the design system's marker for "this is an article
+        # page" \u2014 section numbering and the whole article treatment hang off
+        # `:has(.hz-byline)`. Frozen summaries lose the original byline, so
+        # rebuild the part that survives: source, profile and date.
+        f'{doc.get("source_type", "archive")} \u00b7 {doc["profile"]} \u00b7 {doc["date"]}',
     ]
     for title, text in doc["blocks"]:
         if text:
