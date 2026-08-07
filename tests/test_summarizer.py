@@ -636,3 +636,25 @@ def test_ru_digest_uses_russian_chrome_labels():
     assert "# Horizon Daily" in result
     assert "Источники" in result and "References" not in result
     assert "Теги" in result and "**Tags**" not in result
+
+
+def test_frozen_english_labels_are_localized_on_site_pages():
+    """Summaries frozen before LABELS gained "ru" carry English markers.
+
+    They are structural labels, not model output, so republishing an archived
+    issue can translate them on the way to the page rather than leaving three
+    English words in an otherwise Russian article.
+    """
+    from src.ai.summarizer import article_site_markup
+
+    frozen = (
+        "# Title\n\n"
+        "**Tags**: `#ai`\n\n"
+        "<details><summary>References</summary>\n<ul></ul>\n</details>\n\n"
+        "rss · a · [Discussion](https://e.com)\n"
+    )
+    out = article_site_markup(frozen)
+
+    assert "**Теги**" in out and "**Tags**" not in out
+    assert "<summary>Источники</summary>" in out and "References" not in out
+    assert "[Обсуждение](" in out and "[Discussion](" not in out

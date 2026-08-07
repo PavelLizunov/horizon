@@ -182,7 +182,26 @@ def article_site_markup(markdown: str) -> str:
     # The separator only made sense between items on a combined page. No re.M:
     # only the trailing one may go — a --- inside block content must survive.
     markdown = re.sub(r"\n---\s*$", "\n", markdown.rstrip() + "\n")
+    markdown = _localize_frozen_labels(markdown)
     return markdown.rstrip() + "\n"
+
+
+# LABELS gained a "ru" entry only after these were written, so summaries frozen
+# in data/summaries/ carry the English fallbacks. Republishing reads that frozen
+# text, and the labels are structural markers rather than model output, so they
+# can be translated on the way to the page. New runs already emit Russian and
+# these substitutions simply find nothing.
+_FROZEN_LABELS = (
+    ("**Tags**", "**Теги**"),
+    ("<summary>References</summary>", "<summary>Источники</summary>"),
+    ("[Discussion](", "[Обсуждение]("),
+)
+
+
+def _localize_frozen_labels(markdown: str) -> str:
+    for english, russian in _FROZEN_LABELS:
+        markdown = markdown.replace(english, russian)
+    return markdown
 
 
 @dataclass(frozen=True)
