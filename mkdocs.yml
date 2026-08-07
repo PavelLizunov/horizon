@@ -22,11 +22,12 @@ theme:
   features:
     - navigation.instant
     - navigation.top
-    - search.suggest
-    - search.highlight
 
 extra_css:
   - assets/horizon-digest.css
+
+extra_javascript:
+  - assets/horizon-search-redirect.js
 
 plugins:
   - search:

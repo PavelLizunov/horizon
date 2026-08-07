@@ -609,6 +609,9 @@ class SearchConfig(BaseModel):
     enabled: bool = False
     url: str = "http://127.0.0.1:9200"
     index: str = "horizon-articles"
+    # Where the site serves article pages; search results link there, and
+    # the source URL stays as a secondary "original" link.
+    site_base: str = "https://digest.ninitux.com/digest"
 
 
 class EmailConfig(BaseModel):

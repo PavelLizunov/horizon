@@ -42,7 +42,9 @@
     hits.forEach(function (hit) {
       var li = document.createElement("li");
       var a = document.createElement("a");
-      a.href = hit.url;
+      // The title opens our article page; the original source is a
+      // secondary link in the meta line.
+      a.href = hit.page || hit.url;
       a.innerHTML = highlight(hit.title || "(без названия)", terms);
       var meta = document.createElement("div");
       meta.className = "hz-search-meta";
@@ -51,6 +53,14 @@
       if (hit.score !== undefined && hit.score !== null) bits.push("⭐️ " + hit.score + "/10");
       if (hit.profile) bits.push(hit.profile);
       meta.textContent = bits.join(" · ");
+      if (hit.url) {
+        var src = document.createElement("a");
+        src.href = hit.url;
+        src.textContent = "оригинал";
+        src.className = "hz-search-source";
+        meta.appendChild(document.createTextNode(" · "));
+        meta.appendChild(src);
+      }
       var snippet = document.createElement("div");
       snippet.className = "hz-search-snippet";
       snippet.innerHTML = highlight(hit.snippet || "", terms);

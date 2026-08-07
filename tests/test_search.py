@@ -69,7 +69,9 @@ def _view(items):
 def test_documents_carry_the_page_slug_as_id():
     # The id is the same slug the site publisher and the headline links use,
     # so reindexing a run overwrites exactly its own pages.
-    documents = build_search_documents(_view([_item(1)]), "2026-08-06", "ru")
+    documents = build_search_documents(
+        _view([_item(1)]), "2026-08-06", "ru", "https://digest.ninitux.com/digest"
+    )
 
     assert len(documents) == 1
     doc = documents[0]
@@ -86,9 +88,24 @@ def test_documents_carry_the_page_slug_as_id():
 def test_documents_fall_back_to_the_analysis_summary_without_artifact():
     item = _item(1)
     item.processing.artifacts.clear()
-    documents = build_search_documents(_view([item]), "2026-08-06", "ru")
+    documents = build_search_documents(
+        _view([item]), "2026-08-06", "ru", "https://digest.ninitux.com/digest"
+    )
 
     assert documents[0]["content"] == "Summary 1."
+
+
+def test_documents_link_the_site_page_not_just_the_source():
+    # Reader complaint: a search hit must open our article page; the source
+    # stays as the secondary "original" link.
+    documents = build_search_documents(
+        _view([_item(1)]), "2026-08-06", "ru", "https://digest.ninitux.com/digest"
+    )
+
+    doc = documents[0]
+    slug = DailySummarizer._item_anchor("tech-news", 1).removeprefix("item-")
+    assert doc["page"] == f"https://digest.ninitux.com/digest/2026-08-06-ru/{slug}/"
+    assert doc["url"] == "https://example.com/items/1"
 
 
 def test_search_query_boosts_titles_and_highlights_content():
@@ -154,7 +171,9 @@ def test_bulk_index_sends_ndjson_with_per_doc_ids():
 
     transport, _ = _mock_transport(handler)
     config = SearchConfig(enabled=True, url="http://es.test")
-    documents = build_search_documents(_view([_item(1)]), "2026-08-06", "ru")
+    documents = build_search_documents(
+        _view([_item(1)]), "2026-08-06", "ru", "https://digest.ninitux.com/digest"
+    )
 
     async def run():
         async with SearchIndexer(config, client=httpx.AsyncClient(transport=transport, base_url="http://es.test")) as indexer:
@@ -179,7 +198,9 @@ def test_bulk_index_reports_partial_errors_as_warning(caplog):
 
     transport, _ = _mock_transport(handler)
     config = SearchConfig(enabled=True, url="http://es.test")
-    documents = build_search_documents(_view([_item(1)]), "2026-08-06", "ru")
+    documents = build_search_documents(
+        _view([_item(1)]), "2026-08-06", "ru", "https://digest.ninitux.com/digest"
+    )
 
     async def run():
         async with SearchIndexer(config, client=httpx.AsyncClient(transport=transport, base_url="http://es.test")) as indexer:
@@ -235,4 +256,9 @@ def test_archive_parser_splits_the_old_combined_format():
     assert "#ai" not in first["content"]
     assert "квантизацию" in first["content"]
     assert "Контекст: Текст контекста." in first["content"]
+    # Rendered-page chrome is noise in snippets: no heading line, no byline.
+    assert "###" not in first["content"]
+    assert "rss ·" not in first["content"]
+    # The hit opens our article page; the source is secondary.
+    assert first["page"] == "https://digest.ninitux.com/digest/2026-08-06-ru/tech-news-1/"
 

@@ -32,6 +32,7 @@ INDEX_BODY: Dict[str, Any] = {
             "title": {"type": "text"},
             "content": {"type": "text"},
             "url": {"type": "keyword"},
+            "page": {"type": "keyword"},
             "date": {"type": "keyword"},
             "language": {"type": "keyword"},
             "profile": {"type": "keyword"},
@@ -42,14 +43,15 @@ INDEX_BODY: Dict[str, Any] = {
 
 
 def build_search_documents(
-    view: DailySummaryView, date: str, language: str
+    view: DailySummaryView, date: str, language: str, page_base: str
 ) -> List[Dict[str, Any]]:
     """One document per article in the rendered view.
 
     Consumes the same pure-data seam the Telegram headline builder uses, so
     what is searchable is exactly what was delivered. The document id is the
     issue-scoped page slug — the same derivation the site publisher and the
-    headline links use — which makes reindexing idempotent.
+    headline links use — which makes reindexing idempotent. `page` is where
+    the site serves the article; `url` stays the original source.
     """
     documents: List[Dict[str, Any]] = []
     for group in view.groups:
@@ -62,12 +64,14 @@ def build_search_documents(
                     parts.append(block.content)
             elif item.processing and item.processing.analysis:
                 parts.append(item.processing.analysis.summary)
+            slug = view_item.anchor_id.removeprefix("item-")
             documents.append(
                 {
-                    "id": f"{date}-{language}-{view_item.anchor_id.removeprefix('item-')}",
+                    "id": f"{date}-{language}-{slug}",
                     "title": view_item.title,
                     "content": "\n".join(p for p in parts if p),
                     "url": str(item.url),
+                    "page": f"{page_base}/{date}-{language}/{slug}/",
                     "date": date,
                     "language": language,
                     "profile": item.profile or "unknown",

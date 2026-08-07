@@ -262,6 +262,23 @@ input {
   margin-top: 0.15rem;
 }
 
+.hz-search-source {
+  color: var(--md-typeset-a-color);
+  text-decoration: none;
+}
+
+.hz-search-source:hover {
+  text-decoration: underline;
+}
+
+/* The header box is a gateway to the Elasticsearch page (see
+ * horizon-search-redirect.js); the lunr dropdown only ever reports
+ * "no matches" for the digest, so it is hidden. */
+.md-search__output,
+.md-search__options {
+  display: none !important;
+}
+
 .hz-search-snippet {
   font-size: 0.8rem;
   margin-top: 0.3rem;

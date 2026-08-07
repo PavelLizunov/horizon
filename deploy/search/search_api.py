@@ -59,6 +59,7 @@ def shape(raw: dict) -> dict:
             {
                 "title": source.get("title", ""),
                 "url": source.get("url", ""),
+                "page": source.get("page", ""),
                 "date": source.get("date", ""),
                 "score": source.get("score"),
                 "profile": source.get("profile", ""),

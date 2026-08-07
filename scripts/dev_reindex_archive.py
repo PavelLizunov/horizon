@@ -41,6 +41,13 @@ def _plain(markdown: str) -> str:
     # The frozen archive predates the escaping fix and carries &#x27;-style
     # entities; search text should be the words, not the entities.
     text = html.unescape(text)
+    # Drop the rendered-page chrome that is noise in search snippets: the
+    ### heading line, the byline, and markdown backslash escapes.
+    text = re.sub(r"(?m)^#{1,6} .*$", " ", text)
+    text = "\n".join(
+        line for line in text.split("\n") if not (" · " in line and "…" not in line and not line.rstrip().endswith("."))
+    )
+    text = re.sub(r"\\([\\`*_{}\[\]()#+\-.!|])", r"\1", text)
     return re.sub(r"\s+", " ", text).strip()
 
 
@@ -71,7 +78,9 @@ def _split_blocks(segment: str) -> tuple[str, list[tuple[str, str]]]:
     return lead, blocks
 
 
-def parse_summary(markdown: str, date: str, language: str) -> list[dict]:
+def parse_summary(
+    markdown: str, date: str, language: str, page_base: str = "https://digest.ninitux.com/digest"
+) -> list[dict]:
     """Split one combined issue document into per-article search documents."""
     anchors = list(_ANCHOR_RE.finditer(markdown))
     documents = []
@@ -83,14 +92,16 @@ def parse_summary(markdown: str, date: str, language: str) -> list[dict]:
         if not heading:
             continue  # unparseable item: skip loudly? no — the archive is frozen, skip
         lead, blocks = _split_blocks(segment)
+        slug = anchor.removeprefix("item-")
         documents.append(
             {
-                "id": f"{date}-{language}-{anchor.removeprefix('item-')}",
+                "id": f"{date}-{language}-{slug}",
                 "title": html.unescape(heading.group("title").replace("\\", "")),
                 "content": _plain(segment),
                 "lead": lead,
                 "blocks": blocks,
                 "url": heading.group("url"),
+                "page": f"{page_base}/{date}-{language}/{slug}/",
                 "date": date,
                 "language": language,
                 "profile": re.match(r"item-(.+)-\d+$", anchor).group(1),
@@ -117,7 +128,9 @@ async def main() -> None:
     for path in sorted(SUMMARIES_DIR.glob("horizon-*.md")):
         stem = path.name[len("horizon-") : -len(".md")]
         date, _, language = stem.rpartition("-")
-        documents = parse_summary(path.read_text(encoding="utf-8"), date, language)
+        documents = parse_summary(
+            path.read_text(encoding="utf-8"), date, language, config.search.site_base
+        )
         print(f"{path.name}: {len(documents)} articles")
         total += len(documents)
         batches.append((date, language, documents))

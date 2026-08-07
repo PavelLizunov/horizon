@@ -335,6 +335,7 @@ class HorizonOrchestrator:
                                 summarizer.build_view(important_items, lang),
                                 today,
                                 lang,
+                                self.config.search.site_base,
                             )
                             indexed = await indexer.index_documents(documents)
                         self.console.print(
