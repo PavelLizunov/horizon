@@ -235,6 +235,8 @@ def test_publish_site_pages_refreshes_the_index_newest_first(tmp_path, monkeypat
     assert index.index("2026-08-06-ru") < index.index("2026-08-05-ru")
     # Each issue is linked through its own index page.
     assert "2026-08-06-ru/index.md" in index
+    assert 'class="hz-archive"' in index
+    assert 'class="hz-archive__count">1<' in index
     # The listing must not link to the top-level index it lives in.
     assert "](index.md)" not in index
 

@@ -554,21 +554,25 @@ def test_build_article_pages_index_links_every_article():
     index = pages[-1]
 
     for page in pages[:-1]:
-        assert f"({page.slug}.md)" in index.markdown
-    assert "8.0/10" in index.markdown
+        assert f'href="{page.slug}.md"' in index.markdown
+    assert 'class="hz-list"' in index.markdown
+    assert 'class="hz-item__title"' in index.markdown
+    assert 'class="hz-score"' in index.markdown
 
 
-def test_build_article_pages_renders_title_as_h1():
-    # MkDocs takes the page title from the first H1; the anchor line precedes
-    # it, and the site markup turns the glued-on score into a badge span.
+def test_build_article_pages_renders_title_as_an_article_h1():
+    # Site pages keep their own title as the H1; the primary source moves to
+    # the byline, so a title click cannot navigate the reader away.
     summarizer = DailySummarizer()
     pages = summarizer.build_article_pages([_make_item(1)], "2026-08-06", language="en")
 
     assert (
-        '# [Important Item 1](https://example.com/items/1) '
-        '<span class="hz-score hz-score--lead" data-tier="mid" '
-        'style="--hz-score:0.60">8.0<span class="hz-score__scale">/10</span></span>'
+        '# Important Item 1 '
+        '<span class="hz-score hz-score--lead" data-tier="high" '
+        'style="--hz-score:0.67">8.0<span class="hz-score__scale">/10</span></span>'
     ) in pages[0].markdown
+    assert 'class="hz-page--article"' in pages[0].markdown
+    assert '<a class="hz-source" href="https://example.com/items/1">Source</a>' in pages[0].markdown
 
 
 _ARTICLE_MD = (
@@ -603,14 +607,13 @@ def test_article_site_markup_renders_the_score_per_the_design_contract():
     """The bare number said nothing — 9.0 and 4.0 were set identically.
 
     The design system encodes it twice, both monochrome: an ink tier and a
-    meter whose width comes from --hz-score, normalised to the 5..10 range
-    scores actually occupy.
+    meter whose width comes from --hz-score, normalised to the observed range.
     """
     result = article_site_markup(_ARTICLE_MD)
 
     assert 'class="hz-score hz-score--lead"' in result
-    assert 'data-tier="mid"' in result          # 8.0 -> mid (7.0..8.4)
-    assert "--hz-score:0.60" in result          # (8.0 - 5) / 5
+    assert 'data-tier="high"' in result         # 8.0 -> high (8.0..10)
+    assert "--hz-score:0.67" in result          # (8.0 - 4) / 6
     assert '<span class="hz-score__scale">/10</span>' in result
     assert "⭐" not in result.encode("ascii", "backslashreplace").decode()
 
@@ -620,6 +623,23 @@ def test_article_site_markup_marks_the_byline():
     assert "rss · tester · Apr 25, 08:00\n{: .hz-byline}" in result
     # The lede is marked too — it sets the gap before the first section.
     assert "{: .hz-lede}" in result
+    assert result.startswith('<div class="hz-page--article" markdown>')
+
+
+def test_article_site_markup_preserves_the_lowest_observed_score_tier():
+    result = article_site_markup(_ARTICLE_MD.replace("8.0/10", "4.0/10"))
+
+    assert 'data-tier="low"' in result
+    assert "--hz-score:0.04" in result
+
+
+def test_article_site_markup_turns_renderer_tags_into_searchable_tag_links():
+    result = article_site_markup("# Title\n\n**Tags**: `#AI`, `#local model`\n")
+
+    assert '<ul class="hz-tags">' in result
+    assert 'href="/search/?q=%23AI"' in result
+    assert 'href="/search/?q=%23local%20model"' in result
+    assert "`#AI`" not in result
 
 
 def test_article_site_markup_drops_the_trailing_separator():
@@ -667,6 +687,8 @@ def test_frozen_english_labels_are_localized_on_site_pages():
     )
     out = article_site_markup(frozen)
 
-    assert "**Теги**" in out and "**Tags**" not in out
+    # Site pages promote tags from an inline renderer label into the visual
+    # tag list, so neither the old nor localized label remains in the output.
+    assert '<ul class="hz-tags">' in out and "**Tags**" not in out
     assert "<summary>Источники</summary>" in out and "References" not in out
     assert "[Обсуждение](" in out and "[Discussion](" not in out

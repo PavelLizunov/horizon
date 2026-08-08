@@ -1,5 +1,5 @@
 /* ===========================================================================
-   horizon-digest.css — v2
+   horizon-digest.css — v3
    Horizon Daily / digest.ninitux.com
 
    Ограничения, заложенные в файл:
@@ -67,9 +67,9 @@
   --hz-col: 759px;
 
   /* -- Оценка ------------------------------------------------------------- */
-  /* Шкала индикатора нормирована к 5…10: реально встречающийся диапазон.
-     0 % = 5.0 и ниже, 100 % = 10.0. Иначе 7.1 и 9.2 выглядят одинаково. */
-  --hz-score-floor: 5;
+  /* Шкала индикатора нормирована к 4…10: наблюдаемый диапазон оценок.
+     0 % = 4.0 и ниже, 100 % = 10.0. */
+  --hz-score-floor: 4;
   --hz-score-meter-w: 42px;
   --hz-score-meter-h: 3px;
 }
@@ -171,7 +171,7 @@
   --md-typeset-kbd-border-color: var(--hz-border-strong);
   --md-typeset-table-color: var(--hz-border);
 
-  --md-code-bg-color: var(--hz-surface);
+  --md-code-bg-color: var(--hz-surface-2);
   --md-code-fg-color: var(--hz-text-2);
   --md-code-hl-color: var(--hz-mark-bg);
 
@@ -328,6 +328,31 @@ select {
   margin-left: 0;
 }
 
+/* Inline code and tags are different things: tags receive .hz-tag from the
+   generator, while code keeps a compact code treatment. */
+.md-typeset code {
+  font-family: var(--hz-font-meta);
+  font-size: 0.86em;
+  color: var(--hz-text-2);
+  background: var(--hz-surface-2);
+  border-radius: var(--hz-radius-sm);
+  padding: 0.15em 0.36em;
+  box-shadow: none;
+  overflow-wrap: anywhere;
+}
+
+.md-typeset pre > code {
+  background: transparent;
+  padding: 0;
+}
+
+.md-typeset pre {
+  background: var(--hz-surface);
+  border: var(--hz-hairline) solid var(--hz-border);
+  border-radius: var(--hz-radius);
+  box-shadow: none;
+}
+
 /* Пилкроу на читательской странице — шум. */
 .md-typeset .headerlink {
   display: none;
@@ -477,8 +502,8 @@ select {
    §8  ОЦЕНКА
    Цифра одна ничего не сообщала: 9.0 и 4.0 набраны одинаково. Кодируется
    двумя средствами, оба монохромные:
-     · индикатор — полоса шириной (score−5)/5, нормировка в §1;
-     · ступень чернил — high ≥ 8.5, mid 7.0…8.4, low < 7.0.
+     · индикатор — полоса шириной (score−4)/6, нормировка в §1;
+     · ступень чернил — high ≥ 8.0, mid 6.0…7.9, low < 6.0.
    Цветового кодирования нет намеренно: светофор в тексте без картинок
    становится главным пятном на экране и врёт про точность модели.
 
@@ -598,8 +623,7 @@ select {
   margin: 0;
 }
 
-/* Генератор отдаёт теги как `code` — оставляем контракт, меняем вид. */
-.md-typeset code,
+/* Теги размечаются отдельно; инлайн-код остаётся кодом. */
 .md-typeset a.hz-tag,
 .hz-tag {
   font-family: var(--hz-font-meta);
@@ -625,8 +649,8 @@ a.hz-tag:hover {
    Шапка: заголовок → оценка с индикатором → байлайн → лид.
    Разделы разбора нумеруются счётчиком: 01 Контекст, 02 Влияние…
    Нумерация даёт ритм и предсказуемость длины без единого цветного пятна.
-   Правило ограничено страницами статьи через :has(.hz-byline) — без
-   переопределения шаблонов.
+   Правило ограничено явным маркером .hz-page--article, поэтому импортированные
+   материалы без байлайна не теряют нумерацию.
    =========================================================================== */
 
 .hz-lede,
@@ -645,11 +669,11 @@ a.hz-tag:hover {
   margin-bottom: var(--hz-space-4);
 }
 
-.md-typeset:has(.hz-byline) {
+.md-typeset .hz-page--article {
   counter-reset: hz-sec;
 }
 
-.md-typeset:has(.hz-byline) h2 {
+.md-typeset .hz-page--article > h2 {
   counter-increment: hz-sec;
   display: flex;
   align-items: baseline;
@@ -665,7 +689,7 @@ a.hz-tag:hover {
   color: var(--hz-muted);
 }
 
-.md-typeset:has(.hz-byline) h2::before {
+.md-typeset .hz-page--article > h2::before {
   content: counter(hz-sec, decimal-leading-zero);
   font-family: var(--hz-font-meta);
   font-weight: 400;
@@ -675,7 +699,7 @@ a.hz-tag:hover {
 }
 
 /* Первый h2 идёт сразу за лидом — верхняя линия там лишняя. */
-.md-typeset:has(.hz-byline) h2:first-of-type {
+.md-typeset .hz-page--article > h2:first-of-type {
   border-top: 0;
   padding-top: 0;
 }
@@ -1037,8 +1061,8 @@ mark {
 
    Оценка (везде):
      <span class="hz-score" data-tier="high|mid|low" style="--hz-score:.84">8.4</span>
-     data-tier: high ≥ 8.5, mid 7.0…8.4, low < 7.0
-     --hz-score: clamp((score − 5) / 5, 0.04, 1) — с округлением до 2 знаков
+     data-tier: high ≥ 8.0, mid 6.0…7.9, low < 6.0
+     --hz-score: clamp((score − 4) / 6, 0.04, 1) — с округлением до 2 знаков
 
    Профиль:
      <span class="hz-profile"><span class="hz-i hz-i--video" aria-hidden="true"></span>video</span>
@@ -1046,8 +1070,8 @@ mark {
      video → hz-i--video, finance-news → hz-i--finance
 
    Статья:
-     h1 → шапка; .hz-score--lead; p.hz-byline (маркер страницы статьи —
-     от него зависит нумерация разделов); p.hz-lede; h2 на каждый раздел;
+     div.hz-page--article вокруг h1, .hz-score--lead, p.hz-byline,
+     p.hz-lede и h2 на каждый раздел;
      details/ul для источников; ul.hz-tags с a.hz-tag.
 
    Выпуск:  ul.hz-list > li[data-tier] > div.hz-item

@@ -1,11 +1,13 @@
 """Storage manager for configuration and state persistence."""
 
+import html
 import json
 import os
 import re
 import shutil
 from pathlib import Path
 from typing import Any
+from urllib.parse import quote
 
 from pydantic import ValidationError
 
@@ -186,8 +188,23 @@ class StorageManager:
             key=lambda d: d.name,
             reverse=True,
         )
-        lines = ["# Архив выпусков", ""]
-        lines += [f"- [{d.name}]({d.name}/index.md)" for d in issues[:limit]]
+        lines = ["# Архив выпусков", "", '<ul class="hz-archive">']
+        for issue in issues[:limit]:
+            count = sum(path.name != "index.md" for path in issue.glob("*.md"))
+            name = html.escape(issue.name)
+            href = quote(f"{issue.name}/index.md", safe="/-_.")
+            lines.extend(
+                [
+                    "<li>",
+                    f'<a href="{href}">',
+                    f'<span class="hz-archive__date">{name}</span>',
+                    '<span class="hz-archive__rule"></span>',
+                    f'<span class="hz-archive__count">{count}</span>',
+                    "</a>",
+                    "</li>",
+                ]
+            )
+        lines.append("</ul>")
         _atomic_write_text(
             SITE_DIGEST_DIR / "index.md", _SITE_FRONT_MATTER + "\n".join(lines) + "\n"
         )

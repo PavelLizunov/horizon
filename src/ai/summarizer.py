@@ -140,6 +140,22 @@ class ArticlePage:
 # strings on purpose: re has no \u escape, the string parser resolves it.
 _BLOCK_TITLE_RE = re.compile("(?m)^\\*\\*\u300c([^\u300d]+)\u300d\\*\\*[ \t]*")
 _SCORE_IN_HEADING_RE = re.compile(" \u2b50\ufe0f ([0-9.]+|\\?)/10$")
+_SITE_TAG_LINE_RE = re.compile(r"(?m)^\*\*(?:Tags|Теги|标签)\*\*:\s*(.+)$")
+_PROFILE_ICONS = {
+    "tech-news": "news",
+    "tech-blog": "blog",
+    "video": "video",
+    "finance-news": "finance",
+}
+
+
+def _score_tier(value: float) -> str:
+    """Return the design-system tier for the observed 4..10 score range."""
+    if value >= 8.0:
+        return "high"
+    if value >= 6.0:
+        return "mid"
+    return "low"
 
 
 def _score_markup(raw: str, *, lead: bool = True) -> str:
@@ -147,8 +163,8 @@ def _score_markup(raw: str, *, lead: bool = True) -> str:
 
     The bare number said nothing — 9.0 and 4.0 were set identically. The CSS
     encodes it twice, both monochrome: an ink tier and a meter whose width is
-    `--hz-score`. The meter is normalised to 5…10 because that is the range
-    scores actually occupy; against 0…10 the interesting differences vanish.
+    `--hz-score`. The meter is normalised to 4…10, the observed score range;
+    against 0…10 the interesting differences vanish.
 
     A missing score ("?") still gets the element so the layout does not jump,
     but with no tier and an empty meter.
@@ -157,15 +173,30 @@ def _score_markup(raw: str, *, lead: bool = True) -> str:
     try:
         value = float(raw)
     except ValueError:
-        return f'<span class="{classes}">{raw}</span>'
+        return f'<span class="{classes}">{html.escape(raw)}</span>'
 
-    tier = "high" if value >= 8.5 else "mid" if value >= 7.0 else "low"
-    fill = min(max((value - 5.0) / 5.0, 0.04), 1.0)
+    tier = _score_tier(value)
+    fill = min(max((value - 4.0) / 6.0, 0.04), 1.0)
     scale = '<span class="hz-score__scale">/10</span>' if lead else ""
     return (
         f'<span class="{classes}" data-tier="{tier}" '
-        f'style="--hz-score:{fill:.2f}">{raw}{scale}</span>'
+        f'style="--hz-score:{fill:.2f}">{html.escape(raw)}{scale}</span>'
     )
+
+
+def _site_tags_markup(match: re.Match[str]) -> str:
+    """Turn the renderer's inline-code tags into the site's tag list."""
+    tags = re.findall(r"`([^`]+)`", match.group(1))
+    if not tags:
+        return match.group(0)
+    items = []
+    for tag in tags:
+        query = quote(tag, safe="")
+        items.append(
+            '<li><a class="hz-tag" href="/search/?q='
+            f'{query}">{html.escape(tag)}</a></li>'
+        )
+    return '<ul class="hz-tags">\n' + "\n".join(items) + "\n</ul>"
 
 
 def article_site_markup(markdown: str) -> str:
@@ -215,7 +246,10 @@ def article_site_markup(markdown: str) -> str:
     # only the trailing one may go — a --- inside block content must survive.
     markdown = re.sub(r"\n---\s*$", "\n", markdown.rstrip() + "\n")
     markdown = _localize_frozen_labels(markdown)
-    return markdown.rstrip() + "\n"
+    markdown = _SITE_TAG_LINE_RE.sub(_site_tags_markup, markdown)
+    # This explicit marker is more reliable than inferring article pages from
+    # a byline: old or imported items can legitimately be missing one.
+    return '<div class="hz-page--article" markdown>\n\n' + markdown.rstrip() + "\n\n</div>\n"
 
 
 # LABELS gained a "ru" entry only after these were written, so summaries frozen
@@ -309,7 +343,7 @@ class DailySummarizer:
         index_lines = [f"# {labels['header']} - {date}", ""]
 
         for group in view.groups:
-            index_lines += [f"## {group.name}", ""]
+            index_lines += [f"## {_escape_markdown(group.name)}", "", '<ul class="hz-list">']
             for view_item in group.items:
                 slug = view_item.anchor_id.removeprefix("item-")
                 body = self._format_item(
@@ -321,6 +355,7 @@ class DailySummarizer:
                     anchor_id=view_item.anchor_id,
                     title_override=view_item.title,
                     score_override=view_item.score,
+                    site_article=True,
                 )
                 pages.append(
                     ArticlePage(
@@ -329,11 +364,24 @@ class DailySummarizer:
                         markdown=article_site_markup(body),
                     )
                 )
-                index_lines.append(
-                    f"- [{_escape_markdown(view_item.title)}]({slug}.md) "
-                    f"⭐️ {view_item.score}/10"
+                score = _score_markup(str(view_item.score), lead=False)
+                tier = _score_tier(float(view_item.score)) if view_item.score != "?" else None
+                tier_attribute = f' data-tier="{tier}"' if tier else ""
+                icon = _PROFILE_ICONS.get(group.profile_id, "sections")
+                index_lines.extend(
+                    [
+                        f"<li{tier_attribute}>",
+                        '<div class="hz-item">',
+                        f'<a class="hz-item__title" href="{quote(slug + ".md")}">{html.escape(view_item.title)}</a>',
+                        score,
+                        '<div class="hz-item__meta">',
+                        f'<span class="hz-profile"><span class="hz-i hz-i--{icon}" aria-hidden="true"></span>{html.escape(group.name)}</span>',
+                        "</div>",
+                        "</div>",
+                        "</li>",
+                    ]
                 )
-            index_lines.append("")
+            index_lines += ["</ul>", ""]
 
         pages.append(
             ArticlePage(
@@ -558,6 +606,7 @@ class DailySummarizer:
         anchor_id: Optional[str] = None,
         title_override: Optional[str] = None,
         score_override: float | str | None = None,
+        site_article: bool = False,
     ) -> str:
         """Format a single ContentItem into Markdown."""
         artifact = item.processing.artifacts.get(language) if item.processing else None
@@ -618,7 +667,12 @@ class DailySummarizer:
             if safe_discussion_url and str(discussion_url) != raw_url:
                 source_line += f' · [{labels["discussion"]}]({safe_discussion_url})'
 
-        title_link = f"[{title}]({url})" if url else title
+        title_link = title if site_article else f"[{title}]({url})" if url else title
+        if site_article and url:
+            source_line += (
+                f' · <a class="hz-source" href="{url}">'
+                f'{html.escape(labels["source"])}</a>'
+            )
 
         lines = [
             f'<a id="{anchor_id or f"item-{index}"}"></a>',

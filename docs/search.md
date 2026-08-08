@@ -1,7 +1,10 @@
 # Поиск по архиву
 
 <div class="hz-search" markdown="0">
-  <input id="hz-search-input" type="search" placeholder="Ключевые слова, например: llama.cpp квантизация" autocomplete="off">
+  <div class="hz-search__field">
+    <span class="hz-i hz-i--search" aria-hidden="true"></span>
+    <input id="hz-search-input" type="search" placeholder="Ключевые слова, например: llama.cpp квантизация" autocomplete="off">
+  </div>
   <div id="hz-search-status" class="hz-search-status" hidden></div>
   <ol id="hz-search-results" class="hz-search-results"></ol>
 </div>
@@ -45,9 +48,10 @@
       // The title opens our article page; the original source is a
       // secondary link in the meta line.
       a.href = hit.page || hit.url;
+      a.className = "hz-item__title";
       a.innerHTML = highlight(hit.title || "(без названия)", terms);
       var meta = document.createElement("div");
-      meta.className = "hz-search-meta";
+      meta.className = "hz-item__meta";
       var bits = [];
       if (hit.date) bits.push(hit.date);
       if (hit.score !== undefined && hit.score !== null) bits.push("⭐️ " + hit.score + "/10");
