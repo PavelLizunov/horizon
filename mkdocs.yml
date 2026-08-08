@@ -1,4 +1,4 @@
-site_name: Horizon Daily
+site_name: Digest Ninitux
 # Deliberately says nothing about cadence, source count or subject matter: all
 # three are configuration. The previous line promised a *daily* digest of
 # *technology and research* from *a dozen sources*, while the schedule is a
@@ -25,6 +25,10 @@ theme:
       scheme: slate
       primary: custom
       toggle: {icon: material/weather-sunny, name: Светлая тема}
+  # The mascot, on every page. `.md-logo` is hidden by §6 of the skin for
+  # the default Material logo; §16 puts this one back.
+  logo: assets/hz-penguin.png
+  favicon: assets/hz-penguin.png
   features:
     - navigation.instant
     - navigation.top

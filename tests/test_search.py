@@ -219,7 +219,7 @@ def test_config_example_stays_valid_with_search_section():
 
 
 _OLD_FORMAT = (
-    "# Horizon Daily - 2026-08-06\n\n---\n\n"
+    "# Digest Ninitux - 2026-08-06\n\n---\n\n"
     '<a id="item-tech-news-1"></a>\n'
     "### [Заголовок один](https://example.com/one) ⭐️ 9.0/10\n\n"
     "Лид-абзац про квантизацию.\n\n"

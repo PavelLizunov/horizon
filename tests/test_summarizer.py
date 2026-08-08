@@ -229,7 +229,7 @@ def test_generate_summary_groups_items_by_profile_with_heading_hierarchy():
         )
     )
 
-    assert result.count("# Horizon Daily") == 1
+    assert result.count("# Digest Ninitux") == 1
     assert "## Technology News" in result
     assert "## Technology Blog" in result
     assert "### [Important Item 1]" in result
@@ -734,7 +734,7 @@ def test_ru_digest_uses_russian_chrome_labels():
     summarizer = DailySummarizer()
     result = _run_async(summarizer.generate_summary([item], "2026-04-25", 1, language="ru"))
 
-    assert "# Horizon Daily" in result
+    assert "# Digest Ninitux" in result
     assert "Источники" in result and "References" not in result
     assert "Теги" in result and "**Tags**" not in result
 

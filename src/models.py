@@ -625,7 +625,7 @@ class EmailConfig(BaseModel):
     smtp_username: Optional[str] = None
     email_address: str
     password_env: str = "EMAIL_PASSWORD"
-    sender_name: str = "Horizon Daily"
+    sender_name: str = "Digest Ninitux"
     subscribe_keyword: str = "SUBSCRIBE"
     unsubscribe_keyword: str = "UNSUBSCRIBE"
     enabled: bool = False
@@ -684,7 +684,7 @@ class DigestConfig(BaseModel):
     # label table entirely — so a rename was guaranteed to leave a stale copy
     # somewhere. `tests/test_branding.py` fails if a new one appears.
     # Not localised: a name is a name in every language.
-    brand: str = "Horizon Daily"
+    brand: str = "Digest Ninitux"
     max_items: Optional[int] = Field(default=None, gt=0)
     category_groups: Dict[str, CategoryGroupConfig] = Field(default_factory=dict)
     default_group: str = "other"

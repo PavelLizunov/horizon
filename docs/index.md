@@ -1,4 +1,6 @@
-# Horizon Daily
+# Digest Ninitux
+
+<img class="hz-mark" src="assets/hz-mark.png" alt="" width="420" height="420">
 
 Модель читает мои источники, оценивает каждый материал и разбирает то, что
 прошло порог: контекст, влияние, обсуждение, проверка фактов.

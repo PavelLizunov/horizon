@@ -63,7 +63,7 @@ def _pangu(text: str) -> str:
 # Mirrors `DigestConfig.brand`. Kept here as a fallback for the two entry
 # points that build a summarizer without a config (the webhook self-test and
 # the archive republisher); everything on the live path passes the real one.
-DEFAULT_BRAND = "Horizon Daily"
+DEFAULT_BRAND = "Digest Ninitux"
 
 LABELS = {
     "en": {

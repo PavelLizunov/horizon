@@ -673,7 +673,7 @@ Email delivery is optional and disabled unless `email.enabled` is `true`. Horizo
     "imap_port": 993,
     "email_address": "xxx@qq.com",
     "password_env": "EMAIL_PASSWORD",
-    "sender_name": "Horizon Daily",
+    "sender_name": "Digest Ninitux",
     "subscribe_keyword": "SUBSCRIBE",
     "unsubscribe_keyword": "UNSUBSCRIBE"
   }
@@ -704,7 +704,7 @@ Resend SMTP example:
     "imap_server": "",
     "imap_port": 993,
     "email_address": "noreply@example.com",
-    "sender_name": "Horizon Daily"
+    "sender_name": "Digest Ninitux"
   }
 }
 ```

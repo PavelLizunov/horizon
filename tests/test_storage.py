@@ -208,7 +208,7 @@ def test_publish_site_pages_keeps_the_h1_and_excludes_from_search(tmp_path, monk
     storage = StorageManager(data_dir=str(tmp_path / "data"))
 
     issue_dir = storage.publish_site_pages(
-        "2026-08-06", _pages(("tech-news-1", "# Horizon Daily\n\nbody\n")), language="ru"
+        "2026-08-06", _pages(("tech-news-1", "# Digest Ninitux\n\nbody\n")), language="ru"
     )
     written = (issue_dir / "tech-news-1.md").read_text(encoding="utf-8")
 
@@ -220,7 +220,7 @@ def test_publish_site_pages_keeps_the_h1_and_excludes_from_search(tmp_path, monk
     # plus a score badge, and silently falls back to the filename.
     assert '"Title tech-news-1"' in written
     # The H1 itself must still survive verbatim.
-    assert "# Horizon Daily" in written
+    assert "# Digest Ninitux" in written
     assert "body" in written
 
 

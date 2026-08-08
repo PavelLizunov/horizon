@@ -445,7 +445,7 @@ def test_generate_summary_persists_informative_empty_summary(
                 runtime=SimpleNamespace(DailySummarizer=RecordingSummarizer),
                 config=SimpleNamespace(
                     digest=SimpleNamespace(
-                        profile_order=profile_order, brand="Horizon Daily"
+                        profile_order=profile_order, brand="Digest Ninitux"
                     )
                 ),
             ),
@@ -657,7 +657,7 @@ def test_send_webhook_reports_delivery_failure_truthfully(
             SimpleNamespace(
                 config=SimpleNamespace(
                     webhook=webhook_config,
-                    digest=SimpleNamespace(brand="Horizon Daily"),
+                    digest=SimpleNamespace(brand="Digest Ninitux"),
                 )
             ),
             [],
@@ -669,7 +669,7 @@ def test_send_webhook_reports_delivery_failure_truthfully(
         def __init__(self, config, console, brand=None) -> None:  # type: ignore[no-untyped-def]
             assert config is webhook_config
             assert console is service.console
-            assert brand == "Horizon Daily"
+            assert brand == "Digest Ninitux"
 
         async def notify(self, variables):  # type: ignore[no-untyped-def]
             return WebhookDeliveryResult(
