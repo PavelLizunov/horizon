@@ -19,16 +19,18 @@
   var results = document.getElementById("hz-search-results");
   var timer = null;
 
-  function highlight(text, terms) {
+  // The API marks matches with U+0001/U+0002 rather than with tags. Escape
+  // first — this is model output over scraped content and must never reach
+  // innerHTML as markup — then turn the surviving sentinels into <mark>.
+  // Doing it this way means the highlighting comes from the Elasticsearch
+  // analyser, which knows Russian morphology; matching terms here with a
+  // regex missed every inflected form.
+  function highlight(text) {
     var safe = document.createElement("span");
-    safe.textContent = text;
-    var html = safe.innerHTML;
-    terms.forEach(function (term) {
-      if (!term) return;
-      var re = new RegExp("(" + term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + ")", "gi");
-      html = html.replace(re, "<mark>$1</mark>");
-    });
-    return html;
+    safe.textContent = text || "";
+    return safe.innerHTML
+      .split("\u0001").join("<mark>")
+      .split("\u0002").join("</mark>");
   }
 
   function showStatus(text) {
@@ -74,7 +76,7 @@
     return span;
   }
 
-  function render(data, terms) {
+  function render(data) {
     results.innerHTML = "";
     var hits = (data && data.hits) || [];
     if (!hits.length) {
@@ -97,7 +99,7 @@
       var a = document.createElement("a");
       a.className = "hz-item__title";
       a.href = hit.page || hit.url;
-      a.innerHTML = highlight(hit.title || "(без названия)", terms);
+      a.innerHTML = highlight(hit.title || "(без названия)");
       item.appendChild(a);
 
       if (hit.score !== undefined && hit.score !== null) {
@@ -124,7 +126,7 @@
 
       var snippet = document.createElement("p");
       snippet.className = "hz-search-snippet";
-      snippet.innerHTML = highlight(hit.snippet || "", terms);
+      snippet.innerHTML = highlight(hit.snippet || "");
       item.appendChild(snippet);
 
       li.appendChild(item);
@@ -146,7 +148,7 @@
         if (!r.ok) throw new Error("HTTP " + r.status);
         return r.json();
       })
-      .then(function (data) { render(data, q.split(/\s+/)); })
+      .then(function (data) { render(data); })
       .catch(function () {
         showStatus("");
         showEmpty(

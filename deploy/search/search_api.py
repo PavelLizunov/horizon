@@ -22,6 +22,11 @@ ES_INDEX = os.environ.get("ES_INDEX", "horizon-articles")
 PORT = int(os.environ.get("PORT", "8788"))
 MAX_Q = 200
 
+# U+0001/U+0002 cannot occur in digest text and pass through HTML escaping
+# unchanged, which is what makes them usable as highlight markers.
+HL_OPEN = "\u0001"
+HL_CLOSE = "\u0002"
+
 
 def es_search(query: str) -> dict:
     body = json.dumps(
@@ -33,8 +38,20 @@ def es_search(query: str) -> dict:
                     "type": "best_fields",
                 }
             },
+            # Highlight markers are two control characters, not `<em>`. The
+            # browser has to escape this text before inserting it — it is model
+            # output over scraped content — and escaping turned Elasticsearch's
+            # default tags into visible "<em>" in every snippet. Sentinels
+            # survive escaping untouched and the page swaps them for <mark>
+            # afterwards, so the highlighting is the analyser's (which knows
+            # Russian morphology) without ever injecting markup from the index.
             "highlight": {
-                "fields": {"content": {"fragment_size": 220, "number_of_fragments": 2}}
+                "pre_tags": [HL_OPEN],
+                "post_tags": [HL_CLOSE],
+                "fields": {
+                    "title": {"number_of_fragments": 0},
+                    "content": {"fragment_size": 220, "number_of_fragments": 2},
+                },
             },
             "size": 30,
             "sort": [{"_score": {"order": "desc"}}, {"date": {"order": "desc"}}],
@@ -50,20 +67,58 @@ def es_search(query: str) -> dict:
         return json.loads(response.read().decode("utf-8"))
 
 
+def balance_highlights(text: str) -> str:
+    """Repair highlight markers split across a fragment boundary.
+
+    Elasticsearch cuts fragments to a character window, not to tag boundaries,
+    so a fragment can open a highlight it never closes, or begin with a close
+    that was opened in text that got trimmed away. Measured on the live index:
+    4 of 30 snippets for "модель" came back unbalanced. Passed through as-is,
+    an unclosed marker makes one `<mark>` swallow the rest of the snippet —
+    a whole paragraph rendered as a match.
+
+    Nested openers are dropped too, so the output is a flat, balanced sequence
+    whatever the highlighter emits.
+    """
+    out = []
+    inside = False
+    for char in text:
+        if char == HL_OPEN:
+            if inside:
+                continue
+            inside = True
+        elif char == HL_CLOSE:
+            if not inside:
+                continue
+            inside = False
+        out.append(char)
+    if inside:
+        out.append(HL_CLOSE)
+    return "".join(out)
+
+
 def shape(raw: dict) -> dict:
     hits = []
     for hit in raw.get("hits", {}).get("hits", []):
         source = hit.get("_source", {})
-        fragments = hit.get("highlight", {}).get("content", [])
+        highlight = hit.get("highlight", {})
+        fragments = highlight.get("content", [])
+        titles = highlight.get("title", [])
         hits.append(
             {
-                "title": source.get("title", ""),
+                "title": balance_highlights(
+                    titles[0] if titles else source.get("title", "")
+                ),
                 "url": source.get("url", ""),
                 "page": source.get("page", ""),
                 "date": source.get("date", ""),
                 "score": source.get("score"),
                 "profile": source.get("profile", ""),
-                "snippet": " … ".join(fragments),
+                # Per fragment, before joining. Balancing the joined string
+                # instead lets a marker opened at the end of one fragment run
+                # across the " … " seam and close inside the next, which put a
+                # 160-character <mark> on the page.
+                "snippet": " … ".join(balance_highlights(f) for f in fragments),
             }
         )
     return {"total": raw.get("hits", {}).get("total", {}).get("value", len(hits)), "hits": hits}
