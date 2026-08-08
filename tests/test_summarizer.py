@@ -554,21 +554,67 @@ def test_build_article_pages_index_links_every_article():
     index = pages[-1]
 
     for page in pages[:-1]:
-        assert f"({page.slug}.md)" in index.markdown
-    assert "8.0/10" in index.markdown
+        assert f'href="{page.slug}/"' in index.markdown
+
+
+def test_build_article_pages_index_is_the_design_systems_list():
+    """The issue index is the site's main working screen.
+
+    It used to be a plain `- [title](slug.md) ⭐️ 8.0/10` list: seven identical
+    stars, the only colour on a monochrome page, encoding nothing. A 4.0 and an
+    8.0 were set with exactly the same weight.
+    """
+    summarizer = DailySummarizer()
+    pages = summarizer.build_article_pages([_make_item(1)], "2026-08-06", language="en")
+    index = pages[-1].markdown
+
+    assert '<ul class="hz-list">' in index and "</ul>" in index
+    assert '<li data-tier="high">' in index  # 8.0 clears the high threshold
+    assert 'class="hz-item__title"' in index
+    assert '<div class="hz-item__meta">example.com</div>' in index
+    assert "⭐" not in index.encode("ascii", "backslashreplace").decode()
 
 
 def test_build_article_pages_renders_title_as_h1():
-    # MkDocs takes the page title from the first H1; the anchor line precedes
-    # it, and the site markup turns the glued-on score into a badge span.
+    # MkDocs takes the page title from the first H1. The heading carries the
+    # title and nothing else: the score is its own element and the source link
+    # moved to the byline.
     summarizer = DailySummarizer()
     pages = summarizer.build_article_pages([_make_item(1)], "2026-08-06", language="en")
 
+    assert "\n# Important Item 1\n" in pages[0].markdown
+
+
+def test_article_head_does_not_send_the_reader_away_on_the_title():
+    """The heading used to be a link to the original.
+
+    A reader clicking what looks like the article's own name left the site
+    without ever seeing the analysis the page exists for. The link belongs in
+    the byline, named by its domain.
+    """
+    summarizer = DailySummarizer()
+    pages = summarizer.build_article_pages([_make_item(1)], "2026-08-06", language="en")
+    markdown = pages[0].markdown
+
+    assert "# [Important Item 1](" not in markdown
     assert (
-        '# [Important Item 1](https://example.com/items/1) '
-        '<span class="hz-score hz-score--lead" data-tier="mid" '
-        'style="--hz-score:0.60">8.0<span class="hz-score__scale">/10</span></span>'
-    ) in pages[0].markdown
+        '<a class="hz-source" href="https://example.com/items/1">example.com'
+    ) in markdown
+
+
+def test_article_head_keeps_the_score_out_of_the_permalink():
+    """With the score inline the anchor came out as `#amd-taalas-8010`.
+
+    Rescoring an article then silently changed its own address, breaking every
+    external link to it.
+    """
+    summarizer = DailySummarizer()
+    pages = summarizer.build_article_pages([_make_item(1)], "2026-08-06", language="en")
+
+    heading = next(
+        line for line in pages[0].markdown.split("\n") if line.startswith("# ")
+    )
+    assert "8.0" not in heading and "/10" not in heading
 
 
 _ARTICLE_MD = (
@@ -603,23 +649,66 @@ def test_article_site_markup_renders_the_score_per_the_design_contract():
     """The bare number said nothing — 9.0 and 4.0 were set identically.
 
     The design system encodes it twice, both monochrome: an ink tier and a
-    meter whose width comes from --hz-score, normalised to the 5..10 range
-    scores actually occupy.
+    meter whose width comes from --hz-score. Both the 4..10 normalisation and
+    the 8.0/6.0 tier steps come from the published issues: 2026-08-07 ran
+    4.0..8.0 in whole points, so a floor of 5 clipped a real 4.0 to nothing and
+    a `high` threshold of 8.5 never fired at all.
     """
     result = article_site_markup(_ARTICLE_MD)
 
     assert 'class="hz-score hz-score--lead"' in result
-    assert 'data-tier="mid"' in result          # 8.0 -> mid (7.0..8.4)
-    assert "--hz-score:0.60" in result          # (8.0 - 5) / 5
+    assert 'data-tier="high"' in result          # 8.0 reaches high
+    assert "--hz-score:0.67" in result           # (8.0 - 4) / 6
     assert '<span class="hz-score__scale">/10</span>' in result
     assert "⭐" not in result.encode("ascii", "backslashreplace").decode()
 
 
-def test_article_site_markup_marks_the_byline():
+def test_article_site_markup_puts_the_byline_above_the_lede():
+    """The byline used to sit *under* the summary.
+
+    That put the reader through four sentences of text before anything said
+    where the text came from. It is also where the source link now lives.
+    """
+    result = article_site_markup(_ARTICLE_MD, profile_id="tech-news")
+
+    byline = result.index('<p class="hz-byline">')
+    assert byline < result.index("{: .hz-lede}")
+    assert result.index("# Заголовок") < byline
+    # The profile is a chip with an icon, not a bare internal token, and "rss"
+    # — which names our plumbing, not a source — is gone.
+    assert '<span class="hz-i hz-i--news" aria-hidden="true"></span>tech-news' in result
+    assert "rss" not in result
+    assert "tester · Apr 25, 08:00" in result
+
+
+def test_article_site_markup_renders_tags_as_the_design_systems_list():
+    # The pill belongs to .hz-tag alone: styling `code` for it would have
+    # caught every command and path the digest quotes in prose.
     result = article_site_markup(_ARTICLE_MD)
-    assert "rss · tester · Apr 25, 08:00\n{: .hz-byline}" in result
-    # The lede is marked too — it sets the gap before the first section.
-    assert "{: .hz-lede}" in result
+
+    assert '<ul class="hz-tags">' in result
+    assert '<a class="hz-tag" href="/search/?q=AI">#AI</a>' in result
+    assert "`#AI`" not in result
+
+
+def test_article_site_markup_strips_tool_citation_ids():
+    """The analyst leaves internal call ids in its prose.
+
+    They name tool invocations: the reader cannot follow them and the sources
+    they stand for never reach the page. Frozen summaries carry the
+    markdown-escaped shape, live output the raw one; both must go, and neither
+    may leave a stranded space before the full stop.
+    """
+    frozen = (
+        "# T\n\nЛид.\n\nrss · a · Apr 25\n\n"
+        "Подтверждается пресс-релизами \\[tool-2-1\\]\\[tool-2-2\\]. "
+        "И вторым [tool-3-1].\n"
+    )
+    result = article_site_markup(frozen)
+
+    assert "tool-2-1" not in result and "tool-3-1" not in result
+    assert "пресс-релизами." in result
+    assert "вторым." in result
 
 
 def test_article_site_markup_drops_the_trailing_separator():
@@ -667,6 +756,8 @@ def test_frozen_english_labels_are_localized_on_site_pages():
     )
     out = article_site_markup(frozen)
 
-    assert "**Теги**" in out and "**Tags**" not in out
+    # The tags line no longer carries a label at all — it became .hz-tags.
+    assert '<a class="hz-tag" href="/search/?q=ai">#ai</a>' in out
+    assert "**Tags**" not in out
     assert "<summary>Источники</summary>" in out and "References" not in out
     assert "[Обсуждение](" in out and "[Discussion](" not in out

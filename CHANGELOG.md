@@ -9,6 +9,59 @@ recoverable by reading the code.
 
 ## Unreleased
 
+### Visual system v3 — the generator now emits what the CSS was written for
+
+The v2 stylesheet described components the generator never produced, so most
+of it was dead. An audit of the four published screens found twelve defects;
+these are the eleven that were real. (The twelfth — "the search page is
+empty" — was a false positive: the page reads empty to a text extractor
+because its content is an `<input>` and a script.)
+
+- **The heading no longer sends the reader away.** It was
+  `# [title](original) ⭐️ 8.0/10`: a reader clicking what looked like the
+  article's own name left the site without seeing the analysis the page
+  exists for. The heading now carries the title alone, the score is its own
+  `span.hz-score`, and the source link moved into the byline named by its
+  domain. This also fixes the permalink — with the score inline the anchor
+  came out `#amd-taalas-8010`, so rescoring an article changed its address.
+- **The byline moved above the lede** and gained icons and the source link.
+  It used to sit under four sentences of summary, so the reader was well
+  into the text before anything said where the text came from.
+- **Page type is declared, not inferred.** `article_site_markup()` wraps the
+  body in `div.hz-page--article`. v2 hung the whole article treatment off
+  `:has(.hz-byline)`, which meant a page that happened to lack a byline
+  rendered as plain typography, silently — as the republished archive did.
+- **Issue lists are `ul.hz-list`.** They were plain `- [title](x.md) ⭐️ 8.0/10`
+  rows: seven identical stars, the only colour on a monochrome page, encoding
+  nothing. A 4.0 and an 8.0 were set with identical weight. Rows now carry
+  `data-tier`, a meter and the source domain.
+- **Score scale renormalised to 4…10, tiers at 8.0/6.0.** Measured, not
+  chosen: 2026-08-07 ran 4.0…8.0 in whole points, so the previous floor of 5
+  clipped a real 4.0 to nothing and the 8.5 `high` threshold never fired once
+   — the whole issue rendered mid and low.
+- **Archive rows show a date and an article count** instead of the raw
+  directory name, `2026-08-07-ru`, which made every row look identical.
+- **Tool citation ids are stripped.** `[tool-2-1]` and friends reached the
+  published text; they name internal calls no reader can follow. Matched in
+  both raw and markdown-escaped form, since frozen summaries carry the latter.
+- **Tags render as `ul.hz-tags`.** The pill belongs to `.hz-tag` alone —
+  styling `code` for it, as v2 did, also caught every command and path the
+  digest quotes in prose (15 in the archive: `brew doctor`, `uvx`,
+  `/v1/chat/completions`…).
+- **Cyrillic heading anchors.** The default slugify produced `#_1`…`#_4`:
+  unreadable, and positional, so reordering an article's sections repointed
+  every link into it. `pymdownx.slugs.slugify` keeps the letters.
+- **A way out of an article** (`nav.hz-pager`) and one name for the archive
+  in the nav, the page heading and the home-page button.
+- **Search page rebuilt to the §13 contract**, including the `.hz-empty`
+  states for no hits and for an unreachable index.
+
+Operational finding from the same session: the Mac rebooted, Docker Desktop
+does not start at login, and the Mac's DHCP lease moved `.246 → .247` while
+the ingress proxied `/api/search` at a hard-coded `.246`. Archive search was
+down and nothing reported it. `deploy/search/README.md` now says to pin the
+address.
+
 ### Per-article pages, reading-first site, Elasticsearch search
 
 Follow-up to the site/Telegram split, driven by live use: a headline link

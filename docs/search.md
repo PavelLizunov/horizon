@@ -1,9 +1,13 @@
 # Поиск по архиву
 
 <div class="hz-search" markdown="0">
-  <input id="hz-search-input" type="search" placeholder="Ключевые слова, например: llama.cpp квантизация" autocomplete="off">
-  <div id="hz-search-status" class="hz-search-status" hidden></div>
-  <ol id="hz-search-results" class="hz-search-results"></ol>
+  <div class="hz-search__field">
+    <span class="hz-i hz-i--search" aria-hidden="true"></span>
+    <input id="hz-search-input" type="search" placeholder="Заголовок, источник, тема" autocomplete="off" aria-label="Поиск по архиву">
+  </div>
+  <p id="hz-search-status" class="hz-search-status" hidden></p>
+  <div id="hz-search-empty" hidden></div>
+  <ul id="hz-search-results" class="hz-search-results"></ul>
 </div>
 
 <script>
@@ -11,6 +15,7 @@
   "use strict";
   var input = document.getElementById("hz-search-input");
   var status = document.getElementById("hz-search-status");
+  var empty = document.getElementById("hz-search-empty");
   var results = document.getElementById("hz-search-results");
   var timer = null;
 
@@ -31,42 +36,98 @@
     status.hidden = !text;
   }
 
+  // Empty states are not centred and carry no illustration: same alignment as
+  // the rest of the text, one sentence of fact and one thing to do.
+  function showEmpty(head, body) {
+    if (!head) {
+      empty.hidden = true;
+      empty.innerHTML = "";
+      return;
+    }
+    empty.innerHTML =
+      '<div class="hz-empty">' +
+      '<span class="hz-i hz-i--none" aria-hidden="true"></span>' +
+      '<div class="hz-empty__head"></div>' +
+      '<div class="hz-empty__body"></div>' +
+      "</div>";
+    empty.querySelector(".hz-empty__head").textContent = head;
+    empty.querySelector(".hz-empty__body").innerHTML = body;
+    empty.hidden = false;
+  }
+
+  // Mirrors _score_tier / _score_markup in src/ai/summarizer.py — that is the
+  // source of truth for both thresholds and the 4..10 normalisation.
+  function scoreElement(score) {
+    var value = parseFloat(score);
+    var span = document.createElement("span");
+    span.className = "hz-score";
+    if (isNaN(value)) {
+      span.textContent = "?";
+      return span;
+    }
+    span.dataset.tier = value >= 8.0 ? "high" : value >= 6.0 ? "mid" : "low";
+    span.style.setProperty(
+      "--hz-score",
+      Math.min(Math.max((value - 4.0) / 6.0, 0.04), 1.0).toFixed(2)
+    );
+    span.textContent = value.toFixed(1);
+    return span;
+  }
+
   function render(data, terms) {
     results.innerHTML = "";
     var hits = (data && data.hits) || [];
     if (!hits.length) {
-      showStatus("Ничего не найдено.");
+      showStatus("");
+      showEmpty(
+        "Ничего не найдено",
+        'Попробуйте другое слово или откройте <a href="/digest/">архив выпусков</a>.'
+      );
       return;
     }
+    showEmpty("");
     showStatus("Найдено: " + (data.total !== undefined ? data.total : hits.length));
     hits.forEach(function (hit) {
       var li = document.createElement("li");
+      var item = document.createElement("div");
+      item.className = "hz-item";
+
+      // The title opens our article page; the original source is a secondary
+      // link in the meta line.
       var a = document.createElement("a");
-      // The title opens our article page; the original source is a
-      // secondary link in the meta line.
+      a.className = "hz-item__title";
       a.href = hit.page || hit.url;
       a.innerHTML = highlight(hit.title || "(без названия)", terms);
+      item.appendChild(a);
+
+      if (hit.score !== undefined && hit.score !== null) {
+        var score = scoreElement(hit.score);
+        item.appendChild(score);
+        li.dataset.tier = score.dataset.tier || "";
+      }
+
       var meta = document.createElement("div");
-      meta.className = "hz-search-meta";
+      meta.className = "hz-item__meta";
       var bits = [];
       if (hit.date) bits.push(hit.date);
-      if (hit.score !== undefined && hit.score !== null) bits.push("⭐️ " + hit.score + "/10");
       if (hit.profile) bits.push(hit.profile);
       meta.textContent = bits.join(" · ");
       if (hit.url) {
         var src = document.createElement("a");
         src.href = hit.url;
-        src.textContent = "оригинал";
-        src.className = "hz-search-source";
-        meta.appendChild(document.createTextNode(" · "));
+        src.className = "hz-source";
+        src.textContent = (hit.url.split("/")[2] || "оригинал").replace(/^www\./, "");
+        meta.appendChild(document.createTextNode(" "));
         meta.appendChild(src);
       }
-      var snippet = document.createElement("div");
+      item.appendChild(meta);
+
+      var snippet = document.createElement("p");
       snippet.className = "hz-search-snippet";
       snippet.innerHTML = highlight(hit.snippet || "", terms);
-      li.appendChild(a);
-      li.appendChild(meta);
-      li.appendChild(snippet);
+      item.appendChild(snippet);
+
+      li.appendChild(item);
       results.appendChild(li);
     });
   }
@@ -76,6 +137,7 @@
     results.innerHTML = "";
     if (q.length < 2) {
       showStatus("");
+      showEmpty("");
       return;
     }
     showStatus("Ищем…");
@@ -86,7 +148,11 @@
       })
       .then(function (data) { render(data, q.split(/\s+/)); })
       .catch(function () {
-        showStatus("Поиск недоступен. Попробуйте позже.");
+        showStatus("");
+        showEmpty(
+          "Поиск недоступен",
+          'Индекс сейчас не отвечает. Выпуски открываются напрямую из <a href="/digest/">архива</a>.'
+        );
       });
   }
 

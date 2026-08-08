@@ -20,7 +20,13 @@ try:  # runnable both as `python scripts/...` and as a package import
 except ImportError:
     from dev_reindex_archive import SUMMARIES_DIR, parse_summary
 
-from src.ai.summarizer import ArticlePage, article_site_markup
+from src.ai.summarizer import (
+    LABELS,
+    ArticlePage,
+    _issue_item_markup,
+    _pager_markup,
+    article_site_markup,
+)
 from src.storage.manager import StorageManager
 
 
@@ -28,26 +34,34 @@ def render_page(doc: dict) -> ArticlePage:
     # id = {date}-{language}-{slug}; the slug is the anchor minus its prefix,
     # the same derivation the live publisher uses.
     slug = doc["id"].removeprefix(f"{doc['date']}-{doc['language']}-")
-    # Emit the score in the same bare form the live renderer produces and let
-    # article_site_markup turn it into the design system's element. Wrapping it
-    # here as well meant this script silently kept the pre-v2 markup: the
-    # regex looks for a bare score at end of line and never saw one.
+    # Emit the score and the source link in the same bare form the live
+    # renderer produces, and let article_site_markup restructure both. Building
+    # the finished markup here meant this script silently kept the previous
+    # design's shape: the regexes look for the renderer's form and never saw it.
     lines = [
         f'<a id="item-{slug}"></a>',
         f'# [{doc["title"]}]({doc["url"]}) \u2b50\ufe0f {doc["score"]:.1f}/10',
         "",
         doc["lead"],
         "",
-        # The byline is the design system's marker for "this is an article
-        # page" \u2014 section numbering and the whole article treatment hang off
-        # `:has(.hz-byline)`. Frozen summaries lose the original byline, so
-        # rebuild the part that survives: source, profile and date.
+        # Frozen summaries lose the original byline, so rebuild the part that
+        # survives. The leading source type and the profile are dropped again
+        # downstream \u2014 the profile becomes an icon chip, and "archive" names
+        # our plumbing rather than anything the reader can go and read.
         f'{doc.get("source_type", "archive")} \u00b7 {doc["profile"]} \u00b7 {doc["date"]}',
     ]
     for title, text in doc["blocks"]:
         if text:
             lines += ["", f"## {title}", "", text]
-    return ArticlePage(slug=slug, title=doc["title"], markdown=article_site_markup("\n".join(lines) + "\n"))
+    labels = LABELS.get(doc["language"], LABELS["en"])
+    return ArticlePage(
+        slug=slug,
+        title=doc["title"],
+        markdown=article_site_markup(
+            "\n".join(lines) + "\n", profile_id=doc["profile"]
+        )
+        + _pager_markup(labels["issue"]),
+    )
 
 
 def _render_issue_index(date: str, documents: list[dict]) -> ArticlePage:
@@ -56,10 +70,16 @@ def _render_issue_index(date: str, documents: list[dict]) -> ArticlePage:
     current_profile = None
     for doc in documents:
         if doc["profile"] != current_profile:
+            if current_profile is not None:
+                lines += ["</ul>", ""]
             current_profile = doc["profile"]
-            lines += [f"## {current_profile}", ""]
+            lines += [f"## {current_profile}", "", '<ul class="hz-list">']
         slug = doc["id"].removeprefix(f"{doc['date']}-{doc['language']}-")
-        lines.append(f"- [{doc['title']}]({slug}.md) \u2b50\ufe0f {doc['score']:.1f}/10")
+        lines.append(
+            _issue_item_markup(slug, doc["title"], doc["score"], doc["url"])
+        )
+    if current_profile is not None:
+        lines.append("</ul>")
     return ArticlePage(
         slug="index",
         title=f"Horizon Daily - {date}",

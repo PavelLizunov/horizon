@@ -180,14 +180,31 @@ class StorageManager:
 
     @staticmethod
     def _write_site_index(limit: int = 60) -> None:
-        """Regenerate the archive listing; `nav` in mkdocs.yml never sees these."""
+        """Regenerate the archive listing; `nav` in mkdocs.yml never sees these.
+
+        Rows carry the date and how many articles the issue holds. They used to
+        be the raw directory name — `2026-08-07-ru`, language suffix and all —
+        which meant every row looked identical and there was nothing to choose
+        between them. The date stays ISO rather than spelled out: it is set in
+        tabular figures, it sorts as it reads, and spelling it out would mean
+        carrying a month-name table for every language the digest can render.
+        """
         issues = sorted(
             (d for d in SITE_DIGEST_DIR.iterdir() if d.is_dir()),
             key=lambda d: d.name,
             reverse=True,
         )
-        lines = ["# Архив выпусков", ""]
-        lines += [f"- [{d.name}]({d.name}/index.md)" for d in issues[:limit]]
+        lines = ["# Архив выпусков", "", '<ul class="hz-archive">']
+        for issue in issues[:limit]:
+            date = issue.name.rpartition("-")[0] or issue.name
+            count = sum(1 for page in issue.glob("*.md") if page.name != "index.md")
+            lines.append(
+                f'<li><a href="{issue.name}/">'
+                f'<span class="hz-archive__date">{date}</span>'
+                f'<span class="hz-archive__rule"></span>'
+                f'<span class="hz-archive__count">{count}</span></a></li>'
+            )
+        lines.append("</ul>")
         _atomic_write_text(
             SITE_DIGEST_DIR / "index.md", _SITE_FRONT_MATTER + "\n".join(lines) + "\n"
         )

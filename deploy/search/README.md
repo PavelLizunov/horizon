@@ -32,7 +32,23 @@ pipeline (Mac) ── 127.0.0.1:9200 ── Elasticsearch ──┘  (same compo
 
   Validate before reload: `caddy validate --config /etc/caddy/Caddyfile
   --adapter caddyfile`, then `systemctl reload caddy`, then curl the
-  neighbours (`gs.ninitux.com`, `ninitux.com`) to prove nothing broke.
+  neighbours to prove nothing broke.
+
+  **Pin `<MAC_LAN_IP>` with a DHCP reservation.** It is written into the proxy
+  by hand, so a lease change silently breaks search and nothing reports it:
+  the site keeps serving, the search page keeps loading, and only
+  `/api/search` answers 502. This has happened once — a reboot moved the Mac
+  by one address while the proxy kept pointing at the old one.
+
+Two failure modes worth knowing, both from the same reboot:
+
+- **Docker Desktop does not start at login by default.** Nothing brings
+  `es`/`search-api` back after a restart until someone opens it. Enable
+  "Start Docker Desktop when you sign in" in its settings.
+- The pipeline degrades rather than fails when the backend is unreachable, by
+  design — so a dead index costs nothing at run time and stays invisible.
+  `curl -s -o /dev/null -w '%{http_code}' https://<digest-domain>/api/search?q=test`
+  is the one-line check; anything but 200 means the chain is broken.
 
 ## Run
 

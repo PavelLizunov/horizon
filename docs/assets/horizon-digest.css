@@ -1,19 +1,32 @@
 /* ===========================================================================
-   horizon-digest.css — v2
+   horizon-digest.css — v3
    Horizon Daily / digest.ninitux.com
 
-   Ограничения, заложенные в файл:
-     · ни одного @import и ни одной ссылки на CDN — шрифты только системные;
-     · ни одного переопределения шаблонов темы — только конфиг + этот CSS;
-     · обе схемы равноправны и заданы независимо, не инверсией;
-     · мобильный первичен: базовые правила без медиа-запроса — мобильные,
-       десктоп добавляется через min-width.
+   Файл разделён на две части:
 
-   Разметочный контракт (что должен выдавать генератор) — в §12 внизу.
+     ЧАСТЬ A (§1–§7)  — работает на текущем выводе генератора. Подключил —
+                        подействовало. Ничего менять в шаблонах не нужно.
+
+     ЧАСТЬ B (§8–§13) — требует, чтобы генератор отдавал конкретные классы.
+                        До этого — мёртвый CSS. У каждого блока в заголовке
+                        помечено, что именно должен выдавать генератор и
+                        какой объём работы это значит.
+
+   Все правила части B написаны против контракта в §14, а не против
+   наблюдаемой разметки сайта. Пока генератор не переписан, считать их
+   предложением, а не готовым результатом.
+
+   Ограничения: ни одного @import и ни одной ссылки на CDN, шрифты
+   системные, шаблоны темы не переопределяются, обе схемы заданы
+   независимо, мобильная вёрстка первична.
    =========================================================================== */
 
 /* ===========================================================================
-   §1  ТОКЕНЫ, НЕ ЗАВИСЯЩИЕ ОТ СХЕМЫ
+   ЧАСТЬ A · РАБОТАЕТ НА ТЕКУЩЕЙ РАЗМЕТКЕ
+   =========================================================================== */
+
+/* ===========================================================================
+   §1  ТОКЕНЫ, НЕ ЗАВИСЯЩИЕ ОТ СХЕМЫ                                     [A]
    =========================================================================== */
 
 :root {
@@ -21,14 +34,14 @@
   /* Проза — системный гуманистический sans. */
   --hz-font-text: -apple-system, BlinkMacSystemFont, "Segoe UI Variable Text",
     "Segoe UI", Roboto, "Helvetica Neue", Helvetica, Arial, sans-serif;
-  /* Машинные данные — системный моно. Даты, оценки, профили, теги, счётчики.
+  /* Машинные данные — системный моно. Даты, оценки, профили, счётчики.
      Это несущий приём типографики: проза и метаданные различаются гарнитурой,
      а не цветом. Ноль килобайт загрузки. */
   --hz-font-meta: ui-monospace, SFMono-Regular, "SF Mono", "Cascadia Mono",
     "Segoe UI Mono", Menlo, Consolas, "Liberation Mono", monospace;
 
   /* -- Шкала кегля (1rem = 20px в Material) ------------------------------- */
-  --hz-t-micro: 0.625rem;  /* 12.5px — теги, счётчики */
+  --hz-t-micro: 0.625rem;  /* 12.5px */
   --hz-t-meta: 0.65rem;    /* 13px   — байлайн, мета-строки */
   --hz-t-small: 0.725rem;  /* 14.5px — сниппеты, подписи */
   --hz-t-label: 0.7rem;    /* 14px   — заглавные разделы */
@@ -64,18 +77,19 @@
   --hz-radius-sm: 6px;
   --hz-hairline: 1px;
   --hz-measure: 68ch;
-  --hz-col: 759px;
 
   /* -- Оценка ------------------------------------------------------------- */
-  /* Шкала индикатора нормирована к 5…10: реально встречающийся диапазон.
-     0 % = 5.0 и ниже, 100 % = 10.0. Иначе 7.1 и 9.2 выглядят одинаково. */
-  --hz-score-floor: 5;
+  /* Шкала индикатора нормирована к 4…10. Порог 5 из v2 был ошибкой: на
+     сайте встречаются оценки 4.0, они обрезались в ноль. Наблюдаемый
+     разброс за 2026-08-07 — 4.0…8.0, шаг 1.0, дробных значений нет.
+     Если модель начнёт выдавать десятые, порог можно вернуть к 5. */
+  --hz-score-floor: 4;
   --hz-score-meter-w: 42px;
   --hz-score-meter-h: 3px;
 }
 
 /* ===========================================================================
-   §2  СХЕМА: СВЕТЛАЯ
+   §2  СХЕМА: СВЕТЛАЯ                                                     [A]
    Синий живёт ровно в двух местах — ссылка и подсветка совпадения.
    Всё остальное монохромно. Ссылочный синий здесь темнее бренд-акцента:
    #3d7eff на #f6f7f8 даёт 3.4:1 и в теле текста не читается, #1f5fe0 — 5.1:1.
@@ -105,7 +119,7 @@
 }
 
 /* ===========================================================================
-   §3  СХЕМА: ТЁМНАЯ
+   §3  СХЕМА: ТЁМНАЯ                                                      [A]
    Не инверсия. Отличия по существу:
      · поверхность светлее фона (подъём), как и в светлой — метафора одна;
      · тело текста не белое (#e8eaed), контраст к фону 13:1, не 19:1;
@@ -137,7 +151,7 @@
 }
 
 /* ===========================================================================
-   §4  ЗАЧИСТКА ДЕФОЛТНОГО ИНДИГО MATERIAL (#4051b5)
+   §4  ЗАЧИСТКА ДЕФОЛТНОГО ИНДИГО MATERIAL (#4051b5)                      [A]
    Тема раскрашивает кнопки, отметки, тени, футер и подсветку кода своими
    переменными. Пока они не переопределены — индиго проступает.
    =========================================================================== */
@@ -171,7 +185,7 @@
   --md-typeset-kbd-border-color: var(--hz-border-strong);
   --md-typeset-table-color: var(--hz-border);
 
-  --md-code-bg-color: var(--hz-surface);
+  --md-code-bg-color: var(--hz-surface-2);
   --md-code-fg-color: var(--hz-text-2);
   --md-code-hl-color: var(--hz-mark-bg);
 
@@ -226,7 +240,7 @@
 }
 
 /* ===========================================================================
-   §5  БАЗОВАЯ ТИПОГРАФИКА
+   §5  БАЗОВАЯ ТИПОГРАФИКА                                                [A]
    =========================================================================== */
 
 body,
@@ -296,8 +310,9 @@ select {
   text-decoration: underline;
 }
 
-/* Ссылки внутри абзаца подчёркнуты всегда: без картинок и без цвета в
-   остальном интерфейсе синева одна не должна нести всю нагрузку. */
+/* Ссылки внутри прозы подчёркнуты всегда: без картинок и без цвета в
+   остальном интерфейсе синева одна не должна нести всю нагрузку.
+   Компонентные списки несут класс на ul и сюда не попадают. */
 .md-typeset p > a:not([class]),
 .md-typeset ul:not([class]) > li > a:not([class]),
 .md-typeset ol:not([class]) > li > a:not([class]) {
@@ -328,6 +343,41 @@ select {
   margin-left: 0;
 }
 
+/* Инлайн-код — это код: команды, пути, имена полей. Моно, приглушённая
+   подложка, малый радиус. Пилюлей тега он больше не выглядит (см. §11). */
+.md-typeset code {
+  font-family: var(--hz-font-meta);
+  font-size: 0.86em;
+  color: var(--hz-text-2);
+  background: var(--hz-surface-2);
+  border-radius: var(--hz-radius-sm);
+  padding: 0.15em 0.36em;
+  box-shadow: none;
+  overflow-wrap: anywhere;
+}
+
+.md-typeset pre > code {
+  background: transparent;
+  padding: 0;
+}
+
+.md-typeset pre {
+  background: var(--hz-surface);
+  border: var(--hz-hairline) solid var(--hz-border);
+  border-radius: var(--hz-radius);
+  box-shadow: none;
+}
+
+/* Подсветка совпадения — второе и последнее место, где живёт синий. */
+.md-typeset mark,
+mark {
+  background: var(--hz-mark-bg);
+  color: inherit;
+  padding: 0.06em 0.18em;
+  border-radius: 3px;
+  box-shadow: inset 0 -1px 0 color-mix(in srgb, var(--hz-accent) 55%, transparent);
+}
+
 /* Пилкроу на читательской странице — шум. */
 .md-typeset .headerlink {
   display: none;
@@ -340,7 +390,7 @@ select {
 }
 
 /* ===========================================================================
-   §6  ХРОМ: ШАПКА, КОЛОНКА, ФУТЕР
+   §6  ХРОМ: ШАПКА, КОЛОНКА, ФУТЕР                                        [A]
    =========================================================================== */
 
 .md-header {
@@ -429,11 +479,79 @@ select {
 }
 
 /* ===========================================================================
-   §7  ИКОНКИ
-   Десять фигур, 16×16, обводка 1.5, встроены как data-URI и наносятся маской
-   по currentColor. Ноль запросов, наследуют цвет и кегль текста, работают в
-   обеих схемах без второго набора.
-   Разметка:  <span class="hz-i hz-i--video" aria-hidden="true"></span>
+   §7  БЛОК ИСТОЧНИКОВ (details/summary)                                  [A]
+   Работает на любом details в контенте, класс не нужен.
+   =========================================================================== */
+
+.md-typeset details {
+  margin-top: var(--hz-space-6);
+  padding: var(--hz-space-4);
+  background: var(--hz-surface);
+  border: var(--hz-hairline) solid var(--hz-border);
+  border-radius: var(--hz-radius);
+  box-shadow: none;
+  font-size: var(--hz-t-small);
+}
+
+.md-typeset details > summary {
+  font-family: var(--hz-font-text);
+  font-size: var(--hz-t-label);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: var(--hz-tr-label);
+  color: var(--hz-muted);
+  background: none;
+  padding: 0;
+  cursor: pointer;
+  list-style: none;
+}
+
+.md-typeset details > summary::-webkit-details-marker,
+.md-typeset details > summary::after,
+.md-typeset details > summary::before {
+  display: none;
+  content: "";
+}
+
+.md-typeset details[open] > summary {
+  margin-bottom: var(--hz-space-3);
+}
+
+.md-typeset details ul {
+  margin: 0;
+}
+
+.md-typeset details li {
+  margin-bottom: var(--hz-space-2);
+  overflow-wrap: anywhere;
+}
+
+.md-typeset details li > a {
+  color: var(--hz-link);
+  text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, var(--hz-link) 40%, transparent);
+}
+
+/* ===========================================================================
+   ЧАСТЬ B · ТРЕБУЕТ ИЗМЕНЕНИЙ В ГЕНЕРАТОРЕ
+   Ниже — мёртвый CSS до того, как вывод будет переписан. Объём работы:
+
+     §8   иконки          · утилита, нужна остальным блокам   · мелко
+     §9   оценка          · выпуск + статья                   · средне
+     §10  профиль, мета   · выпуск + статья                    · средне
+     §11  теги            · статья                             · мелко
+     §12  страница статьи · явный маркер страницы + h2-разделы  · средне
+     §13  выпуск, архив, поиск, пусто, пагинация · 4 шаблона   · крупно
+
+   Полный контракт разметки — §14.
+   =========================================================================== */
+
+/* ===========================================================================
+   §8  ИКОНКИ                                                             [B]
+   Нужно от генератора: <span class="hz-i hz-i--video" aria-hidden="true">.
+   Десять фигур, 16×16, обводка 1.5, встроены как data-URI и наносятся
+   маской по currentColor. Ноль запросов, наследуют цвет и кегль текста,
+   один набор на обе схемы.
    =========================================================================== */
 
 :root {
@@ -474,15 +592,18 @@ select {
 .hz-i--next { --hz-i: var(--hz-i-next); }
 
 /* ===========================================================================
-   §8  ОЦЕНКА
+   §9  ОЦЕНКА                                                             [B]
+   Нужно от генератора: вместо текста «⭐️ 8.0/10» —
+     <span class="hz-score" data-tier="mid" style="--hz-score:.6">8.0</span>
+
    Цифра одна ничего не сообщала: 9.0 и 4.0 набраны одинаково. Кодируется
    двумя средствами, оба монохромные:
-     · индикатор — полоса шириной (score−5)/5, нормировка в §1;
-     · ступень чернил — high ≥ 8.5, mid 7.0…8.4, low < 7.0.
+     · индикатор — полоса шириной (score−4)/6, нормировка в §1;
+     · ступень чернил — high ≥ 8.0, mid 6.0…7.9, low < 6.0.
+   Пороги подогнаны под реальный разброс 4.0…8.0: при прежних (8.5/7.0)
+   ступень high не срабатывала бы ни разу.
    Цветового кодирования нет намеренно: светофор в тексте без картинок
    становится главным пятном на экране и врёт про точность модели.
-
-   <span class="hz-score" data-tier="high" style="--hz-score:.84">8.4</span>
    =========================================================================== */
 
 .hz-score {
@@ -529,7 +650,9 @@ select {
 }
 
 /* ===========================================================================
-   §9  ПРОФИЛЬ, МЕТА-СТРОКА, ТЕГИ
+   §10  ПРОФИЛЬ И МЕТА-СТРОКА                                             [B]
+   Нужно от генератора: .hz-byline на странице статьи, .hz-profile вокруг
+   типа источника, .hz-source вокруг ссылки на первоисточник.
    Профили различаются фигурой иконки, а не цветом: цвет занят ссылкой.
    =========================================================================== */
 
@@ -559,7 +682,7 @@ select {
   max-width: none;
 }
 
-/* Точки-разделители больше не нужны: разделяет гэп. */
+/* Точки-разделители не нужны: разделяет гэп. */
 .hz-profile {
   display: inline-flex;
   align-items: center;
@@ -585,6 +708,14 @@ select {
   text-decoration: underline;
 }
 
+/* ===========================================================================
+   §11  ТЕГИ                                                              [B]
+   Нужно от генератора: ul.hz-tags > li > a.hz-tag.
+   Пилюля навешивается ТОЛЬКО на .hz-tag. Инлайн-код (§5) остаётся кодом:
+   если генератор сейчас отдаёт теги как `code`, это правится в генераторе,
+   а не переопределением семантики в CSS.
+   =========================================================================== */
+
 .hz-tags {
   display: flex;
   flex-wrap: wrap;
@@ -598,8 +729,6 @@ select {
   margin: 0;
 }
 
-/* Генератор отдаёт теги как `code` — оставляем контракт, меняем вид. */
-.md-typeset code,
 .md-typeset a.hz-tag,
 .hz-tag {
   font-family: var(--hz-font-meta);
@@ -621,12 +750,17 @@ a.hz-tag:hover {
 }
 
 /* ===========================================================================
-   §10  СТРАНИЦА СТАТЬИ
+   §12  СТРАНИЦА СТАТЬИ                                                   [B]
+   Нужно от генератора — ЯВНЫЙ МАРКЕР ТИПА СТРАНИЦЫ, любой из двух:
+     · атрибут на любом предке:  <body data-hz-page="article">
+     · класс на обёртке в контенте: <div class="hz-page--article" markdown>
+
+   Тип страницы больше не выводится из содержимого. Прежняя версия висела
+   на :has(.hz-byline) и молча отваливалась, когда байлайна нет.
+
    Шапка: заголовок → оценка с индикатором → байлайн → лид.
    Разделы разбора нумеруются счётчиком: 01 Контекст, 02 Влияние…
-   Нумерация даёт ритм и предсказуемость длины без единого цветного пятна.
-   Правило ограничено страницами статьи через :has(.hz-byline) — без
-   переопределения шаблонов.
+   Нумерация даёт ритм и предсказуемую длину без единого цветного пятна.
    =========================================================================== */
 
 .hz-lede,
@@ -645,11 +779,13 @@ a.hz-tag:hover {
   margin-bottom: var(--hz-space-4);
 }
 
-.md-typeset:has(.hz-byline) {
+[data-hz-page="article"] .md-typeset,
+.md-typeset .hz-page--article {
   counter-reset: hz-sec;
 }
 
-.md-typeset:has(.hz-byline) h2 {
+[data-hz-page="article"] .md-typeset > h2,
+.md-typeset .hz-page--article > h2 {
   counter-increment: hz-sec;
   display: flex;
   align-items: baseline;
@@ -665,7 +801,8 @@ a.hz-tag:hover {
   color: var(--hz-muted);
 }
 
-.md-typeset:has(.hz-byline) h2::before {
+[data-hz-page="article"] .md-typeset > h2::before,
+.md-typeset .hz-page--article > h2::before {
   content: counter(hz-sec, decimal-leading-zero);
   font-family: var(--hz-font-meta);
   font-weight: 400;
@@ -675,68 +812,16 @@ a.hz-tag:hover {
 }
 
 /* Первый h2 идёт сразу за лидом — верхняя линия там лишняя. */
-.md-typeset:has(.hz-byline) h2:first-of-type {
+[data-hz-page="article"] .md-typeset > h2:first-of-type,
+.md-typeset .hz-page--article > h2:first-of-type {
   border-top: 0;
   padding-top: 0;
 }
 
-/* Блок источников. */
-.md-typeset details {
-  margin-top: var(--hz-space-6);
-  padding: var(--hz-space-4);
-  background: var(--hz-surface);
-  border: var(--hz-hairline) solid var(--hz-border);
-  border-radius: var(--hz-radius);
-  box-shadow: none;
-  font-size: var(--hz-t-small);
-}
-
-.md-typeset details > summary {
-  font-family: var(--hz-font-text);
-  font-size: var(--hz-t-label);
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: var(--hz-tr-label);
-  color: var(--hz-muted);
-  background: none;
-  padding: 0;
-  cursor: pointer;
-}
-
-.md-typeset details > summary {
-  list-style: none;
-}
-
-.md-typeset details > summary::-webkit-details-marker,
-.md-typeset details > summary::after,
-.md-typeset details > summary::before {
-  display: none;
-  content: "";
-}
-
-.md-typeset details[open] > summary {
-  margin-bottom: var(--hz-space-3);
-}
-
-.md-typeset details ul {
-  margin: 0;
-}
-
-.md-typeset details li {
-  margin-bottom: var(--hz-space-2);
-  overflow-wrap: anywhere;
-}
-
-/* Источники и поисковые сниппеты — обычные текстовые ссылки. */
-.md-typeset details li > a,
-.md-typeset .hz-search-snippet a {
-  color: var(--hz-link);
-  text-decoration: underline;
-  text-decoration-color: color-mix(in srgb, var(--hz-link) 40%, transparent);
-}
-
 /* ===========================================================================
-   §11  ВЫПУСК, АРХИВ, ПОИСК, ПУСТЫЕ СОСТОЯНИЯ
+   §13  ВЫПУСК, АРХИВ, ПОИСК, ПУСТЫЕ СОСТОЯНИЯ, ПАГИНАЦИЯ                 [B]
+   Самый крупный блок работы: четыре шаблона страниц целиком. Пока вывод
+   не переписан, ни одно правило ниже не применяется. Разметка — §14.
    =========================================================================== */
 
 /* -- Выпуск: список статей за дату ---------------------------------------- */
@@ -950,15 +1035,10 @@ a.hz-tag:hover {
   max-width: 62ch;
 }
 
-/* Подсветка совпадения — второе и последнее место, где живёт синий. */
-.hz-search-results mark,
-.md-typeset mark,
-mark {
-  background: var(--hz-mark-bg);
-  color: inherit;
-  padding: 0.06em 0.18em;
-  border-radius: 3px;
-  box-shadow: inset 0 -1px 0 color-mix(in srgb, var(--hz-accent) 55%, transparent);
+.md-typeset .hz-search-snippet a {
+  color: var(--hz-link);
+  text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, var(--hz-link) 40%, transparent);
 }
 
 /* -- Пустые состояния ------------------------------------------------------ */
@@ -1032,36 +1112,47 @@ mark {
 }
 
 /* ===========================================================================
-   §12  РАЗМЕТОЧНЫЙ КОНТРАКТ
-   Что генератор должен выдавать, чтобы этот CSS сработал.
+   §14  РАЗМЕТОЧНЫЙ КОНТРАКТ ЧАСТИ B
+   Что генератор должен выдавать, чтобы §8–§13 ожили.
 
-   Оценка (везде):
+   Маркер типа страницы (обязателен для §12):
+     <body data-hz-page="article">          — предпочтительно
+     либо <div class="hz-page--article" markdown> вокруг тела статьи
+     Значения: article | issue | archive | search
+
+   Оценка (§9):
      <span class="hz-score" data-tier="high|mid|low" style="--hz-score:.84">8.4</span>
-     data-tier: high ≥ 8.5, mid 7.0…8.4, low < 7.0
-     --hz-score: clamp((score − 5) / 5, 0.04, 1) — с округлением до 2 знаков
+     data-tier: high ≥ 8.0, mid 6.0…7.9, low < 6.0
+     --hz-score: clamp((score − 4) / 6, 0.04, 1) — округление до 2 знаков
 
-   Профиль:
+   Профиль (§10):
      <span class="hz-profile"><span class="hz-i hz-i--video" aria-hidden="true"></span>video</span>
      tech-news → hz-i--news, tech-blog → hz-i--blog,
      video → hz-i--video, finance-news → hz-i--finance
 
-   Статья:
-     h1 → шапка; .hz-score--lead; p.hz-byline (маркер страницы статьи —
-     от него зависит нумерация разделов); p.hz-lede; h2 на каждый раздел;
-     details/ul для источников; ul.hz-tags с a.hz-tag.
+   Статья (§12):
+     h1 (только заголовок, без вклеенной оценки и без внешней ссылки)
+     span.hz-score.hz-score--lead
+     p.hz-byline (дата, профиль, a.hz-source на первоисточник)
+     p.hz-lede
+     h2 — прямой ребёнок .md-typeset или обёртки: нумерация идёт по ним
+     details/ul — источники (§7 уже работает)
+     ul.hz-tags > li > a.hz-tag — НЕ `code`
 
-   Выпуск:  ul.hz-list > li[data-tier] > div.hz-item
-              > a.hz-item__title + span.hz-score + div.hz-item__meta
+   Выпуск (§13):
+     ul.hz-list > li[data-tier] > div.hz-item
+       > a.hz-item__title + span.hz-score + div.hz-item__meta
 
-   Архив:   ul.hz-archive > li > a
-              > span.hz-archive__date + span.hz-archive__rule
-                + span.hz-archive__count
+   Архив (§13):
+     ul.hz-archive > li > a
+       > span.hz-archive__date + span.hz-archive__rule + span.hz-archive__count
 
-   Поиск:   div.hz-search > .hz-search__field > .hz-i.hz-i--search + input
-            p.hz-search-status
-            ul.hz-search-results > li > a.hz-item__title
-              + div.hz-item__meta + p.hz-search-snippet (с <mark>)
+   Поиск (§13):
+     div.hz-search > .hz-search__field > .hz-i.hz-i--search + input[type=search]
+     p.hz-search-status
+     ul.hz-search-results > li > a.hz-item__title
+       + div.hz-item__meta + p.hz-search-snippet (с <mark>)
 
-   Пусто:   div.hz-empty > .hz-i.hz-i--none
-              + div.hz-empty__head + div.hz-empty__body
+   Пусто (§13):
+     div.hz-empty > .hz-i.hz-i--none + div.hz-empty__head + div.hz-empty__body
    =========================================================================== */

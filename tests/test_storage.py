@@ -233,10 +233,28 @@ def test_publish_site_pages_refreshes_the_index_newest_first(tmp_path, monkeypat
     index = (tmp_path / "digest" / "index.md").read_text(encoding="utf-8")
 
     assert index.index("2026-08-06-ru") < index.index("2026-08-05-ru")
-    # Each issue is linked through its own index page.
-    assert "2026-08-06-ru/index.md" in index
+    assert 'href="2026-08-06-ru/"' in index
     # The listing must not link to the top-level index it lives in.
-    assert "](index.md)" not in index
+    assert 'href="index.md"' not in index and "](index.md)" not in index
+
+
+def test_site_index_rows_carry_a_date_and_a_count(tmp_path, monkeypatch):
+    """Rows used to be the raw directory name, language suffix and all.
+
+    Every row then looked identical — `2026-08-07-ru` — with nothing to choose
+    between them and no sign of how much was in any issue.
+    """
+    monkeypatch.setattr(manager, "SITE_DIGEST_DIR", tmp_path / "digest")
+    storage = StorageManager(data_dir=str(tmp_path / "data"))
+
+    storage.publish_site_pages(
+        "2026-08-06", _pages(("a", "# a"), ("b", "# b")), language="ru"
+    )
+    index = (tmp_path / "digest" / "index.md").read_text(encoding="utf-8")
+
+    assert '<span class="hz-archive__date">2026-08-06</span>' in index
+    # The issue's own index page is not one of its articles.
+    assert '<span class="hz-archive__count">2</span>' in index
 
 
 def test_publish_site_pages_rejects_path_escape(tmp_path, monkeypatch):

@@ -68,6 +68,7 @@ LABELS = {
         "discussion": "Discussion",
         "references": "References",
         "tags": "Tags",
+        "issue": "All of this issue",
         "selected_items": "From {total} items, {selected} important content pieces were selected",
         "empty_analyzed": "Analyzed {total} items, but none met the importance threshold.",
         "empty_body": (
@@ -88,6 +89,7 @@ LABELS = {
         "discussion": "社区讨论",
         "references": "参考链接",
         "tags": "标签",
+        "issue": "查看本期全部内容",
         "selected_items": "从 {total} 条内容中筛选出 {selected} 条重要资讯。",
         "empty_analyzed": "已分析 {total} 条内容，但没有达到重要性阈值的条目。",
         "empty_body": (
@@ -111,6 +113,7 @@ LABELS = {
         "discussion": "Обсуждение",
         "references": "Источники",
         "tags": "Теги",
+        "issue": "Все материалы выпуска",
         "selected_items": "Из {total} материалов отобрано {selected} важных.",
         "empty_analyzed": "Проанализировано {total} материалов, но ни один не прошёл порог важности.",
         "empty_body": (
@@ -142,25 +145,175 @@ _BLOCK_TITLE_RE = re.compile("(?m)^\\*\\*\u300c([^\u300d]+)\u300d\\*\\*[ \t]*")
 _SCORE_IN_HEADING_RE = re.compile(" \u2b50\ufe0f ([0-9.]+|\\?)/10$")
 
 
-def _score_markup(raw: str, *, lead: bool = True) -> str:
+_HEADING_LINK_RE = re.compile(r"^# \[(?P<title>.+)\]\((?P<url>\S*)\)\s*$")
+
+# Citation ids the analyst leaves in its prose, e.g. "…6 августа 2026 [tool-2-1]".
+# They name internal tool calls: the reader cannot follow them and the sources
+# they stand for never reach the page. The leading space is part of the match so
+# removing a run does not leave "года ." behind. Both the raw and the
+# markdown-escaped shape are matched — summaries frozen in data/summaries/ were
+# escaped before they were written, and republishing reads that text back.
+_TOOL_TOKEN_RE = re.compile(r"[ \t]*(?:\\?\[tool-\d+-\d+\\?\])+")
+
+# A tags line is recognised by its shape rather than its label, so this works for
+# every language in LABELS without listing them.
+_TAGS_LINE_RE = re.compile(r"(?m)^\*\*[^*]+\*\*: ((?:`#[^`]+`(?:, )?)+)\s*$")
+_TAG_RE = re.compile(r"`#([^`]+)`")
+_MARKDOWN_ESCAPE_RE = re.compile(r"\\([\\`*_{}\[\]()#!>+.-])")
+_INLINE_LINK_RE = re.compile(r"\[([^\]]+)\]\((\S+?)\)")
+
+# Profiles differ by icon shape, never by colour — colour is spent on links.
+_PROFILE_ICONS = {
+    "tech-news": "news",
+    "tech-blog": "blog",
+    "video": "video",
+    "finance-news": "finance",
+}
+
+# Internal plumbing names that used to open the byline. "rss" and "archive" tell
+# a reader nothing about where the material came from; the source link does.
+_INTERNAL_SOURCE_TOKENS = {"rss", "archive", "api", "web", "html", "unknown"}
+
+
+def _strip_tool_tokens(text: str) -> str:
+    return _TOOL_TOKEN_RE.sub("", text)
+
+
+def _plain_text(value: str) -> str:
+    """Undo markdown escaping for text about to be placed inside raw HTML.
+
+    Inside an HTML block Python-Markdown does not process escapes, so a ``\\#``
+    that reads correctly in markdown would render as a literal backslash.
+    """
+    return _MARKDOWN_ESCAPE_RE.sub(r"\1", value)
+
+
+def _icon(name: str) -> str:
+    return f'<span class="hz-i hz-i--{name}" aria-hidden="true"></span>'
+
+
+def _byline_markup(
+    text: str, source_url: Optional[str], profile_id: Optional[str]
+) -> str:
+    """Build the article byline: what kind, when, and a way to the original.
+
+    The source link lives here rather than on the heading. With the title
+    linked, a reader who clicked what looked like the article's own name left
+    the site without ever seeing the analysis the page exists for.
+    """
+    parts = [part.strip() for part in text.split(" · ") if part.strip()]
+    if parts and _plain_text(parts[0]).lower() in _INTERNAL_SOURCE_TOKENS:
+        parts.pop(0)
+    if profile_id:
+        parts = [part for part in parts if _plain_text(part) != profile_id]
+
+    chunks = []
+    if profile_id:
+        icon = _icon(_PROFILE_ICONS.get(profile_id, "news"))
+        chunks.append(
+            f'<span class="hz-profile">{icon}{html.escape(profile_id)}</span>'
+        )
+    if parts:
+        rest = _INLINE_LINK_RE.sub(
+            r'<a href="\2">\1</a>', _plain_text(" · ".join(parts))
+        )
+        chunks.append(f"{_icon('date')}{rest}")
+    if source_url:
+        domain = urlsplit(source_url).netloc.removeprefix("www.")
+        if domain:
+            chunks.append(
+                f'<a class="hz-source" href="{source_url}">'
+                f"{html.escape(domain)}{_icon('external')}</a>"
+            )
+    return '<p class="hz-byline">' + "".join(chunks) + "</p>"
+
+
+def _tags_markup(match: re.Match) -> str:
+    """A ``**Tags**: `#a`, `#b``` line becomes the design system's tag list.
+
+    The pill is attached to ``.hz-tag`` only. Styling ``code`` instead — the
+    shape the renderer emits — would have caught every command and path the
+    digest quotes in prose along with it.
+    """
+    items = "".join(
+        f'<li><a class="hz-tag" href="/search/?q={quote(tag)}">'
+        f"#{html.escape(tag)}</a></li>"
+        for tag in (_plain_text(raw) for raw in _TAG_RE.findall(match.group(1)))
+    )
+    return f'<ul class="hz-tags">{items}</ul>' if items else ""
+
+
+def _pager_markup(label: str) -> str:
+    """The way out of an article page.
+
+    Reaching the end of an article, the only way back was the browser's own
+    back button — nothing on the page led anywhere. Neighbouring days are not
+    linked from here: that needs knowledge of other issues this render does not
+    have, and the archive is one click away in the nav.
+    """
+    return (
+        '\n<nav class="hz-pager">'
+        f'<a href="../">{html.escape(label)}{_icon("next")}</a>'
+        "</nav>\n"
+    )
+
+
+def _score_tier(score: object) -> Optional[str]:
+    """Ink step for a score, or None when there is no score to step.
+
+    The thresholds came from the published issues rather than from taste:
+    2026-08-07 ran 4.0…8.0 in whole points, so the first cut's 8.5 `high`
+    never fired once and the whole issue rendered as mid and low.
+    """
+    try:
+        value = float(score)  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return None
+    return "high" if value >= 8.0 else "mid" if value >= 6.0 else "low"
+
+
+def _issue_item_markup(slug: str, title: str, score: object, url: object) -> str:
+    """One row of an issue's article list (§13 of the design system).
+
+    The list used to be ``- [title](slug.md) ⭐️ 8.0/10``. Seven identical stars
+    were the only colour on an otherwise monochrome page, and they encoded
+    nothing: a 4.0 and an 8.0 were set with exactly the same weight. The tier
+    on the ``li`` is what lets the CSS mute the weak material as a whole rather
+    than only its number.
+    """
+    tier = _score_tier(score)
+    attribute = f' data-tier="{tier}"' if tier else ""
+    domain = urlsplit(str(url)).netloc.removeprefix("www.")
+    meta = f'<div class="hz-item__meta">{html.escape(domain)}</div>' if domain else ""
+    return (
+        f"<li{attribute}><div class=\"hz-item\">"
+        f'<a class="hz-item__title" href="{slug}/">{html.escape(title)}</a>'
+        f"{_score_markup(score, lead=False)}{meta}"
+        f"</div></li>"
+    )
+
+
+def _score_markup(raw: object, *, lead: bool = True) -> str:
     """Render a score per the design system's markup contract (§12 of the CSS).
 
     The bare number said nothing — 9.0 and 4.0 were set identically. The CSS
     encodes it twice, both monochrome: an ink tier and a meter whose width is
-    `--hz-score`. The meter is normalised to 5…10 because that is the range
-    scores actually occupy; against 0…10 the interesting differences vanish.
+    `--hz-score`.
+
+    The meter is normalised to 4…10, the range the published issues actually
+    occupy; the first cut's floor of 5 clipped a real 4.0 to nothing. Tiers are
+    `_score_tier`'s.
 
     A missing score ("?") still gets the element so the layout does not jump,
     but with no tier and an empty meter.
     """
     classes = "hz-score hz-score--lead" if lead else "hz-score"
-    try:
-        value = float(raw)
-    except ValueError:
-        return f'<span class="{classes}">{raw}</span>'
+    tier = _score_tier(raw)
+    if tier is None:
+        return f'<span class="{classes}">{html.escape(str(raw))}</span>'
 
-    tier = "high" if value >= 8.5 else "mid" if value >= 7.0 else "low"
-    fill = min(max((value - 5.0) / 5.0, 0.04), 1.0)
+    value = float(raw)  # type: ignore[arg-type]
+    fill = min(max((value - 4.0) / 6.0, 0.04), 1.0)
     scale = '<span class="hz-score__scale">/10</span>' if lead else ""
     return (
         f'<span class="{classes}" data-tier="{tier}" '
@@ -168,54 +321,96 @@ def _score_markup(raw: str, *, lead: bool = True) -> str:
     )
 
 
-def article_site_markup(markdown: str) -> str:
+def article_site_markup(markdown: str, *, profile_id: Optional[str] = None) -> str:
     """Restructure a rendered item for its own site page. Site-only.
 
     The shared renderer emits one combined-document shape (bold-run block
-    titles, score glued to the heading, a trailing separator before the next
-    item). On a standalone page each of those reads wrong, so the page gets
-    restructured here instead of changing the renderer everyone else shares:
+    titles, score and source link glued to the heading, a trailing separator
+    before the next item). On a standalone page each of those reads wrong, so
+    the page gets restructured here instead of changing the renderer everyone
+    else shares:
 
     - ``**"X"** body`` becomes an ``## X`` section heading plus its body, so
       labelled blocks are visually separate and land in the page TOC;
-    - the heading's trailing score becomes a ``span.hz-score`` badge;
-    - the byline paragraph (``rss · author · date``) gets ``hz-byline``;
-    - the trailing ``---`` that separates items in a combined page is dropped.
+    - the heading keeps the title and nothing else. The score becomes a
+      ``span.hz-score`` of its own, and the source link moves into the byline:
+      with the title linked, a reader who clicked what looked like the
+      article's own name left the site without seeing the analysis the page
+      exists for;
+    - the byline is rebuilt as ``p.hz-byline`` and moves *above* the lede. It
+      used to sit under four sentences of summary, which put the reader well
+      into the text before anything said where the text came from;
+    - the lede is marked, so the entry to the text is distinct from the body;
+    - tool citation ids, and the trailing ``---``, are dropped.
+
+    Taking the score out of the heading also fixes the permalink: with it
+    inline the anchor came out as ``#amd-taalas-8010``, so rescoring an
+    article silently changed its own address.
     """
+    markdown = _strip_tool_tokens(markdown)
     # Section headings. The block title may contain escaped markdown; it was
     # escaped for inline bold context, and heading context accepts the same.
     markdown = _BLOCK_TITLE_RE.sub(r"## \1\n\n", markdown)
+    markdown = _TAGS_LINE_RE.sub(_tags_markup, markdown)
 
     lines = markdown.split("\n")
-    seen_h1 = False
-    byline_done = False
-    lede_done = False
-    for i, line in enumerate(lines):
-        if not seen_h1 and line.startswith("# "):
-            seen_h1 = True
-            lines[i] = _SCORE_IN_HEADING_RE.sub(
-                lambda m: " " + _score_markup(m.group(1)), line
-            )
-            continue
-        if seen_h1 and not (byline_done and lede_done) and line.strip():
+    h1_index = next((i for i, line in enumerate(lines) if line.startswith("# ")), None)
+    if h1_index is not None:
+        heading = lines[h1_index]
+        score = None
+        match = _SCORE_IN_HEADING_RE.search(heading)
+        if match:
+            score = match.group(1)
+            heading = heading[: match.start()]
+        source_url = None
+        link = _HEADING_LINK_RE.match(heading)
+        if link:
+            heading = f"# {link.group('title')}"
+            source_url = link.group("url") or None
+
+        # The byline is the first " \u00b7 " line after the heading, the lede the
+        # first prose paragraph. Both live in the run of plain paragraphs before
+        # the first block, so a single pass over that run finds them.
+        byline_index = None
+        lede_index = None
+        for i in range(h1_index + 1, len(lines)):
+            line = lines[i]
+            if not line.strip():
+                continue
             if line.startswith(("## ", "<", "*", ">", "-", "|", "`")):
                 break  # past the intro paragraphs; nothing else qualifies
-            if " \u00b7 " in line:
-                # attr_list only decorates a paragraph from its own line.
-                lines[i] = line + "\n{: .hz-byline}"
-                byline_done = True
-            elif not lede_done:
-                # First prose paragraph after the H1 is the lede: larger, and
-                # it sets the gap before the first numbered section.
-                lines[i] = line + "\n{: .hz-lede}"
-                lede_done = True
+            if " \u00b7 " in line and byline_index is None:
+                byline_index = i
+            elif lede_index is None:
+                lede_index = i
+
+        head = [heading.rstrip()]
+        if score:
+            head += ["", _score_markup(score)]
+        if byline_index is not None or source_url:
+            byline_text = lines[byline_index] if byline_index is not None else ""
+            head += ["", _byline_markup(byline_text, source_url, profile_id)]
+            if byline_index is not None:
+                lines[byline_index] = ""
+        lines[h1_index] = "\n".join(head)
+        if lede_index is not None:
+            # attr_list only decorates a paragraph from its own line.
+            lines[lede_index] += "\n{: .hz-lede}"
 
     markdown = "\n".join(lines)
     # The separator only made sense between items on a combined page. No re.M:
     # only the trailing one may go — a --- inside block content must survive.
     markdown = re.sub(r"\n---\s*$", "\n", markdown.rstrip() + "\n")
     markdown = _localize_frozen_labels(markdown)
-    return markdown.rstrip() + "\n"
+    # The page type is declared, not inferred. The first cut hung the whole
+    # article treatment — section numbering included — off `:has(.hz-byline)`,
+    # which meant a page that happened to lack a byline silently rendered as
+    # plain typography. `markdown="1"` needs md_in_html, which mkdocs.yml has.
+    return (
+        '<div class="hz-page--article" markdown="1">\n\n'
+        + markdown.rstrip()
+        + "\n\n</div>\n"
+    )
 
 
 # LABELS gained a "ru" entry only after these were written, so summaries frozen
@@ -309,7 +504,7 @@ class DailySummarizer:
         index_lines = [f"# {labels['header']} - {date}", ""]
 
         for group in view.groups:
-            index_lines += [f"## {group.name}", ""]
+            index_lines += [f"## {group.name}", "", '<ul class="hz-list">']
             for view_item in group.items:
                 slug = view_item.anchor_id.removeprefix("item-")
                 body = self._format_item(
@@ -326,14 +521,18 @@ class DailySummarizer:
                     ArticlePage(
                         slug=slug,
                         title=view_item.title,
-                        markdown=article_site_markup(body),
+                        markdown=article_site_markup(
+                            body, profile_id=group.profile_id
+                        )
+                        + _pager_markup(labels["issue"]),
                     )
                 )
                 index_lines.append(
-                    f"- [{_escape_markdown(view_item.title)}]({slug}.md) "
-                    f"⭐️ {view_item.score}/10"
+                    _issue_item_markup(
+                        slug, view_item.title, view_item.score, view_item.item.url
+                    )
                 )
-            index_lines.append("")
+            index_lines += ["</ul>", ""]
 
         pages.append(
             ArticlePage(

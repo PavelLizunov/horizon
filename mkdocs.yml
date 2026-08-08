@@ -40,8 +40,14 @@ markdown_extensions:
   - pymdownx.details
   - pymdownx.superfences
   - tables
+  # Cyrillic headings slugged to `#_1`, `#_2` … with the default slugify: the
+  # ids were unreadable and, worse, positional — reordering the sections of an
+  # article silently repointed every link into it. pymdownx keeps the letters.
   - toc:
       permalink: true
+      slugify: !!python/object/apply:pymdownx.slugs.slugify
+        kwds:
+          case: lower
 
 # The Jekyll site that used to live here belongs to upstream. Deleting those
 # files would mean resolving a merge conflict every time upstream touches its
@@ -82,5 +88,7 @@ validation:
 
 nav:
   - Главная: index.md
-  - Дайджесты: digest/index.md
+  # One name for one thing: the nav said "Дайджесты" while the page heading and
+  # the button on the home page both said "Архив выпусков".
+  - Архив выпусков: digest/index.md
   - Поиск: search.md
