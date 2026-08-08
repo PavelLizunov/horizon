@@ -21,6 +21,7 @@ except ImportError:
     from dev_reindex_archive import SUMMARIES_DIR, parse_summary
 
 from src.ai.summarizer import (
+    DEFAULT_BRAND,
     LABELS,
     ArticlePage,
     _issue_item_markup,
@@ -73,7 +74,7 @@ def render_page(doc: dict) -> ArticlePage:
 
 def _render_issue_index(date: str, documents: list[dict]) -> ArticlePage:
     """The issue's index page, mirroring build_article_pages' listing."""
-    lines: list[str] = [f"# Horizon Daily - {date}", ""]
+    lines: list[str] = [f"# {DEFAULT_BRAND} - {date}", ""]
     current_profile = None
     for doc in documents:
         if doc["profile"] != current_profile:
@@ -89,7 +90,7 @@ def _render_issue_index(date: str, documents: list[dict]) -> ArticlePage:
         lines.append("</ul>")
     return ArticlePage(
         slug="index",
-        title=f"Horizon Daily - {date}",
+        title=f"{DEFAULT_BRAND} - {date}",
         markdown="\n".join(lines).rstrip() + "\n",
     )
 

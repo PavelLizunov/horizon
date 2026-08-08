@@ -38,8 +38,9 @@
     status.hidden = !text;
   }
 
-  // Empty states are not centred and carry no illustration: same alignment as
-  // the rest of the text, one sentence of fact and one thing to do.
+  // Empty states keep the text's own alignment rather than centring: one
+  // sentence of fact, one thing to do, and the mascot instead of the abstract
+  // dotted circle — it says the same thing in the site's own voice.
   function showEmpty(head, body) {
     if (!head) {
       empty.hidden = true;
@@ -48,7 +49,7 @@
     }
     empty.innerHTML =
       '<div class="hz-empty">' +
-      '<span class="hz-i hz-i--none" aria-hidden="true"></span>' +
+      '<span class="hz-mascot" aria-hidden="true"></span>' +
       '<div class="hz-empty__head"></div>' +
       '<div class="hz-empty__body"></div>' +
       "</div>";

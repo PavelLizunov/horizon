@@ -60,9 +60,13 @@ def _pangu(text: str) -> str:
     return text
 
 
+# Mirrors `DigestConfig.brand`. Kept here as a fallback for the two entry
+# points that build a summarizer without a config (the webhook self-test and
+# the archive republisher); everything on the live path passes the real one.
+DEFAULT_BRAND = "Horizon Daily"
+
 LABELS = {
     "en": {
-        "header": "Horizon Daily",
         "source": "Source",
         "background": "Background",
         "discussion": "Discussion",
@@ -83,7 +87,6 @@ LABELS = {
         ),
     },
     "zh": {
-        "header": "Horizon 每日速递",
         "source": "来源",
         "background": "背景",
         "discussion": "社区讨论",
@@ -104,10 +107,9 @@ LABELS = {
         ),
     },
     "ru": {
-        # Header stays the brand name; everything the reader sees around the
-        # articles is Russian — the digest is written in ru, en fallback
-        # labels ("References", "Tags") read as a bug on the site.
-        "header": "Horizon Daily",
+        # Everything the reader sees around the articles is Russian — the
+        # digest is written in ru, and en fallback labels ("References",
+        # "Tags") read as a bug on the site.
         "source": "Источник",
         "background": "Контекст",
         "discussion": "Обсуждение",
@@ -485,9 +487,11 @@ class DailySummarizer:
         self,
         profile_names: Optional[Dict[str, Dict[str, str]]] = None,
         profile_order: Optional[List[str]] = None,
+        brand: Optional[str] = None,
     ):
         self.profile_names = profile_names or {}
         self.profile_order = profile_order or []
+        self.brand = brand or DEFAULT_BRAND
 
     @staticmethod
     def _profile_id(item: ContentItem) -> str:
@@ -524,7 +528,7 @@ class DailySummarizer:
         labels = LABELS.get(language, LABELS["en"])
         view = self.build_view(items, language)
         pages: List[ArticlePage] = []
-        index_lines = [f"# {labels['header']} - {date}", ""]
+        index_lines = [f"# {self.brand} - {date}", ""]
 
         for group in view.groups:
             # Profile names come from config, so they are escaped like any
@@ -568,7 +572,7 @@ class DailySummarizer:
         pages.append(
             ArticlePage(
                 slug="index",
-                title=f"{labels['header']} - {date}",
+                title=f"{self.brand} - {date}",
                 markdown="\n".join(index_lines).rstrip() + "\n",
             )
         )
@@ -665,7 +669,7 @@ class DailySummarizer:
             return self._generate_empty_summary(date, total_fetched, labels)
 
         header = (
-            f"# {labels['header']} - {date}\n\n"
+            f"# {self.brand} - {date}\n\n"
             f"> {labels['selected_items'].format(total=total_fetched, selected=len(items))}\n\n"
             "---\n\n"
         )
@@ -719,13 +723,13 @@ class DailySummarizer:
 
         if language == "zh":
             header = (
-                f"# {labels['header']} - {date}\n\n"
+                f"# {self.brand} - {date}\n\n"
                 f"> 从 {total_fetched} 条内容中筛选出 {len(items)} 条重要资讯。\n\n"
                 "下面会按内容逐条发送详情，你可以只看感兴趣的标题。\n\n"
             )
         else:
             header = (
-                f"# {labels['header']} - {date}\n\n"
+                f"# {self.brand} - {date}\n\n"
                 f"> Selected {len(items)} important items from {total_fetched} fetched items.\n\n"
                 "Details will be sent item by item so you can read only the topics you care about.\n\n"
             )
@@ -900,7 +904,7 @@ class DailySummarizer:
     def _generate_empty_summary(self, date: str, total_fetched: int, labels: dict) -> str:
         """Generate summary when no high-scoring items were found."""
         return (
-            f"# {labels['header']} - {date}\n\n"
+            f"# {self.brand} - {date}\n\n"
             f"> {labels['empty_analyzed'].format(total=total_fetched)}\n\n"
             + labels["empty_body"]
         )

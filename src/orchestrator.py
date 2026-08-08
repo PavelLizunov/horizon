@@ -214,7 +214,12 @@ class HorizonOrchestrator:
                 )
         self.email_manager = EmailManager(config.email, console=self.console) if config.email else None
         self.webhook_notifier = (
-            WebhookNotifier(config.webhook, console=self.console, icons=self.icons)
+            WebhookNotifier(
+                config.webhook,
+                console=self.console,
+                icons=self.icons,
+                brand=config.digest.brand,
+            )
             if config.webhook and config.webhook.enabled
             else None
         )
@@ -302,6 +307,7 @@ class HorizonOrchestrator:
                 summarizer = DailySummarizer(
                     profile_names=self.profiles.names,
                     profile_order=self.config.digest.profile_order,
+                    brand=self.config.digest.brand,
                 )
                 summary = await summarizer.generate_summary(important_items, today, len(all_items), language=lang)
 

@@ -16,7 +16,7 @@ import httpx
 from ..ai.markdown_utils import clean_app_summary_markdown
 from ..console_icons import get_icons
 from ..models import ContentItem, WebhookConfig
-from ..ai.summarizer import DailySummarizer, _safe_url
+from ..ai.summarizer import DEFAULT_BRAND, LABELS, DailySummarizer, _safe_url
 from ..url_security import UnsafeURLError, safe_request, validate_http_url
 
 logger = logging.getLogger(__name__)
@@ -56,6 +56,14 @@ _PLACEHOLDER_RE = re.compile(r"#\{(\w+)(\?\w+=[^}]+)?\}")
 # with headroom costs at most one extra message, while guessing high costs the
 # whole day's digest — an over-limit message is rejected, not truncated.
 _TELEGRAM_CHUNK_CHARS = 3900
+
+# Card-specific instruction: it describes Feishu's own collapsible panels,
+# so it belongs with the card builder rather than in the digest's LABELS.
+FEISHU_EXPAND_HINT = {
+    "en": "Expand the panels below to read the full briefing inside Feishu/Lark.",
+    "zh": "点击下方新闻面板即可在飞书内展开阅读全文。",
+    "ru": "Разверните панели ниже, чтобы прочитать материалы целиком.",
+}
 
 _SENSITIVE_HEADER_RE = re.compile(
     r"(authorization|token|secret|signature|key|password)", re.IGNORECASE
@@ -268,8 +276,9 @@ def redact_headers(headers: dict[str, str]) -> dict[str, str]:
 class WebhookNotifier:
     """Sends webhook notifications after pipeline completion or failure."""
 
-    def __init__(self, config: WebhookConfig, console=None, icons=None):
+    def __init__(self, config: WebhookConfig, console=None, icons=None, brand=None):
         self.config = config
+        self.brand = brand or DEFAULT_BRAND
         self.console = console if console is not None else Console(stderr=True)
         self.icons = icons if icons is not None else get_icons()
         self.url = None
@@ -375,29 +384,25 @@ class WebhookNotifier:
         date: str,
         lang: str,
     ) -> str:
-        """Build a non-redundant overview for a card that already lists item panels."""
-        if lang == "zh":
-            if item_count == 0:
-                return (
-                    f"# Horizon 每日速递 - {date}\n\n"
-                    f"> 已分析 {all_items_count} 条内容，暂无达到重要性阈值的资讯。"
-                )
-            return (
-                f"# Horizon 每日速递 - {date}\n\n"
-                f"> 从 {all_items_count} 条内容中筛选出 {item_count} 条重要资讯。\n\n"
-                "点击下方新闻面板即可在飞书内展开阅读全文。"
-            )
+        """Build a non-redundant overview for a card that already lists item panels.
 
+        The name and both sentences used to be written out here per language,
+        duplicating `LABELS` and hardcoding the brand — so a rename left this
+        card stale, and a `ru` digest got the English text because only `zh` and
+        a default branch existed. Reading the shared table fixes all three.
+        """
+        labels = LABELS.get(lang, LABELS["en"])
+        heading = f"# {self.brand} - {date}\n\n"
         if item_count == 0:
-            return (
-                f"# Horizon Daily - {date}\n\n"
-                f"> Analyzed {all_items_count} items, but none met the importance threshold."
-            )
-
+            return heading + "> " + labels["empty_analyzed"].format(total=all_items_count)
         return (
-            f"# Horizon Daily - {date}\n\n"
-            f"> Selected {item_count} important items from {all_items_count} fetched items.\n\n"
-            "Expand the panels below to read the full briefing inside Feishu/Lark."
+            heading
+            + "> "
+            + labels["selected_items"].format(
+                total=all_items_count, selected=item_count
+            )
+            + "\n\n"
+            + FEISHU_EXPAND_HINT.get(lang, FEISHU_EXPAND_HINT["en"])
         )
 
     def _build_feishu_collapsible_body(

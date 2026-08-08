@@ -424,11 +424,12 @@ def test_generate_summary_persists_informative_empty_summary(
     received_orders = []
 
     class RecordingSummarizer(DailySummarizer):
-        def __init__(self, *, profile_names=None, profile_order=None):  # type: ignore[no-untyped-def]
+        def __init__(self, *, profile_names=None, profile_order=None, brand=None):  # type: ignore[no-untyped-def]
             received_orders.append(profile_order)
             super().__init__(
                 profile_names=profile_names,
                 profile_order=profile_order,
+                brand=brand,
             )
 
     monkeypatch.setattr(service, "_profiles", lambda ctx: PROFILES)
@@ -443,7 +444,9 @@ def test_generate_summary_persists_informative_empty_summary(
             SimpleNamespace(
                 runtime=SimpleNamespace(DailySummarizer=RecordingSummarizer),
                 config=SimpleNamespace(
-                    digest=SimpleNamespace(profile_order=profile_order)
+                    digest=SimpleNamespace(
+                        profile_order=profile_order, brand="Horizon Daily"
+                    )
                 ),
             ),
             [],
@@ -651,16 +654,22 @@ def test_send_webhook_reports_delivery_failure_truthfully(
         service,
         "_build_context",
         lambda **kwargs: (
-            SimpleNamespace(config=SimpleNamespace(webhook=webhook_config)),
+            SimpleNamespace(
+                config=SimpleNamespace(
+                    webhook=webhook_config,
+                    digest=SimpleNamespace(brand="Horizon Daily"),
+                )
+            ),
             [],
             [],
         ),
     )
 
     class FakeNotifier:
-        def __init__(self, config, console) -> None:  # type: ignore[no-untyped-def]
+        def __init__(self, config, console, brand=None) -> None:  # type: ignore[no-untyped-def]
             assert config is webhook_config
             assert console is service.console
+            assert brand == "Horizon Daily"
 
         async def notify(self, variables):  # type: ignore[no-untyped-def]
             return WebhookDeliveryResult(

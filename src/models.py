@@ -679,11 +679,24 @@ class DigestConfig(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
+    # The name on the digest document, and the only place it is decided. It
+    # used to be written out in five unrelated files, one of which bypassed the
+    # label table entirely — so a rename was guaranteed to leave a stale copy
+    # somewhere. `tests/test_branding.py` fails if a new one appears.
+    # Not localised: a name is a name in every language.
+    brand: str = "Horizon Daily"
     max_items: Optional[int] = Field(default=None, gt=0)
     category_groups: Dict[str, CategoryGroupConfig] = Field(default_factory=dict)
     default_group: str = "other"
     default_group_limit: Optional[int] = Field(default=None, gt=0)
     profile_order: List[str] = Field(default_factory=list)
+
+    @field_validator("brand")
+    @classmethod
+    def validate_brand(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("digest.brand must not be empty")
+        return value.strip()
 
     @field_validator("profile_order")
     @classmethod

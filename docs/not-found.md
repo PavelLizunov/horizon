@@ -6,7 +6,7 @@ search:
 # Страница не найдена
 
 <div class="hz-empty" markdown="0">
-  <span class="hz-i hz-i--none" aria-hidden="true"></span>
+  <span class="hz-mascot" aria-hidden="true"></span>
   <div class="hz-empty__head">Такой страницы нет</div>
   <div class="hz-empty__body">
     Скорее всего, ссылка устарела: адреса статей менялись, когда выпуск

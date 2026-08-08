@@ -1,5 +1,11 @@
 site_name: Horizon Daily
-site_description: Ежедневный AI-дайджест технологий и исследований
+# Deliberately says nothing about cadence, source count or subject matter: all
+# three are configuration. The previous line promised a *daily* digest of
+# *technology and research* from *a dozen sources*, while the schedule is a
+# launchd entry, the enabled sources are four plus three feeds, and
+# `finance-news` is one of the profiles. A description of the method survives
+# reconfiguration; a description of the contents goes stale silently.
+site_description: Материалы из моих источников, отобранные и разобранные моделью
 site_url: https://digest.ninitux.com/
 docs_dir: docs
 site_dir: site

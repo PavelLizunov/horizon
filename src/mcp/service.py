@@ -557,6 +557,7 @@ class HorizonPipelineService:
         summarizer = ctx.runtime.DailySummarizer(
             profile_names=self._profiles(ctx).names,
             profile_order=ctx.config.digest.profile_order,
+            brand=ctx.config.digest.brand,
         )
         summary = await summarizer.generate_summary(
             items,
@@ -793,7 +794,9 @@ class HorizonPipelineService:
                 "reason": "Webhook is not configured.",
             }
 
-        notifier = WebhookNotifier(webhook_config, console=self.console)
+        notifier = WebhookNotifier(
+            webhook_config, console=self.console, brand=ctx.config.digest.brand
+        )
         variables = {
             "date": date,
             "language": language,
