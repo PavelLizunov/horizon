@@ -1,0 +1,1091 @@
+/* ===========================================================================
+   horizon-digest.css — v3
+   Horizon Daily / digest.ninitux.com
+
+   Ограничения, заложенные в файл:
+     · ни одного @import и ни одной ссылки на CDN — шрифты только системные;
+     · ни одного переопределения шаблонов темы — только конфиг + этот CSS;
+     · обе схемы равноправны и заданы независимо, не инверсией;
+     · мобильный первичен: базовые правила без медиа-запроса — мобильные,
+       десктоп добавляется через min-width.
+
+   Разметочный контракт (что должен выдавать генератор) — в §12 внизу.
+   =========================================================================== */
+
+/* ===========================================================================
+   §1  ТОКЕНЫ, НЕ ЗАВИСЯЩИЕ ОТ СХЕМЫ
+   =========================================================================== */
+
+:root {
+  /* -- Гарнитуры ---------------------------------------------------------- */
+  /* Проза — системный гуманистический sans. */
+  --hz-font-text: -apple-system, BlinkMacSystemFont, "Segoe UI Variable Text",
+    "Segoe UI", Roboto, "Helvetica Neue", Helvetica, Arial, sans-serif;
+  /* Машинные данные — системный моно. Даты, оценки, профили, теги, счётчики.
+     Это несущий приём типографики: проза и метаданные различаются гарнитурой,
+     а не цветом. Ноль килобайт загрузки. */
+  --hz-font-meta: ui-monospace, SFMono-Regular, "SF Mono", "Cascadia Mono",
+    "Segoe UI Mono", Menlo, Consolas, "Liberation Mono", monospace;
+
+  /* -- Шкала кегля (1rem = 20px в Material) ------------------------------- */
+  --hz-t-micro: 0.625rem;  /* 12.5px — теги, счётчики */
+  --hz-t-meta: 0.65rem;    /* 13px   — байлайн, мета-строки */
+  --hz-t-small: 0.725rem;  /* 14.5px — сниппеты, подписи */
+  --hz-t-label: 0.7rem;    /* 14px   — заглавные разделы */
+  --hz-t-body: 0.85rem;    /* 17px   — тело */
+  --hz-t-h3: 0.9rem;       /* 18px */
+  --hz-t-lead: 0.95rem;    /* 19px   — лид */
+  --hz-t-h2: 1rem;         /* 20px */
+  --hz-t-h1: 1.6rem;       /* 32px   — мобильный заголовок */
+  --hz-t-score: 1.15rem;   /* 23px   — оценка на странице статьи */
+
+  /* -- Межстрочные -------------------------------------------------------- */
+  --hz-lh-tight: 1.14;
+  --hz-lh-head: 1.3;
+  --hz-lh-meta: 1.45;
+  --hz-lh-lead: 1.6;
+  --hz-lh-body: 1.7;
+
+  /* -- Трекинг ------------------------------------------------------------ */
+  --hz-tr-h1: -0.02em;
+  --hz-tr-label: 0.085em;
+
+  /* -- Ритм --------------------------------------------------------------- */
+  --hz-space-1: 0.25rem;
+  --hz-space-2: 0.5rem;
+  --hz-space-3: 0.8rem;
+  --hz-space-4: 1.2rem;
+  --hz-space-5: 1.8rem;
+  --hz-space-6: 2.6rem;
+  --hz-space-7: 3.6rem;
+
+  /* -- Геометрия ---------------------------------------------------------- */
+  --hz-radius: 12px;
+  --hz-radius-sm: 6px;
+  --hz-hairline: 1px;
+  --hz-measure: 68ch;
+  --hz-col: 759px;
+
+  /* -- Оценка ------------------------------------------------------------- */
+  /* Шкала индикатора нормирована к 4…10: наблюдаемый диапазон оценок.
+     0 % = 4.0 и ниже, 100 % = 10.0. */
+  --hz-score-floor: 4;
+  --hz-score-meter-w: 42px;
+  --hz-score-meter-h: 3px;
+}
+
+/* ===========================================================================
+   §2  СХЕМА: СВЕТЛАЯ
+   Синий живёт ровно в двух местах — ссылка и подсветка совпадения.
+   Всё остальное монохромно. Ссылочный синий здесь темнее бренд-акцента:
+   #3d7eff на #f6f7f8 даёт 3.4:1 и в теле текста не читается, #1f5fe0 — 5.1:1.
+   =========================================================================== */
+
+[data-md-color-scheme="default"] {
+  --hz-bg: #f6f7f8;
+  --hz-surface: #ffffff;
+  --hz-surface-2: #eef0f2;
+  --hz-text: #17181a;
+  --hz-text-2: #3f434a;
+  --hz-muted: #6b7280;
+  --hz-faint: #9aa3b0;
+  --hz-border: #e5e7eb;
+  --hz-border-strong: #d3d7dd;
+
+  --hz-accent: #3d7eff;              /* бренд-синий: фокус, подсветка */
+  --hz-link: #1f5fe0;                /* ссылка в тексте */
+  --hz-link-hover: #17181a;
+  --hz-mark-bg: rgba(61, 126, 255, 0.18);
+
+  /* Индикатор оценки — три ступени чернил, без цвета. */
+  --hz-score-high: #17181a;
+  --hz-score-mid: #6b7280;
+  --hz-score-low: #b3b9c2;
+  --hz-score-track: #e5e7eb;
+}
+
+/* ===========================================================================
+   §3  СХЕМА: ТЁМНАЯ
+   Не инверсия. Отличия по существу:
+     · поверхность светлее фона (подъём), как и в светлой — метафора одна;
+     · тело текста не белое (#e8eaed), контраст к фону 13:1, не 19:1;
+     · линии в тёмной относительно фона светлее, чем в светлой относительно
+       своего — иначе хайрлайны исчезают;
+     · ссылка светлее бренд-акцента, а не темнее.
+   =========================================================================== */
+
+[data-md-color-scheme="slate"] {
+  --hz-bg: #0f1115;
+  --hz-surface: #161a21;
+  --hz-surface-2: #1c212a;
+  --hz-text: #e8eaed;
+  --hz-text-2: #c2c7cf;
+  --hz-muted: #9aa3b0;
+  --hz-faint: #6d7684;
+  --hz-border: #262c37;
+  --hz-border-strong: #333b49;
+
+  --hz-accent: #5b8fff;
+  --hz-link: #6fa2ff;
+  --hz-link-hover: #e8eaed;
+  --hz-mark-bg: rgba(111, 162, 255, 0.22);
+
+  --hz-score-high: #e8eaed;
+  --hz-score-mid: #9aa3b0;
+  --hz-score-low: #4a525f;
+  --hz-score-track: #262c37;
+}
+
+/* ===========================================================================
+   §4  ЗАЧИСТКА ДЕФОЛТНОГО ИНДИГО MATERIAL (#4051b5)
+   Тема раскрашивает кнопки, отметки, тени, футер и подсветку кода своими
+   переменными. Пока они не переопределены — индиго проступает.
+   =========================================================================== */
+
+[data-md-color-scheme="default"],
+[data-md-color-scheme="slate"] {
+  --md-default-bg-color: var(--hz-bg);
+  --md-default-fg-color: var(--hz-text);
+  --md-default-fg-color--light: var(--hz-muted);
+  --md-default-fg-color--lighter: var(--hz-faint);
+  --md-default-fg-color--lightest: var(--hz-border);
+  --md-typeset-color: var(--hz-text);
+
+  --md-primary-fg-color: var(--hz-bg);
+  --md-primary-fg-color--light: var(--hz-bg);
+  --md-primary-fg-color--dark: var(--hz-bg);
+  --md-primary-bg-color: var(--hz-text);
+  --md-primary-bg-color--light: var(--hz-muted);
+
+  --md-accent-fg-color: var(--hz-link);
+  --md-accent-fg-color--transparent: var(--hz-mark-bg);
+  --md-accent-bg-color: var(--hz-bg);
+  --md-accent-bg-color--light: var(--hz-bg);
+
+  --md-typeset-a-color: var(--hz-link);
+  --md-typeset-mark-color: var(--hz-mark-bg);
+  --md-typeset-del-color: var(--hz-surface-2);
+  --md-typeset-ins-color: var(--hz-surface-2);
+  --md-typeset-kbd-color: var(--hz-surface);
+  --md-typeset-kbd-accent-color: var(--hz-surface-2);
+  --md-typeset-kbd-border-color: var(--hz-border-strong);
+  --md-typeset-table-color: var(--hz-border);
+
+  --md-code-bg-color: var(--hz-surface-2);
+  --md-code-fg-color: var(--hz-text-2);
+  --md-code-hl-color: var(--hz-mark-bg);
+
+  --md-footer-bg-color: var(--hz-bg);
+  --md-footer-bg-color--dark: var(--hz-bg);
+  --md-footer-fg-color: var(--hz-muted);
+
+  /* Тени Material дают серо-синий ореол. На читательской странице их нет. */
+  --md-shadow-z1: none;
+  --md-shadow-z2: none;
+  --md-shadow-z3: none;
+}
+
+/* Кнопки на главной: монохром, не индиго. */
+.md-typeset .md-button {
+  font-family: var(--hz-font-text);
+  font-size: var(--hz-t-small);
+  font-weight: 600;
+  padding: 0.6em 1.1em;
+  color: var(--hz-text);
+  background: transparent;
+  border: var(--hz-hairline) solid var(--hz-border-strong);
+  border-radius: var(--hz-radius);
+}
+
+.md-typeset .md-button:focus,
+.md-typeset .md-button:hover {
+  color: var(--hz-bg);
+  background: var(--hz-text);
+  border-color: var(--hz-text);
+}
+
+.md-typeset .md-button--primary {
+  color: var(--hz-bg);
+  background: var(--hz-text);
+  border-color: var(--hz-text);
+}
+
+.md-typeset .md-button--primary:focus,
+.md-typeset .md-button--primary:hover {
+  color: var(--hz-text);
+  background: transparent;
+  border-color: var(--hz-border-strong);
+}
+
+/* Единое кольцо фокуса — единственное системное применение бренд-синего
+   помимо ссылки и подсветки. */
+:where(a, button, input, summary, [tabindex]):focus-visible {
+  outline: 2px solid var(--hz-accent);
+  outline-offset: 2px;
+  border-radius: var(--hz-radius-sm);
+}
+
+/* ===========================================================================
+   §5  БАЗОВАЯ ТИПОГРАФИКА
+   =========================================================================== */
+
+body,
+input,
+button,
+select {
+  font-family: var(--hz-font-text);
+}
+
+.md-typeset {
+  font-size: var(--hz-t-body);
+  line-height: var(--hz-lh-body);
+  text-wrap: pretty;
+  -webkit-text-size-adjust: 100%;
+}
+
+.md-typeset p {
+  margin: 0 0 var(--hz-space-4);
+  max-width: var(--hz-measure);
+}
+
+.md-typeset h1 {
+  font-size: var(--hz-t-h1);
+  line-height: var(--hz-lh-tight);
+  font-weight: 700;
+  letter-spacing: var(--hz-tr-h1);
+  color: var(--hz-text);
+  margin: 0 0 var(--hz-space-3);
+  max-width: 34ch;
+  text-wrap: balance;
+}
+
+.md-typeset h1 a,
+.md-typeset h1 a:hover {
+  color: inherit;
+  text-decoration: none;
+}
+
+.md-typeset h2 {
+  font-size: var(--hz-t-h2);
+  line-height: var(--hz-lh-head);
+  font-weight: 700;
+  color: var(--hz-text);
+  margin: var(--hz-space-6) 0 var(--hz-space-3);
+}
+
+.md-typeset h3 {
+  font-size: var(--hz-t-h3);
+  line-height: var(--hz-lh-head);
+  font-weight: 600;
+  color: var(--hz-text);
+  margin: var(--hz-space-5) 0 var(--hz-space-2);
+}
+
+.md-typeset a {
+  text-decoration: none;
+  text-underline-offset: 0.18em;
+  text-decoration-thickness: 1px;
+}
+
+.md-typeset a:not([class]) {
+  color: var(--hz-link);
+}
+
+.md-typeset a:not([class]):hover {
+  color: var(--hz-link-hover);
+  text-decoration: underline;
+}
+
+/* Ссылки внутри абзаца подчёркнуты всегда: без картинок и без цвета в
+   остальном интерфейсе синева одна не должна нести всю нагрузку. */
+.md-typeset p > a:not([class]),
+.md-typeset ul:not([class]) > li > a:not([class]),
+.md-typeset ol:not([class]) > li > a:not([class]) {
+  text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, var(--hz-link) 40%, transparent);
+}
+
+.md-typeset ul,
+.md-typeset ol {
+  max-width: var(--hz-measure);
+  margin: 0 0 var(--hz-space-4);
+}
+
+.md-typeset li {
+  margin-bottom: var(--hz-space-2);
+}
+
+.md-typeset hr {
+  border: 0;
+  border-top: var(--hz-hairline) solid var(--hz-border);
+  margin: var(--hz-space-6) 0;
+}
+
+.md-typeset blockquote {
+  border-left: 2px solid var(--hz-border-strong);
+  color: var(--hz-text-2);
+  padding-left: var(--hz-space-4);
+  margin-left: 0;
+}
+
+/* Inline code and tags are different things: tags receive .hz-tag from the
+   generator, while code keeps a compact code treatment. */
+.md-typeset code {
+  font-family: var(--hz-font-meta);
+  font-size: 0.86em;
+  color: var(--hz-text-2);
+  background: var(--hz-surface-2);
+  border-radius: var(--hz-radius-sm);
+  padding: 0.15em 0.36em;
+  box-shadow: none;
+  overflow-wrap: anywhere;
+}
+
+.md-typeset pre > code {
+  background: transparent;
+  padding: 0;
+}
+
+.md-typeset pre {
+  background: var(--hz-surface);
+  border: var(--hz-hairline) solid var(--hz-border);
+  border-radius: var(--hz-radius);
+  box-shadow: none;
+}
+
+/* Пилкроу на читательской странице — шум. */
+.md-typeset .headerlink {
+  display: none;
+}
+
+@media screen and (min-width: 600px) {
+  :root {
+    --hz-t-h1: 1.9rem; /* 38px */
+  }
+}
+
+/* ===========================================================================
+   §6  ХРОМ: ШАПКА, КОЛОНКА, ФУТЕР
+   =========================================================================== */
+
+.md-header {
+  background: var(--hz-bg);
+  color: var(--hz-text);
+  box-shadow: none;
+  border-bottom: var(--hz-hairline) solid var(--hz-border);
+}
+
+.md-header__title {
+  font-size: var(--hz-t-small);
+  font-weight: 600;
+  letter-spacing: 0;
+}
+
+.md-header__button.md-logo {
+  display: none;
+}
+
+.md-tabs {
+  background: var(--hz-bg);
+  color: var(--hz-muted);
+  border-bottom: var(--hz-hairline) solid var(--hz-border);
+}
+
+.md-sidebar--primary {
+  display: none;
+}
+
+.md-main__inner {
+  margin-top: var(--hz-space-4);
+}
+
+.md-content {
+  max-width: calc(var(--hz-measure) + 22rem);
+  margin-inline: auto;
+}
+
+.md-content__inner {
+  padding-bottom: var(--hz-space-7);
+}
+
+.md-content__inner::before {
+  display: none; /* лишний отбивочный блок темы */
+}
+
+.md-footer {
+  background: var(--hz-bg);
+  color: var(--hz-muted);
+  border-top: var(--hz-hairline) solid var(--hz-border);
+}
+
+.md-footer-meta {
+  display: none;
+}
+
+.md-footer__link {
+  font-size: var(--hz-t-meta);
+}
+
+/* Выпадашка lunr бесполезна для дайджеста — ввод уходит на страницу поиска
+   (assets/horizon-search-redirect.js). */
+.md-search__output,
+.md-search__options {
+  display: none !important;
+}
+
+.md-search__form {
+  background: var(--hz-surface);
+  border: var(--hz-hairline) solid var(--hz-border);
+  border-radius: var(--hz-radius);
+  box-shadow: none;
+}
+
+.md-search__input::placeholder {
+  color: var(--hz-faint);
+}
+
+@media screen and (max-width: 959px) {
+  .md-content {
+    max-width: 100%;
+  }
+  .md-sidebar--secondary {
+    display: none; /* оглавление на телефоне отнимает первый экран */
+  }
+}
+
+/* ===========================================================================
+   §7  ИКОНКИ
+   Десять фигур, 16×16, обводка 1.5, встроены как data-URI и наносятся маской
+   по currentColor. Ноль запросов, наследуют цвет и кегль текста, работают в
+   обеих схемах без второго набора.
+   Разметка:  <span class="hz-i hz-i--video" aria-hidden="true"></span>
+   =========================================================================== */
+
+:root {
+  --hz-i-news: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='%23000' stroke-width='1.5' stroke-linecap='round'%3E%3Crect x='2' y='3' width='12' height='10' rx='1.5'/%3E%3Cpath d='M4.5 6.5h7M4.5 9.5h4'/%3E%3C/svg%3E");
+  --hz-i-blog: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='%23000' stroke-width='1.5' stroke-linecap='round'%3E%3Cpath d='M2.5 3.5h11M2.5 7h11M2.5 10.5h7'/%3E%3C/svg%3E");
+  --hz-i-video: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='%23000' stroke-width='1.5' stroke-linecap='round'%3E%3Crect x='2' y='3.5' width='12' height='9' rx='2'/%3E%3Cpath d='M7 6.4l3.4 1.6L7 9.6z'/%3E%3C/svg%3E");
+  --hz-i-finance: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='%23000' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M2 13V3'/%3E%3Cpath d='M2 13h12'/%3E%3Cpath d='M4.5 10.5l3-3 2.5 2 3.5-4'/%3E%3C/svg%3E");
+  --hz-i-date: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='%23000' stroke-width='1.5' stroke-linecap='round'%3E%3Crect x='2.5' y='4' width='11' height='9.5' rx='1.5'/%3E%3Cpath d='M5 2.5v3M11 2.5v3M2.5 7.5h11'/%3E%3C/svg%3E");
+  --hz-i-search: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='%23000' stroke-width='1.5' stroke-linecap='round'%3E%3Ccircle cx='7' cy='7' r='4.5'/%3E%3Cpath d='M10.5 10.5L14 14'/%3E%3C/svg%3E");
+  --hz-i-external: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='%23000' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 9v3.5a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1v-7a1 1 0 0 1 1-1h3.5'/%3E%3Cpath d='M9.5 2.5h4v4M13.5 2.5L8 8'/%3E%3C/svg%3E");
+  --hz-i-tag: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='%23000' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M8.6 2.5H13.5V7.4L7.4 13.5 2.5 8.6z'/%3E%3Ccircle cx='10.9' cy='5.1' r='1'/%3E%3C/svg%3E");
+  --hz-i-sections: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='%23000' stroke-width='1.5' stroke-linecap='round'%3E%3Cpath d='M6 4h8M6 8h8M6 12h5'/%3E%3Ccircle cx='3' cy='4' r='1'/%3E%3Ccircle cx='3' cy='8' r='1'/%3E%3Ccircle cx='3' cy='12' r='1'/%3E%3C/svg%3E");
+  --hz-i-none: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='%23000' stroke-width='1.5' stroke-linecap='round'%3E%3Ccircle cx='8' cy='8' r='5.5' stroke-dasharray='2.6 2.4'/%3E%3Cpath d='M5.5 8h5'/%3E%3C/svg%3E");
+  --hz-i-next: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='%23000' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3 8h10M9 4l4 4-4 4'/%3E%3C/svg%3E");
+}
+
+.hz-i {
+  display: inline-block;
+  width: 1.05em;
+  height: 1.05em;
+  flex: none;
+  vertical-align: -0.16em;
+  background-color: currentColor;
+  -webkit-mask: var(--hz-i) center / contain no-repeat;
+  mask: var(--hz-i) center / contain no-repeat;
+}
+
+.hz-i--news { --hz-i: var(--hz-i-news); }
+.hz-i--blog { --hz-i: var(--hz-i-blog); }
+.hz-i--video { --hz-i: var(--hz-i-video); }
+.hz-i--finance { --hz-i: var(--hz-i-finance); }
+.hz-i--date { --hz-i: var(--hz-i-date); }
+.hz-i--search { --hz-i: var(--hz-i-search); }
+.hz-i--external { --hz-i: var(--hz-i-external); }
+.hz-i--tag { --hz-i: var(--hz-i-tag); }
+.hz-i--sections { --hz-i: var(--hz-i-sections); }
+.hz-i--none { --hz-i: var(--hz-i-none); }
+.hz-i--next { --hz-i: var(--hz-i-next); }
+
+/* ===========================================================================
+   §8  ОЦЕНКА
+   Цифра одна ничего не сообщала: 9.0 и 4.0 набраны одинаково. Кодируется
+   двумя средствами, оба монохромные:
+     · индикатор — полоса шириной (score−4)/6, нормировка в §1;
+     · ступень чернил — high ≥ 8.0, mid 6.0…7.9, low < 6.0.
+   Цветового кодирования нет намеренно: светофор в тексте без картинок
+   становится главным пятном на экране и врёт про точность модели.
+
+   <span class="hz-score" data-tier="high" style="--hz-score:.84">8.4</span>
+   =========================================================================== */
+
+.hz-score {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 0.32em;
+  align-items: flex-start;
+  font-family: var(--hz-font-meta);
+  font-size: var(--hz-t-meta);
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+}
+
+.hz-score::after {
+  content: "";
+  width: var(--hz-score-meter-w);
+  height: var(--hz-score-meter-h);
+  border-radius: 999px;
+  background:
+    linear-gradient(to right, currentColor 0 0) left / calc(var(--hz-score, 0) * 100%) 100% no-repeat,
+    var(--hz-score-track);
+}
+
+/* Ступень задаёт и цвет, и запасную длину индикатора: если генератор не
+   выставил --hz-score, полоса всё равно читается, просто грубее. */
+.hz-score[data-tier="high"] { color: var(--hz-score-high); font-weight: 600; --hz-score: 0.75; }
+.hz-score[data-tier="mid"] { color: var(--hz-score-mid); font-weight: 500; --hz-score: 0.45; }
+.hz-score[data-tier="low"] { color: var(--hz-score-low); font-weight: 400; --hz-score: 0.2; }
+
+/* На странице статьи оценка — часть шапки, крупнее и с подписью шкалы. */
+.hz-score--lead {
+  font-size: var(--hz-t-score);
+  gap: 0.4em;
+  --hz-score-meter-w: 68px;
+  --hz-score-meter-h: 4px;
+}
+
+.hz-score--lead .hz-score__scale {
+  font-size: var(--hz-t-micro);
+  color: var(--hz-faint);
+  font-weight: 400;
+}
+
+/* ===========================================================================
+   §9  ПРОФИЛЬ, МЕТА-СТРОКА, ТЕГИ
+   Профили различаются фигурой иконки, а не цветом: цвет занят ссылкой.
+   =========================================================================== */
+
+.hz-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--hz-space-1) var(--hz-space-3);
+  font-family: var(--hz-font-meta);
+  font-size: var(--hz-t-meta);
+  line-height: var(--hz-lh-meta);
+  color: var(--hz-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.md-typeset .hz-byline,
+.md-typeset p.hz-byline {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--hz-space-1) var(--hz-space-3);
+  font-family: var(--hz-font-meta);
+  font-size: var(--hz-t-meta);
+  line-height: var(--hz-lh-meta);
+  color: var(--hz-muted);
+  margin: 0 0 var(--hz-space-5);
+  max-width: none;
+}
+
+/* Точки-разделители больше не нужны: разделяет гэп. */
+.hz-profile {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.38em;
+  font-family: var(--hz-font-meta);
+  font-size: var(--hz-t-meta);
+  color: var(--hz-muted);
+  white-space: nowrap;
+}
+
+.md-typeset .hz-source,
+.hz-source {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35em;
+  color: var(--hz-muted);
+  text-decoration: none;
+}
+
+.md-typeset .hz-source:hover,
+.hz-source:hover {
+  color: var(--hz-link);
+  text-decoration: underline;
+}
+
+.hz-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--hz-space-2);
+  margin: var(--hz-space-5) 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.hz-tags li {
+  margin: 0;
+}
+
+/* Теги размечаются отдельно; инлайн-код остаётся кодом. */
+.md-typeset a.hz-tag,
+.hz-tag {
+  font-family: var(--hz-font-meta);
+  font-size: var(--hz-t-micro);
+  color: var(--hz-muted);
+  background: transparent;
+  border: var(--hz-hairline) solid var(--hz-border);
+  border-radius: 999px;
+  padding: 0.34em 0.7em;
+  box-shadow: none;
+  text-decoration: none;
+}
+
+.md-typeset a.hz-tag:hover,
+a.hz-tag:hover {
+  color: var(--hz-text);
+  border-color: var(--hz-border-strong);
+  text-decoration: none;
+}
+
+/* ===========================================================================
+   §10  СТРАНИЦА СТАТЬИ
+   Шапка: заголовок → оценка с индикатором → байлайн → лид.
+   Разделы разбора нумеруются счётчиком: 01 Контекст, 02 Влияние…
+   Нумерация даёт ритм и предсказуемость длины без единого цветного пятна.
+   Правило ограничено явным маркером .hz-page--article, поэтому импортированные
+   материалы без байлайна не теряют нумерацию.
+   =========================================================================== */
+
+.hz-lede,
+.md-typeset .hz-lede {
+  font-size: var(--hz-t-lead);
+  line-height: var(--hz-lh-lead);
+  color: var(--hz-text-2);
+  max-width: 60ch;
+  margin: 0 0 var(--hz-space-6);
+}
+
+.hz-articlehead {
+  display: flex;
+  flex-direction: column;
+  gap: var(--hz-space-3);
+  margin-bottom: var(--hz-space-4);
+}
+
+.md-typeset .hz-page--article {
+  counter-reset: hz-sec;
+}
+
+.md-typeset .hz-page--article > h2 {
+  counter-increment: hz-sec;
+  display: flex;
+  align-items: baseline;
+  gap: 0.7em;
+  margin-top: var(--hz-space-6);
+  padding-top: var(--hz-space-4);
+  border-top: var(--hz-hairline) solid var(--hz-border);
+  font-family: var(--hz-font-text);
+  font-size: var(--hz-t-label);
+  font-weight: 600;
+  letter-spacing: var(--hz-tr-label);
+  text-transform: uppercase;
+  color: var(--hz-muted);
+}
+
+.md-typeset .hz-page--article > h2::before {
+  content: counter(hz-sec, decimal-leading-zero);
+  font-family: var(--hz-font-meta);
+  font-weight: 400;
+  font-size: var(--hz-t-micro);
+  letter-spacing: 0;
+  color: var(--hz-faint);
+}
+
+/* Первый h2 идёт сразу за лидом — верхняя линия там лишняя. */
+.md-typeset .hz-page--article > h2:first-of-type {
+  border-top: 0;
+  padding-top: 0;
+}
+
+/* Блок источников. */
+.md-typeset details {
+  margin-top: var(--hz-space-6);
+  padding: var(--hz-space-4);
+  background: var(--hz-surface);
+  border: var(--hz-hairline) solid var(--hz-border);
+  border-radius: var(--hz-radius);
+  box-shadow: none;
+  font-size: var(--hz-t-small);
+}
+
+.md-typeset details > summary {
+  font-family: var(--hz-font-text);
+  font-size: var(--hz-t-label);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: var(--hz-tr-label);
+  color: var(--hz-muted);
+  background: none;
+  padding: 0;
+  cursor: pointer;
+}
+
+.md-typeset details > summary {
+  list-style: none;
+}
+
+.md-typeset details > summary::-webkit-details-marker,
+.md-typeset details > summary::after,
+.md-typeset details > summary::before {
+  display: none;
+  content: "";
+}
+
+.md-typeset details[open] > summary {
+  margin-bottom: var(--hz-space-3);
+}
+
+.md-typeset details ul {
+  margin: 0;
+}
+
+.md-typeset details li {
+  margin-bottom: var(--hz-space-2);
+  overflow-wrap: anywhere;
+}
+
+/* Источники и поисковые сниппеты — обычные текстовые ссылки. */
+.md-typeset details li > a,
+.md-typeset .hz-search-snippet a {
+  color: var(--hz-link);
+  text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, var(--hz-link) 40%, transparent);
+}
+
+/* ===========================================================================
+   §11  ВЫПУСК, АРХИВ, ПОИСК, ПУСТЫЕ СОСТОЯНИЯ
+   =========================================================================== */
+
+/* -- Выпуск: список статей за дату ---------------------------------------- */
+
+.hz-list {
+  list-style: none;
+  margin: var(--hz-space-5) 0 0;
+  padding: 0;
+  max-width: var(--hz-measure);
+}
+
+.hz-list > li {
+  margin: 0;
+  padding: var(--hz-space-4) 0;
+  border-top: var(--hz-hairline) solid var(--hz-border);
+}
+
+.hz-list > li:last-child {
+  border-bottom: var(--hz-hairline) solid var(--hz-border);
+}
+
+.hz-item {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  column-gap: var(--hz-space-4);
+  row-gap: var(--hz-space-2);
+  align-items: start;
+}
+
+.md-typeset a.hz-item__title,
+.hz-item__title {
+  grid-column: 1;
+  font-size: var(--hz-t-body);
+  font-weight: 600;
+  line-height: 1.35;
+  color: var(--hz-text);
+  text-decoration: none;
+  text-wrap: pretty;
+}
+
+.md-typeset a.hz-item__title:hover,
+.hz-item__title:hover {
+  color: var(--hz-link);
+  text-decoration: underline;
+}
+
+/* Оценка справа сверху, выровнена по первой строке заголовка. */
+.hz-item > .hz-score {
+  grid-column: 2;
+  grid-row: 1;
+  align-items: flex-end;
+  padding-top: 0.15em;
+}
+
+.hz-item__meta {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--hz-space-1) var(--hz-space-3);
+  font-family: var(--hz-font-meta);
+  font-size: var(--hz-t-meta);
+  color: var(--hz-muted);
+}
+
+/* Материалы ниже интереса — приглушены целиком, а не только оценкой. */
+.hz-list > li[data-tier="low"] .hz-item__title {
+  font-weight: 500;
+  color: var(--hz-text-2);
+}
+
+/* -- Архив: выпуски по датам ---------------------------------------------- */
+
+.hz-archive {
+  list-style: none;
+  margin: var(--hz-space-5) 0 0;
+  padding: 0;
+  max-width: 46ch;
+}
+
+.hz-archive > li {
+  margin: 0;
+  border-top: var(--hz-hairline) solid var(--hz-border);
+}
+
+.hz-archive > li:last-child {
+  border-bottom: var(--hz-hairline) solid var(--hz-border);
+}
+
+.md-typeset .hz-archive a,
+.hz-archive a {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: var(--hz-space-3);
+  padding: var(--hz-space-3) 0;
+  color: var(--hz-text);
+  text-decoration: none;
+}
+
+.md-typeset .hz-archive a:hover,
+.hz-archive a:hover {
+  color: var(--hz-link);
+}
+
+.hz-archive__date {
+  font-family: var(--hz-font-meta);
+  font-size: var(--hz-t-small);
+  font-variant-numeric: tabular-nums;
+}
+
+.hz-archive__count {
+  font-family: var(--hz-font-meta);
+  font-size: var(--hz-t-micro);
+  color: var(--hz-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.hz-archive__rule {
+  height: 0;
+  border-top: var(--hz-hairline) dotted var(--hz-border-strong);
+}
+
+/* Год-разделитель в длинном архиве. */
+.hz-archive__year {
+  font-family: var(--hz-font-meta);
+  font-size: var(--hz-t-micro);
+  letter-spacing: var(--hz-tr-label);
+  color: var(--hz-faint);
+  padding: var(--hz-space-5) 0 var(--hz-space-2);
+  border-top: 0;
+}
+
+/* -- Поиск ---------------------------------------------------------------- */
+
+.hz-search {
+  max-width: var(--hz-measure);
+}
+
+.hz-search__field {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.hz-search__field .hz-i {
+  position: absolute;
+  left: 0.85rem;
+  color: var(--hz-faint);
+  font-size: var(--hz-t-body);
+  pointer-events: none;
+}
+
+.hz-search input[type="search"] {
+  width: 100%;
+  padding: 0.7rem 1rem 0.7rem 2.5rem;
+  font-family: var(--hz-font-text);
+  font-size: var(--hz-t-body);
+  color: var(--hz-text);
+  background: var(--hz-surface);
+  border: var(--hz-hairline) solid var(--hz-border);
+  border-radius: var(--hz-radius);
+  outline: none;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.hz-search input[type="search"]::placeholder {
+  color: var(--hz-faint);
+}
+
+.hz-search input[type="search"]:focus {
+  border-color: var(--hz-accent);
+  box-shadow: 0 0 0 3px var(--hz-mark-bg);
+}
+
+.hz-search-status {
+  margin: var(--hz-space-3) 0 0;
+  font-family: var(--hz-font-meta);
+  font-size: var(--hz-t-meta);
+  color: var(--hz-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.hz-search-results {
+  list-style: none;
+  margin: var(--hz-space-4) 0 0;
+  padding: 0;
+}
+
+.hz-search-results > li {
+  margin: 0;
+  padding: var(--hz-space-4) 0;
+  border-top: var(--hz-hairline) solid var(--hz-border);
+}
+
+.hz-search-results > li:last-child {
+  border-bottom: var(--hz-hairline) solid var(--hz-border);
+}
+
+.hz-search-results a.hz-item__title {
+  display: block;
+  margin-bottom: var(--hz-space-2);
+}
+
+.hz-search-snippet {
+  font-size: var(--hz-t-small);
+  line-height: 1.55;
+  color: var(--hz-text-2);
+  margin: var(--hz-space-2) 0 0;
+  max-width: 62ch;
+}
+
+/* Подсветка совпадения — второе и последнее место, где живёт синий. */
+.hz-search-results mark,
+.md-typeset mark,
+mark {
+  background: var(--hz-mark-bg);
+  color: inherit;
+  padding: 0.06em 0.18em;
+  border-radius: 3px;
+  box-shadow: inset 0 -1px 0 color-mix(in srgb, var(--hz-accent) 55%, transparent);
+}
+
+/* -- Пустые состояния ------------------------------------------------------ */
+/* Не по центру и без картинки: то же выравнивание, что у остального текста,
+   одна фраза о факте и одно действие. */
+
+.hz-empty {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  column-gap: var(--hz-space-4);
+  row-gap: var(--hz-space-1);
+  align-items: start;
+  max-width: 52ch;
+  margin: var(--hz-space-5) 0;
+  padding: var(--hz-space-4);
+  background: var(--hz-surface);
+  border: var(--hz-hairline) dashed var(--hz-border-strong);
+  border-radius: var(--hz-radius);
+}
+
+.hz-empty > .hz-i {
+  font-size: 1.1rem;
+  color: var(--hz-faint);
+  grid-row: 1 / span 2;
+  margin-top: 0.1em;
+}
+
+.hz-empty__head {
+  font-size: var(--hz-t-body);
+  font-weight: 600;
+  color: var(--hz-text);
+}
+
+.hz-empty__body {
+  font-size: var(--hz-t-small);
+  line-height: 1.55;
+  color: var(--hz-muted);
+}
+
+.md-typeset .hz-empty__body a,
+.hz-empty__body a {
+  color: var(--hz-link);
+  text-decoration: underline;
+}
+
+/* -- Навигация между выпусками ------------------------------------------- */
+
+.hz-pager {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--hz-space-4);
+  margin-top: var(--hz-space-6);
+  padding-top: var(--hz-space-4);
+  border-top: var(--hz-hairline) solid var(--hz-border);
+  font-family: var(--hz-font-meta);
+  font-size: var(--hz-t-meta);
+}
+
+.md-typeset .hz-pager a,
+.hz-pager a {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45em;
+  color: var(--hz-muted);
+  text-decoration: none;
+}
+
+.md-typeset .hz-pager a:hover,
+.hz-pager a:hover {
+  color: var(--hz-text);
+}
+
+/* ===========================================================================
+   §12  РАЗМЕТОЧНЫЙ КОНТРАКТ
+   Что генератор должен выдавать, чтобы этот CSS сработал.
+
+   Оценка (везде):
+     <span class="hz-score" data-tier="high|mid|low" style="--hz-score:.84">8.4</span>
+     data-tier: high ≥ 8.0, mid 6.0…7.9, low < 6.0
+     --hz-score: clamp((score − 4) / 6, 0.04, 1) — с округлением до 2 знаков
+
+   Профиль:
+     <span class="hz-profile"><span class="hz-i hz-i--video" aria-hidden="true"></span>video</span>
+     tech-news → hz-i--news, tech-blog → hz-i--blog,
+     video → hz-i--video, finance-news → hz-i--finance
+
+   Статья:
+     div.hz-page--article вокруг h1, .hz-score--lead, p.hz-byline,
+     p.hz-lede и h2 на каждый раздел;
+     details/ul для источников; ul.hz-tags с a.hz-tag.
+
+   Выпуск:  ul.hz-list > li[data-tier] > div.hz-item
+              > a.hz-item__title + span.hz-score + div.hz-item__meta
+
+   Архив:   ul.hz-archive > li > a
+              > span.hz-archive__date + span.hz-archive__rule
+                + span.hz-archive__count
+
+   Поиск:   div.hz-search > .hz-search__field > .hz-i.hz-i--search + input
+            p.hz-search-status
+            ul.hz-search-results > li > a.hz-item__title
+              + div.hz-item__meta + p.hz-search-snippet (с <mark>)
+
+   Пусто:   div.hz-empty > .hz-i.hz-i--none
+              + div.hz-empty__head + div.hz-empty__body
+   =========================================================================== */
