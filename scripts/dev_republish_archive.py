@@ -63,7 +63,9 @@ def render_page(doc: dict) -> ArticlePage:
         slug=slug,
         title=doc["title"],
         markdown=article_site_markup(
-            "\n".join(lines) + "\n", profile_id=doc["profile"]
+            "\n".join(lines) + "\n",
+            profile_id=doc["profile"],
+            issue_date=doc["date"],
         )
         + _pager_markup(labels["issue"]),
     )

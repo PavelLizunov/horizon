@@ -83,3 +83,25 @@ CHANGELOG, not before.
   passthrough), LAN-facing on a trusted home network.
 - Public: only what Caddy proxies (`/api/search*`), which is search-api's
   single endpoint.
+
+## Ingress: two headers and an error page
+
+Set on the digest site block in `conf.d/`, all three found by looking at the
+live site rather than in review:
+
+- **`Cache-Control`.** Caddy sent none, so browsers cached the pages and our
+  two unhashed assets heuristically: a freshly opened tab still got the
+  previous stylesheet after a deploy. Theme assets carry a content hash and
+  stay `immutable`; everything else is `no-cache`, which with the existing
+  ETag is a cheap 304 rather than a re-download. `/api/search*` is excluded so
+  the service keeps its own `max-age=300`.
+- **`handle_errors`.** A dead link returned an *empty body* — zero bytes, no
+  way back. It now serves `/not-found/`, with the 404 status preserved.
+  That page is `docs/not-found.md`, not `404.md`: Material ships its own
+  `404.html` template which wins, and customising it the documented way means
+  `theme.custom_dir` — an override this project does without.
+
+Change either the same way as the search upstream: copy the file to `/root`
+first (**not** into `conf.d/`, where the `*.caddy` glob would load the copy as
+a second block for the same domain), `caddy validate`, `systemctl reload`,
+then curl the neighbouring domains.

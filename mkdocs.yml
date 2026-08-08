@@ -22,6 +22,10 @@ theme:
   features:
     - navigation.instant
     - navigation.top
+    # Without this the nav exists only inside `.md-sidebar--primary`, which the
+    # skin hides — so the site rendered with no visible navigation at all and
+    # the only way out of an article was the pager three screens down.
+    - navigation.tabs
 
 extra_css:
   - assets/horizon-digest.css
@@ -76,8 +80,14 @@ exclude_docs: |
 
 # Digest pages are generated per run and gitignored; they must not be listed
 # individually in the nav, and MkDocs would otherwise warn about each one.
+# The error page is `not-found.md`, not `404.md`: Material ships its own
+# `404.html` template and it wins over a page of that name. Customising it the
+# documented way means `theme.custom_dir`, and this project deliberately
+# overrides no theme templates — so the page lives at its own address and the
+# ingress rewrites errors to it (`handle_errors` in the Caddy site block).
 not_in_nav: |
   digest/*
+  not-found.md
 
 # The digest table of contents links to raw `<a id="item-...">` anchors, which
 # are not heading ids and therefore not in page.toc. That is deliberate — the

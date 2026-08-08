@@ -1210,3 +1210,32 @@ a.hz-tag:hover {
 [dir] .md-typeset ul.hz-search-results > li {
   margin-left: 0;
 }
+
+/* §6 гасит `.md-sidebar--primary` целиком. На широком экране это верно:
+   древовидная колонка читательскому сайту не нужна, её заменяет полоса
+   вкладок. Но ниже 76.25em Material держит в том же элементе выдвижной ящик —
+   единственную навигацию на телефоне, потому что вкладки там не показываются.
+   Возвращаем ящик, оставляя постоянную колонку скрытой. */
+@media screen and (max-width: 76.2344em) {
+  .md-sidebar--primary {
+    display: block;
+  }
+}
+
+/* Хлебная крошка в байлайне: путь к своему выпуску с первого экрана статьи.
+   Пагинация внизу остаётся — она для дочитавшего, а не для передумавшего. */
+.md-typeset .hz-crumb,
+.hz-crumb {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35em;
+  color: var(--hz-muted);
+  text-decoration: none;
+  font-variant-numeric: tabular-nums;
+}
+
+.md-typeset .hz-crumb:hover,
+.hz-crumb:hover {
+  color: var(--hz-link);
+  text-decoration: underline;
+}

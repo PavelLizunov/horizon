@@ -193,7 +193,10 @@ def _icon(name: str) -> str:
 
 
 def _byline_markup(
-    text: str, source_url: Optional[str], profile_id: Optional[str]
+    text: str,
+    source_url: Optional[str],
+    profile_id: Optional[str],
+    issue_date: Optional[str] = None,
 ) -> str:
     """Build the article byline: what kind, when, and a way to the original.
 
@@ -206,8 +209,20 @@ def _byline_markup(
         parts.pop(0)
     if profile_id:
         parts = [part for part in parts if _plain_text(part) != profile_id]
+    if issue_date:
+        # The crumb below already carries it; frozen bylines repeat it here.
+        parts = [part for part in parts if _plain_text(part) != issue_date]
 
     chunks = []
+    if issue_date:
+        # The way back to the issue, on the first screen. The pager at the foot
+        # of the page serves the reader who finished; this one serves the
+        # reader who changed their mind, and who otherwise had three screens of
+        # scrolling or the browser's back button.
+        chunks.append(
+            f'<a class="hz-crumb" href="../">{_icon("date")}'
+            f"{html.escape(issue_date)}</a>"
+        )
     if profile_id:
         icon = _icon(_PROFILE_ICONS.get(profile_id, "news"))
         chunks.append(
@@ -217,7 +232,7 @@ def _byline_markup(
         rest = _INLINE_LINK_RE.sub(
             r'<a href="\2">\1</a>', _plain_text(" · ".join(parts))
         )
-        chunks.append(f"{_icon('date')}{rest}")
+        chunks.append(rest if issue_date else f"{_icon('date')}{rest}")
     if source_url:
         domain = urlsplit(source_url).netloc.removeprefix("www.")
         if domain:
@@ -321,7 +336,12 @@ def _score_markup(raw: object, *, lead: bool = True) -> str:
     )
 
 
-def article_site_markup(markdown: str, *, profile_id: Optional[str] = None) -> str:
+def article_site_markup(
+    markdown: str,
+    *,
+    profile_id: Optional[str] = None,
+    issue_date: Optional[str] = None,
+) -> str:
     """Restructure a rendered item for its own site page. Site-only.
 
     The shared renderer emits one combined-document shape (bold-run block
@@ -389,7 +409,10 @@ def article_site_markup(markdown: str, *, profile_id: Optional[str] = None) -> s
             head += ["", _score_markup(score)]
         if byline_index is not None or source_url:
             byline_text = lines[byline_index] if byline_index is not None else ""
-            head += ["", _byline_markup(byline_text, source_url, profile_id)]
+            head += [
+                "",
+                _byline_markup(byline_text, source_url, profile_id, issue_date),
+            ]
             if byline_index is not None:
                 lines[byline_index] = ""
         lines[h1_index] = "\n".join(head)
@@ -528,7 +551,9 @@ class DailySummarizer:
                         slug=slug,
                         title=view_item.title,
                         markdown=article_site_markup(
-                            body, profile_id=group.profile_id
+                            body,
+                            profile_id=group.profile_id,
+                            issue_date=date,
                         )
                         + _pager_markup(labels["issue"]),
                     )
