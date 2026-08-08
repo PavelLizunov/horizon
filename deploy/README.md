@@ -128,6 +128,14 @@ digest.example.com {
 
 `encode` matters: the built pages are ~83 KB raw and ~23 KB gzipped.
 
+### Public design preview
+
+The repository also has a manual **Deploy Site Preview** GitHub Actions
+workflow. It builds the same MkDocs output and publishes it to GitHub Pages.
+Use it when the private deployment host is unavailable from the workstation;
+the production digest remains the self-hosted site above, because its generated
+issues and runtime state never enter Git.
+
 If you already run an ingress that serves static sites, add the site there
 rather than standing up a container for it — one more `conf.d/<domain>.caddy`
 next to the existing ones is less moving parts than a new host. Two precautions

@@ -504,7 +504,13 @@ class DailySummarizer:
         index_lines = [f"# {labels['header']} - {date}", ""]
 
         for group in view.groups:
-            index_lines += [f"## {group.name}", "", '<ul class="hz-list">']
+            # Profile names come from config, so they are escaped like any
+            # other value landing in a markdown heading.
+            index_lines += [
+                f"## {_escape_markdown(group.name)}",
+                "",
+                '<ul class="hz-list">',
+            ]
             for view_item in group.items:
                 slug = view_item.anchor_id.removeprefix("item-")
                 body = self._format_item(

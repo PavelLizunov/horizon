@@ -64,8 +64,11 @@ logs/*.log
 todo.txt
 .ruff_cache
 .pytest_cache
-# Static site pages generated from digests (regenerated every run)
-docs/digest/
+# Static site pages generated from digests (regenerated every run). Keep the
+# empty archive landing page tracked so a fresh checkout can build the site.
+docs/digest/*
+!docs/digest/
+!docs/digest/index.md
 
 # mkdocs build output
 site/

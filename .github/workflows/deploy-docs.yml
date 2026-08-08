@@ -1,10 +1,8 @@
-name: Deploy Docs
+name: Deploy Site Preview
 
-# Superseded by the self-hosted MkDocs site (see PLAN.md / deploy/README.md).
-# Kept, not deleted, because this workflow is upstream's — and left on manual
-# dispatch so an accidental docs/ push cannot republish the stale Jekyll site.
-# The gh-pages branch exists but Pages does not publish it (verified: the URL
-# 404s), so there is nothing to turn off in the repository settings.
+# A manual, public build of the MkDocs site. The production digest remains on
+# its self-hosted deployment path; this preview is useful when that private
+# deployment host is unavailable from the workstation.
 on:
   workflow_dispatch:
 
@@ -20,11 +18,15 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v6
 
+      - name: Build the MkDocs site
+        run: |
+          python -m pip install --upgrade pip
+          pip install mkdocs-material
+          mkdocs build --strict
+
       - name: Deploy to GitHub Pages
         uses: peaceiris/actions-gh-pages@v4
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: ./docs
-          keep_files: true
+          publish_dir: ./site
           publish_branch: gh-pages
-          enable_jekyll: true
