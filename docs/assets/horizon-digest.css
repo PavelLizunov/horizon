@@ -1156,3 +1156,57 @@ a.hz-tag:hover {
    Пусто (§13):
      div.hz-empty > .hz-i.hz-i--none + div.hz-empty__head + div.hz-empty__body
    =========================================================================== */
+
+/* ===========================================================================
+   §15  СПЕЦИФИЧНОСТЬ: СПИСКИ-КОМПОНЕНТЫ ПРОТИВ MATERIAL          [дополнение]
+
+   Не из макета — найдено на живой странице, когда генератор наконец начал
+   отдавать разметку части B.
+
+   Material задаёт `.md-typeset ol:not([hidden]), .md-typeset ul:not([hidden])
+   { display: flow-root }` плюс маркеры и отступ. Это 0,2,1 против 0,1,0 у
+   `.hz-tags` и `.hz-list`, поэтому §11 и §13 проигрывали каскад целиком:
+   теги вставали столбцом с disc-точками, список выпуска — тоже.
+
+   Правило переобъявлено с префиксом темы вместо правки §11/§13, чтобы
+   следующая версия файла от дизайнера накладывалась без конфликтов.
+   =========================================================================== */
+
+.md-typeset .hz-tags,
+.md-typeset .hz-list,
+.md-typeset .hz-archive,
+.md-typeset .hz-search-results {
+  list-style: none;
+  padding-left: 0;
+}
+
+.md-typeset .hz-tags > li,
+.md-typeset .hz-list > li,
+.md-typeset .hz-archive > li,
+.md-typeset .hz-search-results > li {
+  list-style: none;
+}
+
+/* Отступ приходит отдельным правилом темы — `[dir="ltr"] .md-typeset ul`,
+   0,2,1, а `[dir="ltr"] .md-typeset ul li` уже 0,2,2. Префикс `[dir]` даёт
+   0,3,x и выигрывает у обоих направлений, не завися от порядка файлов. */
+[dir] .md-typeset ul.hz-tags,
+[dir] .md-typeset ul.hz-list,
+[dir] .md-typeset ul.hz-archive,
+[dir] .md-typeset ul.hz-search-results {
+  margin-left: 0;
+}
+
+/* `display: flex` из §11 проигрывало тому же `ul:not([hidden])`: пилюли
+   вставали в столбец во всю ширину колонки вместо переносимого ряда. */
+[dir] .md-typeset ul.hz-tags {
+  display: flex;
+  flex-wrap: wrap;
+}
+
+[dir] .md-typeset ul.hz-tags > li,
+[dir] .md-typeset ul.hz-list > li,
+[dir] .md-typeset ul.hz-archive > li,
+[dir] .md-typeset ul.hz-search-results > li {
+  margin-left: 0;
+}

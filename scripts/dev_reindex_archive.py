@@ -64,10 +64,21 @@ def _paragraphs(text: str) -> str:
     return re.sub(r"\n{3,}", "\n\n", "\n".join(kept)).strip()
 
 
-def _split_blocks(segment: str) -> tuple[str, list[tuple[str, str]]]:
-    """Lead paragraphs plus (block title, block text) pairs of one item."""
+def _split_blocks(segment: str) -> tuple[str, list[tuple[str, str]], list[str]]:
+    """Lead paragraphs, (block title, block text) pairs, and tags of one item.
+
+    Tags used to be dropped here along with the rest of the chrome. They are
+    real model output, though, and republishing is the only way they reach the
+    site for a frozen issue — so the archive rendered no tags at all while the
+    stylesheet carried a tag component nothing ever used.
+    """
     body = "\n".join(segment.lstrip("\n").split("\n")[1:])
     body = _DETAILS_RE.sub(" ", body)
+    tags = [
+        html.unescape(tag).replace("\\", "").lstrip("#")
+        for match in _TAGS_RE.finditer(body)
+        for tag in re.findall(r"`([^`]+)`", match.group(0))
+    ]
     body = _TAGS_RE.sub(" ", body)
     parts = _BLOCK_TITLE_RE.split(body)
     lead = _paragraphs(parts[0])
@@ -75,7 +86,7 @@ def _split_blocks(segment: str) -> tuple[str, list[tuple[str, str]]]:
         (html.unescape(parts[i]), _paragraphs(parts[i + 1]))
         for i in range(1, len(parts) - 1, 2)
     ]
-    return lead, blocks
+    return lead, blocks, tags
 
 
 def parse_summary(
@@ -91,7 +102,7 @@ def parse_summary(
         heading = _HEADING_RE.match(segment.lstrip("\n"))
         if not heading:
             continue  # unparseable item: skip loudly? no — the archive is frozen, skip
-        lead, blocks = _split_blocks(segment)
+        lead, blocks, tags = _split_blocks(segment)
         slug = anchor.removeprefix("item-")
         documents.append(
             {
@@ -100,6 +111,7 @@ def parse_summary(
                 "content": _plain(segment),
                 "lead": lead,
                 "blocks": blocks,
+                "tags": tags,
                 "url": heading.group("url"),
                 "page": f"{page_base}/{date}-{language}/{slug}/",
                 "date": date,

@@ -54,6 +54,11 @@ def render_page(doc: dict) -> ArticlePage:
         if text:
             lines += ["", f"## {title}", "", text]
     labels = LABELS.get(doc["language"], LABELS["en"])
+    if doc.get("tags"):
+        # Emitted in the renderer's own shape so article_site_markup turns it
+        # into ul.hz-tags, the same path a live run takes.
+        tags = ", ".join(f"`#{tag}`" for tag in doc["tags"])
+        lines += ["", f"**{labels['tags']}**: {tags}"]
     return ArticlePage(
         slug=slug,
         title=doc["title"],
