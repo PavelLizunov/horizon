@@ -79,6 +79,47 @@ _SHORTHAND: Sequence[Tuple[str, str]] = (
     ("др.", "другие"),
 )
 
+# Acronyms, said letter by letter in Russian letter names. A run of capitals is
+# not a word, and each voice invents its own way through one — a listener put it
+# as "it read the abbreviations very oddly". Whole English words are left alone:
+# the model reads those well, and transliterating them was tried and rejected.
+#
+# Not applied next to a digit, so "MI300X" and "GPT-4o" stay whole; those are
+# product names rather than initials.
+_ACRONYM_RE = re.compile(r"(?<![A-Za-z0-9])[A-Z]{2,6}(?![A-Za-z0-9])")
+
+# The ones people say as a word instead of spelling out. Measured from the
+# archive rather than imagined: these are the caps runs that actually appear.
+_SAID_AS_WORDS = {
+    "JSON": "джейсон",
+    "YAML": "ямл",
+    "KEDA": "кеда",
+    "QEMU": "кему",
+    "CUDA": "куда",
+    "REST": "рест",
+    "SAAS": "саас",
+}
+
+_LETTER_NAMES = {
+    "A": "эй", "B": "би", "C": "си", "D": "ди", "E": "и", "F": "эф",
+    "G": "джи", "H": "эйч", "I": "ай", "J": "джей", "K": "кей", "L": "эл",
+    "M": "эм", "N": "эн", "O": "оу", "P": "пи", "Q": "кью", "R": "ар",
+    "S": "эс", "T": "ти", "U": "ю", "V": "ви", "W": "дабл-ю", "X": "икс",
+    "Y": "уай", "Z": "зед",
+}
+
+
+def _spell_acronyms(text: str) -> str:
+    def replace(match: re.Match) -> str:
+        word = match.group(0)
+        said = _SAID_AS_WORDS.get(word)
+        if said:
+            return said
+        return "-".join(_LETTER_NAMES.get(letter, letter) for letter in word)
+
+    return _ACRONYM_RE.sub(replace, text)
+
+
 # Number + unit, where the unit has to agree with the number.
 _UNITS = {
     "млрд": ("миллиард", "миллиарда", "миллиардов"),
@@ -241,6 +282,7 @@ def speakable(text: str) -> str:
     # Dates first: they contain a bare year that the plain-number pass would
     # otherwise read as a cardinal ("две тысячи двадцать шесть года").
     text = _expand_dates(text)
+    text = _spell_acronyms(text)
     text = _expand_currency(text)
     text = _expand_units(text)
     text = _expand_decimals(text)

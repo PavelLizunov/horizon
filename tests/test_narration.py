@@ -92,6 +92,29 @@ def test_a_section_heading_never_reaches_the_model():
     assert "#Т" in speakable("тег #Тема тут")
 
 
+def test_acronyms_are_spelled_out_in_russian_letter_names():
+    """A run of capitals is not a word, and each voice invented its own way
+    through one — "it read the abbreviations very oddly"."""
+    assert speakable("целые GPU и CLI") == "целые джи-пи-ю и си-эл-ай"
+    assert speakable("в GA перешёл") == "в джи-эй перешёл"
+
+
+def test_acronyms_people_say_as_words_are_left_as_words():
+    assert speakable("протокол MCP и JSON") == "протокол эм-си-пи и джейсон"
+    assert speakable("KEDA масштабирует") == "кеда масштабирует"
+
+
+def test_english_words_are_not_touched():
+    """Transliterating them was tried and rejected: the model reads real words
+    well, and "консумабл капакити" is not an improvement on hearing them."""
+    assert speakable("Kubernetes и Docker") == "Kubernetes и Docker"
+
+
+def test_a_product_name_with_digits_is_not_taken_for_initials():
+    assert "MI300X" in speakable("на MI300X через AWS")
+    assert "эй-дабл-ю-эс" in speakable("на MI300X через AWS")
+
+
 def test_a_number_that_ends_a_sentence_is_still_spoken():
     """The lookahead blocked on any following period, so a number at the end of
     a sentence was never expanded — and digits are what the model reads with
@@ -104,7 +127,9 @@ def test_a_number_that_ends_a_sentence_is_still_spoken():
 
 def test_versions_and_decimals_are_spoken():
     assert speakable("Kubernetes v1.34+") == "Kubernetes v один точка тридцать четыре+"
-    assert speakable("GPT-5.6 Sol") == "GPT-пять точка шесть Sol"
+    # "GPT" is spelled out by the acronym rule; a version number beside an
+    # acronym is the common shape and both halves have to be right.
+    assert speakable("GPT-5.6 Sol") == "джи-пи-ти-пять точка шесть Sol"
     assert speakable("версия 2.0 вышла") == "версия два точка ноль вышла"
 
 
@@ -112,7 +137,7 @@ def test_punctuation_after_a_version_does_not_block_it():
     """"до v1.36," stayed as digits because a comma followed. A separator only
     continues a number when a digit comes after it."""
     assert speakable("gate до v1.36, дальше") == "gate до v один точка тридцать шесть, дальше"
-    assert speakable("GPT-5.6.") == "GPT-пять точка шесть."
+    assert speakable("GPT-5.6.") == "джи-пи-ти-пять точка шесть."
     # Three parts is a version string, not a decimal; left whole on purpose.
     assert speakable("версия 1.2.3 вышла") == "версия 1.2.3 вышла"
 
