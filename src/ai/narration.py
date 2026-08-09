@@ -450,11 +450,44 @@ def attach_player(markdown: str, url: str, seconds: float) -> str:
 #
 # The floor matters as much as the ceiling: two-word inputs were where the model
 # ran away most often, producing eleven seconds of noise from nine characters.
-MAX_CHUNK_CHARS = 700
+#
+# The ceiling came down from 700 on a listener's judgement, and the measurement
+# I had disagreed with them. Shorter pieces score *worse* on spread of speaking
+# rate — x3.36 against x2.06 — but that is not what a listener hears. What they
+# hear is whether it is the same person throughout, and shorter pieces are
+# steadier there: the random state is reset for every piece, so a short one has
+# less room to drift from the character it started with.
+#
+# 400 is the floor of what is safe, not a preference. Swept over the whole
+# archive: at 400 no piece falls under the floor; at 300 eleven do; at 200 the
+# smallest piece is three characters, which is the runaway case exactly.
+MAX_CHUNK_CHARS = 400
 MIN_CHUNK_CHARS = 120
 
 
 _SENTENCE_SPLIT_RE = re.compile(r"(?<=[.!?…])\s+")
+
+
+def _pack(sentences: List[str], limit: float) -> List[str]:
+    """Whole sentences into pieces of at most `limit` characters.
+
+    A sentence longer than the limit goes out on its own and over-long: a cut
+    anywhere but a sentence boundary is audible, and the ceiling is the softer
+    of the two constraints. A sentence that would leave the piece under the
+    floor is taken anyway — a piece below the floor is the worse failure.
+    """
+    pieces: List[str] = []
+    for sentence in sentences:
+        if not pieces:
+            pieces.append(sentence)
+            continue
+        joined = f"{pieces[-1]} {sentence}"
+        room = len(joined) <= limit or len(pieces[-1]) < MIN_CHUNK_CHARS
+        if room and len(joined) <= MAX_CHUNK_CHARS:
+            pieces[-1] = joined
+        else:
+            pieces.append(sentence)
+    return pieces
 
 
 def chunks(text: str) -> List[str]:
@@ -491,23 +524,24 @@ def chunks(text: str) -> List[str]:
     if not sentences:
         return []
 
+    # Packed twice. The first pass fills to the ceiling and so answers "how few
+    # pieces can this be"; the second spreads the same text evenly over exactly
+    # that many. Deriving the share from the text length alone does not work:
+    # a piece closes on a sentence boundary and so lands under its share every
+    # time, the shortfall accumulates, and the last piece is left with whatever
+    # is over — one article came out …, 399, 286, 122 against a ceiling of 400.
     total = len(" ".join(sentences))
-    wanted = max(1, -(-total // MAX_CHUNK_CHARS))  # ceil, without importing math
-    target = total / wanted
-
-    pieces: List[str] = []
-    for sentence in sentences:
-        if not pieces:
-            pieces.append(sentence)
-            continue
-        joined = f"{pieces[-1]} {sentence}"
-        # Start a new piece once this one has had its share, or when adding the
-        # sentence would break the ceiling. A sentence longer than the ceiling
-        # on its own goes out over-long: cutting mid-sentence is worse.
-        if len(pieces[-1]) >= target or len(joined) > MAX_CHUNK_CHARS:
-            pieces.append(sentence)
-        else:
-            pieces[-1] = joined
+    pieces = _pack(sentences, MAX_CHUNK_CHARS)
+    # Repeat until the count settles: a smaller share can need one more piece
+    # than the count it was derived from, and then the share is wrong again.
+    # Three passes is enough on everything in the archive; the guard is against
+    # a text that oscillates rather than a text that needs more.
+    for _ in range(3):
+        spread = _pack(sentences, total / len(pieces))
+        if len(spread) == len(pieces):
+            pieces = spread
+            break
+        pieces = spread
 
     # Even division leaves no stranded tail in the ordinary case, but the
     # remainder still lands in the last piece and can fall under the floor.

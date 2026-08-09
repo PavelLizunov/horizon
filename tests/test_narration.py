@@ -205,7 +205,7 @@ def test_the_documented_bounds_are_the_actual_bounds():
     """The literals, not the constants. Every other test here compares against
     MAX_CHUNK_CHARS, so widening the constant would keep them all green while
     silently undoing what the measurements bought."""
-    assert (MIN_CHUNK_CHARS, MAX_CHUNK_CHARS) == (120, 700)
+    assert (MIN_CHUNK_CHARS, MAX_CHUNK_CHARS) == (120, 400)
 
 
 def test_the_ceiling_holds_on_the_shape_that_broke_it():
@@ -249,7 +249,7 @@ def test_crlf_text_still_splits():
 def test_text_that_fits_is_not_split_at_all():
     """Under the ceiling there is nothing to gain by splitting, and every join
     between pieces is a place the voice can change character."""
-    text = _sentences(6, "первый") + "\n\n" + _sentences(6, "второй")
+    text = _sentences(4, "первый") + "\n\n" + _sentences(4, "второй")
     assert len(text) < MAX_CHUNK_CHARS
 
     pieces = chunks(text)
