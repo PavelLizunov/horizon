@@ -42,6 +42,7 @@ extra_css:
 
 extra_javascript:
   - assets/horizon-search-redirect.js
+  - assets/horizon-player.js
 
 plugins:
   - search:
