@@ -100,6 +100,27 @@ The cap in #843 is real and present in the installed library
 on the `use_icl` branch — the voice-cloning path, which this pipeline does not use.
 It would bite immediately if narration ever moved to a cloned voice.
 
+## Other models, and why this one stayed
+
+The intonation wanders and the reading speeds up toward the end. Both are what
+an autoregressive sampler does, they are [QwenLM #239](https://github.com/QwenLM/Qwen3-TTS/issues/239),
+and no setting on our side removes them. So the alternatives were tried. All of
+them were rejected by ear, on the same article, and the reasons are recorded
+here so the same ground is not covered twice.
+
+| Tried | Outcome |
+| --- | --- |
+| Qwen3-TTS bf16, unquantised | identical faults — so quantisation was never the cause |
+| Qwen3-TTS 25 Hz, which the technical report calls steadier on long text | **does not exist publicly** — no such model on HuggingFace, under any author |
+| Shorter chunks (350), lower temperature (0.35) | measured: neither improved the rate spread, and 0.35 made it worse |
+| Silero v5 | reads English badly. Its Russian model has no Latin graphemes at all and drops those words in silence; 13.5% of a digest is Latin. A transliteration layer was written and then reverted with it |
+| Chatterbox Multilingual | no voice of its own, needs a reference clip; failed the end check outright (0.00); wrong stress and an accent |
+| Marking stress in the text with ruaccent | Qwen has no stress of its own, so this looked promising. It is not: `+` marks are read aloud as the word "plus", and combining acutes garble the words into something unintelligible. The placer also errs on homographs by itself |
+
+What that leaves is a model with livelier intonation than any alternative
+tested, and two faults that belong to it rather than to this code. Bear them
+rather than trade them for worse.
+
 ## Settings that were established by listening
 
 | Setting | Value | Why |
