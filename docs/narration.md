@@ -1,0 +1,146 @@
+---
+layout: default
+title: Narration (Qwen3-TTS)
+---
+
+# Narration (Qwen3-TTS)
+
+Every published article gets a Russian voice track: the text is normalised, spoken
+locally on the Mac, checked by a *different* model, encoded to Opus, uploaded to
+object storage, and linked from the page.
+
+- **Text preparation**: `src/ai/narration.py` — pure, no models, no network
+- **Driver**: `scripts/dev_narrate_article.py` — runs on the Mac, in its own venv
+- **Player**: `docs/assets/horizon-player.js`, styles in `docs/assets/horizon-digest.css` §17
+- **Tests**: `tests/test_narration.py` (offline)
+
+## Pipeline
+
+```
+published page (docs/digest/<issue>/<slug>.md)
+  └─ narration_text()   strip refs and URLs, expand numbers and dates
+      └─ chunks()       120…700 characters, cut on sentence boundaries
+          └─ Qwen3-TTS  up to 3 attempts per chunk
+              └─ whisper-large-v3-turbo  transcribe and grade
+                  ├─ reached_the_end() ≥ 0.70  → keep
+                  └─ speech_ends_at()          → trim the hallucinated tail
+          └─ concat → Opus 24 kbit/s mono
+              └─ check the join: duration, coverage, ending, tail
+                  └─ R2, key <issue>/<slug>-<sha256[:10]>.opus
+                      └─ attach_player() under the byline
+```
+
+The finished file is checked again, because the pieces being individually sound
+says nothing about the join. Four checks, cheapest first:
+
+| Check | Catches |
+| --- | --- |
+| joined duration vs. sum of the pieces | a piece that never made it into the file — arithmetic, so it cannot be wrong |
+| `coverage() ≥ 0.75` | a chunk lost with its audio |
+| `reached_the_end() ≥ 0.70` | a file that stops before the article does |
+| tail after `speech_ends_at()` ≤ 3 s | noise left after the last words |
+
+## Why the checking model is a different model
+
+Generation fails silently. It stops mid-sentence and pads the rest with noise, and
+nothing about the returned audio says so — the file exists, the duration is
+plausible, the beginning sounds fine. Only reading it back catches it, and the
+generator cannot be the one to read it back: a model grading its own output prefers
+its own output.
+
+`whisper-large-v3-turbo` transcribes each chunk, and two measurements decide:
+
+**`reached_the_end()`** — do the last words of the source appear in the transcript?
+Only the tail words that occur *nowhere else* in the text count. Ordinary words
+("в", "этом", "тут") were being matched against text the model had read minutes
+earlier, which scored a reading that broke off halfway at 0.5, within reach of the
+0.70 threshold.
+
+Whole-text `coverage()` was tried first as the per-chunk gate and abandoned: a
+recogniser mishearing two words in eighty costs more than truncation does, and on
+complete takes the score topped out at 0.92 — it never separated good from broken.
+
+It still runs once over the finished file, where it is answering a different
+question: was a whole chunk lost in the join? That failure is worth twenty points
+on a five-chunk article, so the threshold is 0.75. An earlier version used 0.9 and
+flagged four sound files out of seven — the number was inside the noise floor of
+the measurement it was thresholding.
+
+**`speech_ends_at()`** — where does real speech stop? A hallucinated tail is a long
+segment holding almost no text, so segments are judged by characters per second
+(real speech runs about eleven; the cut-off is three). Anything past that point is
+trimmed off whether or not the take passed.
+
+## Chunk size is a correctness property
+
+120–700 characters, and both ends were paid for:
+
+- **Whole articles in one generation**: seven articles, one usable file. 86 % failure.
+- **Two-word inputs**: nine characters produced eleven seconds of noise. Hence the
+  floor, and hence headings are glued to their first sentence rather than spoken
+  alone.
+
+Sentences are packed into pieces of *even* length — `ceil(total / 700)` of them —
+rather than filled to the ceiling one after another. Greedy filling plus a pass that
+glued short leftovers on produced `[717, 773, 6]` on a real article: over the ceiling
+twice, and a six-character piece sent to the model on its own, which is the exact
+input the floor exists to prevent. Even division cannot produce either.
+
+Three upstream reports describe the same behaviour from the other side, which is
+the reason to treat the ceiling as a property rather than a preference:
+
+| Report | Symptom |
+| --- | --- |
+| [mlx-audio #464](https://github.com/Blaizzy/mlx-audio/issues/464) | speech drops out of the middle of long generations |
+| [QwenLM/Qwen3-TTS #239](https://github.com/QwenLM/Qwen3-TTS/issues/239) | speaking rate drifts over text longer than ~100 characters |
+| [omlx #843](https://github.com/jundot/omlx/issues/843) | the token budget is silently capped |
+
+The cap in #843 is real and present in the installed library
+(`mlx_audio/tts/models/qwen3_tts/qwen3_tts.py`, `per_seq_max_tokens`), but it sits
+on the `use_icl` branch — the voice-cloning path, which this pipeline does not use.
+It would bite immediately if narration ever moved to a cloned voice.
+
+## Settings that were established by listening
+
+| Setting | Value | Why |
+| --- | --- | --- |
+| `lang_code` | `"russian"` | The word, not `"ru"`. An ISO code is accepted and ignored, and the model then reads Cyrillic with Chinese phonetics. |
+| Numbers | written out | Digits and words were compared on the same sentences; the written-out take is the one that sounds like a person. |
+| Sampling | identical across retries | Varying `repetition_penalty` between attempts made the voice change character mid-article. |
+| Bitrate | 24 kbit/s Opus | 16 was audibly worse on speech; 24 was not. |
+
+## Things that bit, and what now stops them
+
+| What happened | What prevents a repeat |
+| --- | --- |
+| Cleanup glob `{name}*.wav` deleted the kept best take | separate namespaces: `-gen*` for output, `-best` for what is kept |
+| `immutable` cache headers on a reusable filename served stale audio | the object key carries a sha256 of the audio |
+| Caddy sent `Host: …r2.dev:443`; R2 truncated the body at 20480 bytes, silently | `header_up Host` is a bare hostname; see `deploy/search/README.md` |
+| Re-narrating stacked a second player onto the page | `attach_player()` removes the old one, and is tested for stability |
+| A page with no byline silently gained no player | `attach_player()` raises instead of returning unchanged |
+
+## Running it
+
+Two invocations, and they use **different interpreters** — this is the step that
+wastes an afternoon if you get it wrong. Preparing the text needs the project's
+dependencies; synthesising needs the Apple-Silicon-only ones, which are deliberately
+not project dependencies.
+
+```bash
+ssh mm4 'zsh -lc "cd ~/horizon && .venv/bin/python scripts/dev_narrate_article.py --issue 2026-08-07-ru --write-all /tmp/narration"'
+```
+
+```bash
+ssh mm4 'zsh -lc "cd ~/horizon && ~/tts/.venv/bin/python scripts/dev_narrate_article.py --speak-dir /tmp/narration --voice Serena --attach"'
+```
+
+`uv` is not on the PATH of a non-interactive ssh session on that box (it lives in
+`~/bin`), so call the venv's python directly. `PATH` also needs `/opt/homebrew/bin`,
+which the script prepends itself — `mlx_whisper` shells out to a bare `ffmpeg`.
+
+An article whose verdict is not `ok` is **not uploaded and not linked**, and the run
+exits non-zero. The audio stays in `~/tts/out/` so you can listen to what the check
+objected to.
+
+Credentials (`R2_*`, `NARRATION_PUBLIC_BASE`) live in `.env` on the Mac, written by
+`scripts/setup_r2.py`, never in the repository — this repository is public.

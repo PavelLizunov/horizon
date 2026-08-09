@@ -88,6 +88,7 @@ exclude_docs: |
   scoring.md
   extractors.md
   twitter-cookies.md
+  narration.md
 
 # Digest pages are generated per run and gitignored; they must not be listed
 # individually in the nav, and MkDocs would otherwise warn about each one.
