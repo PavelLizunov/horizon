@@ -208,7 +208,38 @@ def _upload(audio: Path, issue: str, slug: str) -> str:
         str(audio), os.environ["R2_BUCKET"], key,
         ExtraArgs={"ContentType": "audio/ogg"},
     )
-    return f"{os.environ['NARRATION_PUBLIC_BASE'].rstrip('/')}/{key}"
+    url = f"{os.environ['NARRATION_PUBLIC_BASE'].rstrip('/')}/{key}"
+    _wait_until_whole(url, audio.stat().st_size)
+    return url
+
+
+def _wait_until_whole(url: str, expected: int, attempts: int = 5) -> None:
+    """Fetch the published URL until it returns the whole file.
+
+    The first request for a new object comes back truncated — reproducibly, at
+    exactly 20480 bytes, with a 200 and a Content-Length that says the full
+    size. The second request is complete. The bucket holds the whole object
+    throughout, so this is r2.dev cutting a cold read short, and r2.dev is a
+    development endpoint that Cloudflare rate-limits by design.
+
+    Wearing that first request here means the listener does not. Without it,
+    every newly published narration is broken for whoever opens it first — and
+    the pages tell browsers the audio is immutable for a year, so a truncated
+    copy in their cache is not something a reload repairs.
+    """
+    for attempt in range(1, attempts + 1):
+        got = subprocess.run(
+            ["curl", "-s", "-o", "/dev/null", "-w", "%{size_download}",
+             "--max-time", "60", url],
+            capture_output=True, text=True,
+        ).stdout.strip()
+        if got.isdigit() and int(got) == expected:
+            return
+        print(f"    published copy is {got} of {expected} bytes, refetching "
+              f"{attempt}/{attempts}", file=sys.stderr)
+        time.sleep(2)
+    print(f"    WARNING: {url} still does not serve {expected} bytes",
+          file=sys.stderr)
 
 
 def _attach(issue: str, slug: str, url: str, seconds: float) -> None:
