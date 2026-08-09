@@ -175,12 +175,19 @@ class StorageManager:
             _atomic_write_text(filepath, _site_front_matter(page.title) + page.markdown)
             written.append(filepath)
 
-        self._write_site_index()
+        self.write_site_index()
         return issue_dir
 
     @staticmethod
-    def _write_site_index(limit: int = 60) -> None:
+    def write_site_index(limit: int = 60) -> None:
         """Regenerate the archive listing; `nav` in mkdocs.yml never sees these.
+
+        Public because publishing calls it too. `docs/digest/index.md` is a
+        generated file that is also tracked — it has to exist for a fresh
+        clone to build — so any git operation on a machine that holds real
+        issues restores the "no issues yet" placeholder over it, and the
+        live archive goes empty until the next pipeline run. Rebuilding the
+        site therefore has to regenerate it first; see deploy/README.md.
 
         Rows carry the date and how many articles the issue holds. They used to
         be the raw directory name — `2026-08-07-ru`, language suffix and all —

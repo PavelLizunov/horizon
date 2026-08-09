@@ -107,9 +107,18 @@ uv tool install mkdocs --with mkdocs-material
 Then, after each pipeline run:
 
 ```bash
-cd ~/horizon && mkdocs build
+cd ~/horizon && .venv/bin/python -c 'from src.storage.manager import StorageManager; StorageManager.write_site_index()' && mkdocs build
 cd site && tar czf - . | ssh USER@HOST 'rm -rf /srv/DOMAIN/* && tar xzf - -C /srv/DOMAIN'
 ```
+
+**Regenerate the index first — this is not optional.** `docs/digest/index.md` is
+generated from whatever issues are on disk, but it is also tracked, because a
+fresh clone needs it to exist for the build to resolve `nav`. So it carries a
+"no issues yet" placeholder, and any git operation on this machine — a pull, a
+checkout, a stash — restores that placeholder over the real listing. The
+symptom is an archive page that says there are no issues while five sit in
+`docs/digest/`, and nothing else looks wrong. It stays that way until the next
+pipeline run, because publishing is the only other thing that regenerates it.
 
 `tar` over ssh rather than `rsync`: a minimal ingress container often has no
 rsync, and installing packages on the edge proxy to copy static files is a poor

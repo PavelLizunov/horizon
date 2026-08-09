@@ -62,6 +62,19 @@ SECONDS_PER_CHAR = 1 / 11.5  # measured on this voice reading this digest
 MIN_TAIL = 0.7
 ATTEMPTS = 3
 
+# Trimming the tail is for babble, and babble is long — the ones that started
+# this ran 20 to 72 seconds. Cutting at 1.5s of quiet was cutting real endings
+# off instead: a transcriber's last timestamp is not exact, and on one article
+# it landed at 189.6s in a file 188.2s long, which took the final word ("нет")
+# with it. So trim only a tail long enough to be babble, and keep a full second
+# past where the words are thought to stop.
+BABBLE_SECONDS = 4.0
+KEEP_AFTER_SPEECH = 1.0
+
+# Silence deliberately left at the end, so the reading has somewhere to land
+# instead of stopping against the edge of the file.
+PAD_SECONDS = 2.0
+
 # "Consistent" preset from the model's generation-parameter documentation, and
 # identical for every chunk including retries. Varying it per chunk is what
 # made an earlier attempt wander between a whisper and a shout.
@@ -224,8 +237,11 @@ def _speak_chunk(text: str, out: Path, name: str, voice: str, model, checker) ->
 
         take = out / f"{name}-take.wav"
         take.unlink(missing_ok=True)
-        if speech_end > 0 and _duration(raw) - speech_end > 1.5:
-            _ffmpeg("-i", str(raw), "-t", f"{speech_end + 0.4:.2f}", "-c", "copy", str(take))
+        if speech_end > 0 and _duration(raw) - speech_end > BABBLE_SECONDS:
+            _ffmpeg(
+                "-i", str(raw), "-t", f"{speech_end + KEEP_AFTER_SPEECH:.2f}",
+                "-c", "copy", str(take),
+            )
         else:
             raw.replace(take)
         raw.unlink(missing_ok=True)
@@ -284,7 +300,8 @@ def _speak(text: str, issue: str, slug: str, args, model, checker) -> int:
     seconds = _duration(joined)
     target = out / f"{prefix}.opus"
     _ffmpeg(
-        "-i", str(joined), "-ac", "1", "-ar", "24000", "-c:a", "libopus",
+        "-i", str(joined), "-af", f"apad=pad_dur={PAD_SECONDS}",
+        "-ac", "1", "-ar", "24000", "-c:a", "libopus",
         "-b:a", args.bitrate, "-application", "audio", "-vbr", "on",
         "-compression_level", "10", str(target),
     )
@@ -298,6 +315,8 @@ def _speak(text: str, issue: str, slug: str, args, model, checker) -> int:
 
     score = coverage(text, whole["text"])
     ending = reached_the_end(text, whole["text"])
+    # Measured against the audio before padding, so the silence we added on
+    # purpose is not counted as trailing babble.
     tail = max(0.0, seconds - whole["speech_end"])
     lost = expected - seconds
 
