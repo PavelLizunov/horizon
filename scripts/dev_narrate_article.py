@@ -453,7 +453,7 @@ def _speak_many(directory: Path, args) -> int:
         return 1
 
     print(f"loading {MODEL.split('/')[-1]} and {CHECKER.split('/')[-1]} …", flush=True)
-    model = load_model(model_path=MODEL)
+    model = load_model(model_path=getattr(args, 'model', None) or MODEL)
 
     failures = []
     started = time.time()
@@ -498,6 +498,7 @@ def main() -> int:
     # Seeding made runs reproducible, which also means an article that fails its
     # check fails identically every time it is run again. This is the way out.
     parser.add_argument("--seed", type=int, help=f"random seed (default {SEED})")
+    parser.add_argument("--model", default=MODEL, help="model repo id, for comparing takes")
     args = parser.parse_args()
 
     if args.seed is not None:
