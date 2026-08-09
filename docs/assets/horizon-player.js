@@ -248,11 +248,23 @@
     }
   }
 
-  if (document.readyState === "loading") {
+  // navigation.instant swaps the page body over XHR and never re-runs this
+  // file, so binding to DOMContentLoaded alone enhances the first page visited
+  // and nothing after it — the reader gets the browser's default controls until
+  // they reload by hand. Material publishes `document$` for exactly this; it
+  // emits on the first load and on every instant navigation.
+  //
+  // An earlier version listened for "DOMContentSwitch", which is not an event
+  // Material fires, or anything else does. It looked like the instant-navigation
+  // case was handled and it did nothing at all.
+  //
+  // `typeof` rather than a truthiness check: `document$` is an undeclared
+  // global when instant navigation is off, and touching it directly throws.
+  if (typeof document$ !== "undefined" && document$ && document$.subscribe) {
+    document$.subscribe(enhance);
+  } else if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", enhance);
   } else {
     enhance();
   }
-  // navigation.instant swaps the document without reloading scripts.
-  document.addEventListener("DOMContentSwitch", enhance);
 })();
