@@ -62,6 +62,10 @@ SECONDS_PER_CHAR = 1 / 11.5  # measured on this voice reading this digest
 MIN_TAIL = 0.7
 ATTEMPTS = 3
 
+# Reset before each chunk, so every chunk of an article is sampled from the same
+# starting state. Any fixed value does; 42 is what the long-form guides use.
+SEED = 42
+
 # Trimming the tail is for babble, and babble is long — the ones that started
 # this ran 20 to 72 seconds. Cutting at 1.5s of quiet was cutting real endings
 # off instead: a transcriber's last timestamp is not exact, and on one article
@@ -103,6 +107,66 @@ def _ffmpeg(*arguments: str) -> None:
 def _duration(path: Path) -> float:
     with wave.open(str(path)) as handle:
         return handle.getnframes() / handle.getframerate()
+
+
+# Where each piece is levelled to before the pieces are joined. Measured on a
+# finished article, loudness wandered over 5.2 dB — -22.1 to -27.3 LUFS — and
+# the steps landed on the joins, which is what "the voice changes partway
+# through" turned out to mean. -20 LUFS is quiet enough to leave headroom for a
+# voice that is already peaking around -5 dBFS.
+TARGET_LUFS = -20.0
+PEAK_CEILING = -3.0
+
+
+def _loudness(path: Path) -> tuple[float, float] | None:
+    """Integrated loudness (LUFS) and peak (dBFS), or None if unmeasurable."""
+    output = subprocess.run(
+        ["ffmpeg", "-hide_banner", "-nostats", "-i", str(path),
+         "-af", "ebur128=peak=true", "-f", "null", "-"],
+        capture_output=True, text=True,
+    ).stderr
+    loudness = peak = None
+    for line in reversed(output.splitlines()):
+        if loudness is None and "I:" in line and "LUFS" in line:
+            try:
+                loudness = float(line.split("I:")[1].split("LUFS")[0])
+            except ValueError:
+                return None
+        if peak is None and "Peak:" in line and "dBFS" in line:
+            try:
+                peak = float(line.split("Peak:")[1].split("dBFS")[0])
+            except ValueError:
+                peak = 0.0
+        if loudness is not None and peak is not None:
+            return loudness, peak
+    return None
+
+
+def _level(path: Path) -> None:
+    """Level one piece to TARGET_LUFS, in place.
+
+    A measured constant gain rather than ffmpeg's dynamic normalisation: the
+    problem is that pieces differ from each other, not that any one of them
+    breathes, and a compressor that rides the level inside a piece would flatten
+    the delivery to fix something that is not wrong.
+    """
+    measured = _loudness(path)
+    if measured is None:
+        return
+    loudness, peak = measured
+    if loudness < -70:  # silence measures as -inf
+        return
+
+    # Never past the peak ceiling. Levelling to loudness alone pushed peaks to
+    # -1.1 dBFS, and Opus reconstructs above the sample peaks it was given, so
+    # the result clips on decode — which is heard as the voice turning robotic
+    # rather than as loudness.
+    gain = min(TARGET_LUFS - loudness, PEAK_CEILING - peak)
+    if abs(gain) < 0.1:
+        return
+    levelled = path.with_suffix(".levelled.wav")
+    _ffmpeg("-i", str(path), "-af", f"volume={gain:.2f}dB", str(levelled))
+    levelled.replace(path)
 
 
 def _upload(audio: Path, issue: str, slug: str) -> str:
@@ -196,6 +260,7 @@ def _speak_chunk(text: str, out: Path, name: str, voice: str, model, checker) ->
     mid-sentence and pads with noise, and nothing about the returned audio says
     so. Only reading it back does.
     """
+    import mlx.core as mx
     from mlx_audio.tts.generate import generate_audio
     import mlx_whisper
 
@@ -212,6 +277,14 @@ def _speak_chunk(text: str, out: Path, name: str, voice: str, model, checker) ->
         # existed.
         for stale in out.glob(f"{name}-gen*.wav"):
             stale.unlink()
+        # Reset the random state before every chunk. Identical sampling settings
+        # were not enough on their own: each chunk still started from wherever
+        # the previous one left the generator, and the delivery changed partway
+        # through an article because of it. Seeding each chunk the same way is
+        # what the long-form guides do, and it makes a run reproducible as well.
+        # The attempt number is added so a retry is a genuinely different take
+        # rather than a rerun of the one that just failed.
+        mx.random.seed(SEED + attempt)
         generate_audio(
             text=text, model=model, voice=voice, lang_code=LANGUAGE,
             max_tokens=budget, output_path=str(out), file_prefix=f"{name}-gen",
@@ -269,7 +342,7 @@ def _speak_chunk(text: str, out: Path, name: str, voice: str, model, checker) ->
 def _speak(text: str, issue: str, slug: str, args, model, checker) -> int:
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
-    prefix = f"{issue}-{slug}"
+    prefix = f"{issue}-{slug}{getattr(args, 'suffix', '') or ''}"
     for stale in out.glob(f"{prefix}*"):
         stale.unlink()
 
@@ -287,6 +360,12 @@ def _speak(text: str, issue: str, slug: str, args, model, checker) -> int:
             return 1
         parts.append(rendered)
     synth = time.time() - started
+
+    # Level the pieces to each other before joining them, not the finished file
+    # afterwards: by then the steps are inside one recording and only a dynamic
+    # process could chase them.
+    for part in parts:
+        _level(part)
 
     listing = out / f"{prefix}.txt"
     listing.write_text("".join(f"file '{p.name}'\n" for p in parts), encoding="utf-8")
@@ -408,7 +487,20 @@ def main() -> int:
     parser.add_argument("--write-all", help="write every article of the issue here")
     parser.add_argument("--speak-dir", help="synthesise every prepared text here")
     parser.add_argument("--attach", action="store_true", help="upload and link it")
+    # Both defaults live in the constants above; these exist because the two of
+    # them are what you reach for when the delivery wanders, and comparing takes
+    # means changing one without editing the file between runs.
+    parser.add_argument("--max-chars", type=int, help="chunk ceiling, for comparing takes")
+    parser.add_argument("--temperature", type=float, help="sampling temperature")
+    parser.add_argument("--suffix", default="", help="tag the output, to keep takes apart")
     args = parser.parse_args()
+
+    if args.temperature is not None:
+        STEADY["temperature"] = args.temperature
+    if args.max_chars:
+        import src.ai.narration as narration
+
+        narration.MAX_CHUNK_CHARS = args.max_chars
 
     if args.speak_dir:
         return _speak_many(Path(args.speak_dir), args)

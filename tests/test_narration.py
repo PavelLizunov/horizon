@@ -92,6 +92,57 @@ def test_a_section_heading_never_reaches_the_model():
     assert "#Т" in speakable("тег #Тема тут")
 
 
+def test_a_number_that_ends_a_sentence_is_still_spoken():
+    """The lookahead blocked on any following period, so a number at the end of
+    a sentence was never expanded — and digits are what the model reads with
+    Chinese phonetics. Only a period with a digit after it is a decimal point."""
+    assert speakable("Prometheus-порт 31995.") == (
+        "Prometheus-порт тридцать одна тысяча девятьсот девяносто пять."
+    )
+    assert speakable("их было 5, потом больше") == "их было пять, потом больше"
+
+
+def test_versions_and_decimals_are_spoken():
+    assert speakable("Kubernetes v1.34+") == "Kubernetes v один точка тридцать четыре+"
+    assert speakable("GPT-5.6 Sol") == "GPT-пять точка шесть Sol"
+    assert speakable("версия 2.0 вышла") == "версия два точка ноль вышла"
+
+
+def test_punctuation_after_a_version_does_not_block_it():
+    """"до v1.36," stayed as digits because a comma followed. A separator only
+    continues a number when a digit comes after it."""
+    assert speakable("gate до v1.36, дальше") == "gate до v один точка тридцать шесть, дальше"
+    assert speakable("GPT-5.6.") == "GPT-пять точка шесть."
+    # Three parts is a version string, not a decimal; left whole on purpose.
+    assert speakable("версия 1.2.3 вышла") == "версия 1.2.3 вышла"
+
+
+def test_a_version_marker_does_not_glue_itself_to_the_number():
+    """"v1.34" became "vодин точка…" — one word the model has to guess at."""
+    assert " один точка" in speakable("до v1.36")
+
+
+def test_dollars_are_read_as_a_word():
+    assert speakable("$5 в месяц") == "пять долларов в месяц"
+    assert speakable("цена $0,20 за токен") == "цена ноль точка двадцать доллара за токен"
+
+
+def test_a_scale_word_stays_with_the_money_it_scales():
+    """Taking "$567" alone stranded the scale: "пятьсот шестьдесят семь
+    долларов млн"."""
+    assert speakable("выплатить $567 млн за вред") == (
+        "выплатить пятьсот шестьдесят семь миллионов долларов за вред"
+    )
+
+
+def test_escaped_entities_never_reach_the_model():
+    """"admission-webhook&\\#x27;и" was read out entity and backslash and all —
+    the summariser escapes for HTML and then for markdown, and nothing undid
+    either on the way to speech."""
+    assert speakable("admission-webhook&\\#x27;и") == "admission-webhook'и"
+    assert speakable("Rock &amp; Roll") == "Rock & Roll"
+
+
 def test_a_hyphenated_identifier_is_left_alone():
     """All of it becomes words or none of it does. Expanding only the first part
     read "NMSA 1978 § 30-8-1" aloud as "§ тридцать-8-1"."""

@@ -26,6 +26,7 @@ wrong on real text.
 """
 
 import hashlib
+import html
 import re
 from typing import Iterable, List, Sequence, Tuple
 
@@ -95,7 +96,22 @@ _DATE_RE = re.compile(rf"(?<![\d])(\d{{1,2}})\s+({'|'.join(MONTHS)})\s+(\d{{4}})
 # "NMSA 1978 § 30-8-1" was read as "§ тридцать-8-1", because "30" matched and
 # "8" and "1" were then blocked by the lookbehind. Either every part is a word
 # or none is, and for an identifier none is right.
-_BARE_NUMBER_RE = re.compile(r"(?<![\w\d.,-])(\d{1,12})(?![\w\d.,-])")
+#
+# `[.,]\d` rather than a bare `[.,]`: blocking on any following period meant a
+# number that ended a sentence was never expanded at all. "Prometheus-порт
+# 31995." went to the model as digits, and digits are what it reads with
+# Chinese phonetics. Only a period with a digit after it is a decimal point.
+_BARE_NUMBER_RE = re.compile(r"(?<![\w\d.,-])(\d{1,12})(?![\w\d-]|[.,]\d)")
+
+# Versions and decimals: "v1.34", "GPT-5.6", "$0,20". A listener hears "один
+# точка тридцать четыре"; the model, left to itself, reads the digits in
+# another language entirely. Expanded before plain numbers, so the two halves
+# are not taken for separate cardinals.
+#
+# The lookahead has the same shape as the bare-number one, and for the same
+# reason: "до v1.36," was left as digits because a comma followed it. A comma
+# or period only continues a number when a digit comes after it.
+_DECIMAL_RE = re.compile(r"(?<![\d.,])(\d+)[.,](\d+)(?!\d|[.,]\d)")
 
 
 def _plural(count: int, one: str, few: str, many: str) -> str:
@@ -159,6 +175,47 @@ def _expand_dates(text: str) -> str:
     )
 
 
+def _expand_decimals(text: str) -> str:
+    def replace(match: re.Match) -> str:
+        # "v1.34" would otherwise come out "vодин точка тридцать четыре", one
+        # word the model has to guess at. A version marker is a word of its own
+        # once the number beside it is one.
+        start = match.start()
+        lead = " " if start and text[start - 1].isalpha() else ""
+        whole, part = int(match.group(1)), int(match.group(2))
+        return f"{lead}{spoken_number(whole)} точка {spoken_number(part)}"
+
+    return _DECIMAL_RE.sub(replace, text)
+
+
+# A currency sign is read, not skipped, and it sits before its number where the
+# unit rules expect one after. Left alone it glued itself to the expanded
+# number — "$ноль точка двадцать" — which is no better than the digits were.
+# The scale word is part of the match, not left for the unit rule: taking
+# "$567" on its own turned "$567 млн" into "пятьсот шестьдесят семь долларов
+# млн", with the scale stranded after the currency it was scaling.
+_DOLLARS_RE = re.compile(r"\$(\d+(?:[.,]\d+)?)(?:\s*(млрд|млн|тыс\.?))?")
+
+
+def _expand_currency(text: str) -> str:
+    def replace(match: re.Match) -> str:
+        amount, scale = match.group(1), match.group(2)
+        if "." in amount or "," in amount:
+            whole, part = re.split(r"[.,]", amount, maxsplit=1)
+            # A fractional amount takes the genitive singular whatever the
+            # digits say — "один точка двадцать доллара", never "доллар".
+            return (
+                f"{spoken_number(int(whole))} точка {spoken_number(int(part))} доллара"
+            )
+        count = int(amount)
+        if scale:
+            forms = _UNITS[scale] if scale in _UNITS else _UNITS[scale.rstrip(".")]
+            return f"{spoken_number(count)} {_plural(count, *forms)} долларов"
+        return f"{spoken_number(count)} {_plural(count, 'доллар', 'доллара', 'долларов')}"
+
+    return _DOLLARS_RE.sub(replace, text)
+
+
 def _expand_bare(text: str) -> str:
     return _BARE_NUMBER_RE.sub(lambda m: spoken_number(int(m.group(1))), text)
 
@@ -170,13 +227,23 @@ def speakable(text: str) -> str:
     text = _URL_RE.sub(" ", text)
     text = _REFERENCE_RE.sub("", text)
     text = _MARKDOWN_ESCAPE_RE.sub("", text)
+    # "admission-webhook&\#x27;\u0438" reached the model spelled out, entity and
+    # backslash and all. The summariser escapes for HTML and then for markdown,
+    # and neither pass is undone on the way to speech: the markdown rule above
+    # only strips a backslash before punctuation, and "#" is not punctuation to
+    # it. Both come off here, in that order, because the backslash is what stops
+    # the entity being recognised.
+    text = text.replace("\\#", "#")
+    text = html.unescape(text)
     text = text.replace("\u00a0", " ")
     for written, spoken in _SHORTHAND:
         text = text.replace(written, spoken)
     # Dates first: they contain a bare year that the plain-number pass would
     # otherwise read as a cardinal ("две тысячи двадцать шесть года").
     text = _expand_dates(text)
+    text = _expand_currency(text)
     text = _expand_units(text)
+    text = _expand_decimals(text)
     text = _expand_bare(text)
     text = _WHITESPACE_RE.sub(" ", text)
     text = _SPACE_BEFORE_PUNCTUATION_RE.sub(r"\1", text)
