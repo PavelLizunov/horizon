@@ -317,7 +317,13 @@ def _speak(text: str, issue: str, slug: str, args, model, checker) -> int:
     ending = reached_the_end(text, whole["text"])
     # Measured against the audio before padding, so the silence we added on
     # purpose is not counted as trailing babble.
-    tail = max(0.0, seconds - whole["speech_end"])
+    #
+    # None, not zero, when the transcriber puts the end of speech past the end
+    # of the file — it does, by up to ten seconds on short pieces. Clamping that
+    # to zero reads as "no trailing noise", which is a measurement that did not
+    # happen dressed up as a clean result. I misread exactly that and concluded
+    # six articles were clipped when they were not.
+    tail = None if whole["speech_end"] > seconds else seconds - whole["speech_end"]
     lost = expected - seconds
 
     verdict = "ok"
@@ -334,12 +340,13 @@ def _speak(text: str, issue: str, slug: str, args, model, checker) -> int:
         verdict = "TEXT MISSING"
     elif ending < 0.7:
         verdict = "ENDING MISSING"
-    elif tail > 3:
+    elif tail is not None and tail > 3:
         verdict = f"{tail:.0f}s TAIL"
     print(
         f"  {len(pieces)} chunks, {seconds / 60:.1f} min, {synth:.0f}s wall, "
-        f"{target.stat().st_size / 1024:.0f} KB, "
-        f"coverage {score:.2f}, ending {ending:.2f}  {verdict}",
+        f"{target.stat().st_size / 1024:.0f} KB, coverage {score:.2f}, "
+        f"ending {ending:.2f}, tail {'n/a' if tail is None else f'{tail:.0f}s'}"
+        f"  {verdict}",
         flush=True,
     )
     # A failed check must not reach the site. An earlier version printed the
