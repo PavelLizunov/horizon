@@ -478,6 +478,8 @@ def _speak_many(directory: Path, args) -> int:
 
 
 def main() -> int:
+    global SEED
+
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--issue", default="2026-08-07-ru")
     parser.add_argument("--slug", default="tech-news-1")
@@ -493,8 +495,13 @@ def main() -> int:
     parser.add_argument("--max-chars", type=int, help="chunk ceiling, for comparing takes")
     parser.add_argument("--temperature", type=float, help="sampling temperature")
     parser.add_argument("--suffix", default="", help="tag the output, to keep takes apart")
+    # Seeding made runs reproducible, which also means an article that fails its
+    # check fails identically every time it is run again. This is the way out.
+    parser.add_argument("--seed", type=int, help=f"random seed (default {SEED})")
     args = parser.parse_args()
 
+    if args.seed is not None:
+        SEED = args.seed
     if args.temperature is not None:
         STEADY["temperature"] = args.temperature
     if args.max_chars:
