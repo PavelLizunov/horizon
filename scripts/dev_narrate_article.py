@@ -34,7 +34,10 @@ faster, so playback rate belongs in the player.
 """
 
 import argparse
+import asyncio
+import json
 import os
+import re
 import subprocess
 import sys
 import time
@@ -132,6 +135,136 @@ INSTRUCT = (
 
 SITE_DIGEST_DIR = REPO / "docs" / "digest"
 ENV_PATH = REPO / ".env"
+
+PRONUNCIATION_SYSTEM = """You audit Russian technical prose for TeraTTS.
+Tera already reads ordinary English words acceptably. This is NOT a general
+transliteration task. Return at most 40 high-risk entries, limited to:
+1. proper names or stylised brands with a non-obvious conventional reading;
+2. abbreviations, identifiers and code-like tokens with punctuation or casing;
+3. multiword product names or UI commands that must be pronounced together.
+Exclude ordinary dictionary words such as runtime, webhook, feature, gate,
+beta, production, medium and high unless they are part of an exact multiword
+name or command. Prefer the complete phrase over separate words: `think harder`,
+`Help Center`, `Dynamic Resource Allocation`. Return Russian phonetics, never a
+translation: Center is `Сентер`, not `Центр`. Use the exact spelling from the
+input in `written`, and Cyrillic only in `spoken`. Return no reasons or prose,
+only this compact JSON:
+{"entries":[{"written":"...","spoken":"..."}]}.
+An empty entries list is valid. Never include an entry already written in
+Cyrillic in the input."""
+
+
+def _parse_pronunciation_review(response: str, source: str) -> list[dict[str, str]]:
+    """Validate cheap-model suggestions before they can reach speech."""
+    from src.ai.utils import parse_json_response
+
+    parsed = parse_json_response(response)
+    if not isinstance(parsed, dict) or not isinstance(parsed.get("entries"), list):
+        raise ValueError("pronunciation model did not return an entries array")
+    rows = parsed["entries"]
+
+    accepted: list[dict[str, str]] = []
+    seen: set[str] = set()
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        written = str(row.get("written", "")).strip()
+        spoken = str(row.get("spoken", "")).strip()
+        key = written.casefold()
+        if (
+            not written
+            or not spoken
+            or key in seen
+            or len(written) > 100
+            or len(spoken) > 160
+            or not re.search(r"[A-Za-z]", written)
+            or not re.search(r"[А-Яа-яЁё]", spoken)
+            or re.search(r"[A-Za-z<>{}\n\r]", spoken)
+            or re.search(r"[<>{}\n\r]", written)
+            or not re.search(
+                rf"(?<![A-Za-z0-9]){re.escape(written)}(?![A-Za-z0-9])",
+                source,
+                re.IGNORECASE,
+            )
+        ):
+            continue
+        seen.add(key)
+        accepted.append({"written": written, "spoken": spoken})
+        if len(accepted) == 40:
+            break
+    return accepted
+
+
+async def _review_pronunciations(texts: dict[str, str], client) -> list[dict[str, str]]:
+    """One cheap, full-context request for one issue."""
+    from src.ai.narration import pronunciation_candidates, tera_text
+
+    reviewed = {name: tera_text(text) for name, text in texts.items()}
+    candidates: Counter[str] = Counter()
+    for text in texts.values():
+        candidates.update(pronunciation_candidates(text))
+    payload = {
+        "candidate_tokens": [
+            {"written": word, "count": count}
+            for word, count in candidates.most_common()
+        ],
+        "articles": reviewed,
+    }
+    response = await client.complete(
+        PRONUNCIATION_SYSTEM,
+        json.dumps(payload, ensure_ascii=False),
+        temperature=0.0,
+        max_tokens=4096,
+    )
+    return _parse_pronunciation_review(response, "\n".join(reviewed.values()))
+
+
+def _prepare_pronunciations(issue: str, texts: dict[str, str]) -> None:
+    """Record cheap-model suggestions; only reviewed static entries speak."""
+    try:
+        from dotenv import load_dotenv
+
+        from src.ai.client import create_ai_client
+        from src.storage.manager import StorageManager
+
+        load_dotenv(ENV_PATH)
+        config = StorageManager(data_dir=str(REPO / "data")).load_config()
+        model = (config.ai.pronunciation_model or "").strip()
+        if not model:
+            print("pronunciation review: skipped (ai.pronunciation_model is unset)")
+            return
+        if model == config.ai.model:
+            print(
+                "pronunciation review: refused to use the primary model; "
+                "configure a separate cheap model",
+                file=sys.stderr,
+            )
+            return
+
+        ai_config = config.ai.model_copy(
+            update={
+                "model": model,
+                "temperature": 0.0,
+                "max_tokens": 4096,
+                "enable_thinking": False,
+            }
+        )
+        entries = asyncio.run(
+            _review_pronunciations(texts, create_ai_client(ai_config))
+        )
+        result = {"issue": issue, "model": model, "entries": entries}
+        report = REPO / "data" / "pronunciation-reviews" / f"{issue}.json"
+        report.parent.mkdir(parents=True, exist_ok=True)
+        report.write_text(
+            json.dumps(result, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+        )
+        print(f"pronunciation review: {len(entries)} readings from {model} -> {report}")
+    except Exception as error:  # narration must survive a review/API failure
+        print(
+            f"pronunciation review: FAILED {type(error).__name__}: {error}; "
+            "using the measured static lexicon",
+            file=sys.stderr,
+        )
 
 
 
@@ -700,6 +833,7 @@ def main() -> int:
     target = Path(args.write_all or ".")
     target.mkdir(parents=True, exist_ok=True)
     total = 0
+    prepared: dict[str, str] = {}
     candidates: Counter[str] = Counter()
     for document in documents:
         slug = document["id"].removeprefix(f"{date}-{language}-")
@@ -709,6 +843,7 @@ def main() -> int:
             document["title"], document["lead"], document["blocks"], date=date
         )
         total += len(text)
+        prepared[slug] = text
         candidates.update(pronunciation_candidates(text))
         (target / f"{args.issue}__{slug}.txt").write_text(text, encoding="utf-8")
         print(
@@ -726,6 +861,7 @@ def main() -> int:
         ]
         report.write_text("\n".join(rows) + "\n", encoding="utf-8")
         print(f"pronunciation candidates: {len(candidates)} -> {report}")
+        _prepare_pronunciations(args.issue, prepared)
     print(f"\n~{total * SECONDS_PER_CHAR / 60:.0f} min of speech to synthesise")
     return 0
 

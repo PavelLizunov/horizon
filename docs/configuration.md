@@ -107,6 +107,29 @@ rules, and block tool permissions.
 
 Configure which AI model analyzes and enriches your content.
 
+Narration may optionally use a separate cheap model to inspect the complete
+Russian issue for Latin names and technical phrases that TeraTTS is likely to
+mispronounce:
+
+```json
+{
+  "ai": {
+    "model": "qwen3.8-max",
+    "pronunciation_model": "deepseek-v4-flash-0731"
+  }
+}
+```
+
+`pronunciation_model` is used only during narration text preparation. Leave it
+unset or `null` to keep the static pronunciation lexicon. It must name a model
+different from `model`; Horizon refuses to fall back to the primary model for
+this optional pass. Both names use the configured provider and endpoint, so the
+secondary model must be available through the same gateway. The pronunciation
+request disables hybrid-model thinking so a small classification task does not
+spend its response budget on hidden reasoning. `enable_thinking` can also be
+set explicitly for ordinary OpenAI-compatible requests; `null` keeps the
+provider default.
+
 `api_key_env` is always an environment variable name, not the API key value.
 Store secrets in `.env` or your shell environment, then point `api_key_env` at
 that variable:

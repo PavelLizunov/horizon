@@ -9,6 +9,21 @@ recoverable by reading the code.
 
 ## Unreleased
 
+### Pronunciation review uses a separate cheap model
+
+Issue preparation can now send the complete narration text and its remaining
+Latin-token candidates to an explicitly configured `ai.pronunciation_model`.
+Validated Cyrillic suggestions are recorded per issue but never handed directly
+to TeraTTS: only a manually reviewed static entry can change speech. The pass
+never inherits the primary model, refuses to run when both
+model names match, and degrades to the measured static lexicon on malformed
+output or an API failure. Production uses DeepSeek V4 Flash for this small
+classification task instead of the main digest model. The first full-context
+pass covered 33 current articles (75,414 characters) in four requests: 28,047
+input and 3,557 output tokens. It produced 160 candidates; manual review kept
+the uncertain tail out of speech and expanded the static lexicon from 42 to 161
+entries, covering 503 occurrences in the current archive.
+
 ### Narration recovers from a poisoned media cache
 
 The public R2 development endpoint has returned a 200 response whose body

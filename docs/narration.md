@@ -62,25 +62,24 @@ better than a blanket transliteration. Immediately before Tera synthesis,
 as words, and separates Latin bases from Russian suffixes. The Qwen fallback
 still receives the original spelling.
 
-The lexicon came from all 86 archived articles through 10 August 2026: 188,206
-characters of narration contained 1,212 unique Latin tokens. Of those, 160 were
-mixed-script words (`OpenAI-совместимый`, `Kubernetes-подов`) and 47 were
-letter/number identifiers (`MI300X`, `ARM64`, `30B-модель`). The Tera pass removes
-every mixed-script token and handles 308 observed lexicon occurrences. Examples:
+The current archive through 10 August 2026 contains 33 articles and 75,414
+characters of narration. The reviewed lexicon has 161 entries and handles 503
+observed occurrences. Another 213 unique Latin tokens (366 occurrences) remain
+deliberately unchanged: they are mostly ordinary English, or names whose reading
+was not trustworthy enough to guess. Examples from the current archive:
 
 | Written | Given to Tera | Archive occurrences |
 | --- | --- | ---: |
-| OpenAI | Оупен Эй-Ай | 78 |
-| Claude / Claude Code | Клод / Клод Код | 50 |
-| GitHub | Гитхаб | 25 |
-| Muse / Muse Glimmer | Мьюз / Мьюз Глиммер | 21 |
-| Codex | Кодекс | 19 |
-| Hugging Face | Хаггинг Фэйс | 18 |
-| Shieldstral | Шилдстрал | 11 |
-| MI300X | эм-ай триста икс | 10 |
-| NVIDIA | энвидиа | 10 |
-| Qwen | Квэн | 8 |
-| ChatGPT / HackerOne / PostgreSQL | Чат-джи-пи-ти / Хакер Уан / Постгрес-кью-эл | 7 each |
+| OpenAI | Оупен Эй-Ай | 30 |
+| GitHub | Гитхаб | 17 |
+| Meta | Мета | 15 |
+| Claude / Claude Code | Клод / Клод Код | 13 |
+| Apple | Эпл | 11 |
+| Sol | Сол | 10 |
+| WeatherNext / OpenJDK / DeepSeek / Kubernetes | Уэзер Некст / Оупен джей-ди-кей / Дипсик / Кубернетес | 9 each |
+| Oracle | Оракл | 8 |
+| Databricks / PostgreSQL / HackerOne / Codex | Датабрикс / Постгрес-кью-эл / Хакер Уан / Кодекс | 7 each |
+| Anthropic / Luna / ChatGPT | Антропик / Луна / Чат-джи-пи-ти | 6 each |
 
 This is deliberately not an English-to-Russian transliterator. A direct A/B
 check with the deployed `ru_f1` voice showed that adjacent `<en>` spans destroy
@@ -92,8 +91,26 @@ Every full issue preparation also rewrites
 `data/pronunciation-candidates/<issue>.tsv`. It counts the Latin tokens that
 still reach Tera after the current lexicon, so new names have one reviewable
 backlog instead of being rediscovered by scanning the archive. The reports are
-runtime state and are gitignored; after confirming a bad reading, add its
-spelling to `_TERA_PRONUNCIATIONS` and regenerate that issue.
+runtime state and are gitignored.
+
+When `ai.pronunciation_model` names a separate cheap model, preparation also
+sends that model the complete prepared text of the issue plus the candidate
+counts. It asks for only names, brands, commands, abbreviations and uncommon
+phrases that a Russian voice is likely to omit or distort. The response is
+accepted only when the written phrase occurs in that issue, contains Latin,
+and the proposed reading is Cyrillic without markup. Accepted readings are
+stored in `data/pronunciation-reviews/<issue>.json` for review. Suggestions do
+not reach Tera automatically: the cheap model can translate instead of
+transcribing or confidently guess an unfamiliar brand. Only a manually reviewed
+reading is promoted to the static Tera lexicon; Qwen remains unaffected.
+
+The model is opt-in and never inherits `ai.model`: unset means skip, and naming
+the primary model is refused. A malformed response or API failure is visible in
+the narration log but falls back to the measured static lexicon, so a cheap
+review cannot delay the readable site or remove audio. The production gateway
+uses `deepseek-v4-flash-0731` with thinking disabled for this pass. Promote a
+reviewed reading into `_TERA_PRONUNCIATIONS`; the per-issue JSON is the
+review trail, not an unbounded source of global truth.
 
 The original audit also found two English sections in the now-retired 4 August
 legacy issue. That was an upstream content-language problem, not a pronunciation

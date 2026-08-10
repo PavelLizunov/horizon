@@ -87,6 +87,7 @@ A minimal configuration:
   "ai": {
     "provider": "openai",
     "model": "gpt-4",
+    "pronunciation_model": null,
     "api_key_env": "OPENAI_API_KEY"
   },
   "sources": {

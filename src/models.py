@@ -195,6 +195,12 @@ class AIConfig(BaseModel):
     provider: AIProvider
     provider_chain: Optional[str] = None
     model: str
+    # Optional cheap model used only to find pronunciation hazards before TTS.
+    # Unset means no LLM pronunciation pass; it must never inherit `model`.
+    pronunciation_model: Optional[str] = None
+    # OpenAI-compatible hybrid models such as DeepSeek V4 accept this through
+    # extra_body. None preserves the provider's default mode.
+    enable_thinking: Optional[bool] = None
     base_url: Optional[str] = None
     api_key_env: str
     temperature: float = 0.3

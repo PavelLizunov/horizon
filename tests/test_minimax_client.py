@@ -207,6 +207,28 @@ class TestOpenAIClientComplete:
         call_kwargs = mock_create.call_args[1]
         assert call_kwargs.get("response_format") == {"type": "json_object"}
 
+    def test_hybrid_thinking_can_be_disabled_per_config(self, monkeypatch):
+        monkeypatch.setenv("ALI_API_KEY", "test-key")
+        client = OpenAIClient(_make_config(
+            provider=AIProvider.ALI,
+            model="deepseek-v4-flash-0731",
+            api_key_env="ALI_API_KEY",
+            enable_thinking=False,
+        ))
+        mock_response = MagicMock()
+        mock_response.choices = [MagicMock()]
+        mock_response.choices[0].message.content = '{"entries": []}'
+        mock_response.usage.prompt_tokens = 10
+        mock_response.usage.completion_tokens = 5
+
+        with patch.object(
+            client.client.chat.completions, "create", new_callable=AsyncMock
+        ) as mock_create:
+            mock_create.return_value = mock_response
+            asyncio.run(client.complete(system="test", user="hello"))
+
+        assert mock_create.call_args[1]["extra_body"] == {"enable_thinking": False}
+
 
 class TestTemperatureFallback:
     """Retry-without-temperature path for models that deprecated temperature.

@@ -53,6 +53,7 @@ data/mcp-secrets.json
 data/mcp-runs/
 data/x_cookies_*.json
 data/pronunciation-candidates/
+data/pronunciation-reviews/
 
 docs/_posts/*.md
 

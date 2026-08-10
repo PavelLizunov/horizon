@@ -156,10 +156,98 @@ def test_tera_separates_mixed_script_words_without_transliterating_the_long_tail
 
 def test_pronunciation_candidates_are_only_words_still_sent_as_latin():
     candidates = pronunciation_candidates(
-        "OpenAI и GitHub работают с Kubernetes-подами, DeepSeek и A3B."
+        "OpenAI и GitHub работают с Kubernetes-подами, Taalas, UnseenTool и A3B."
     )
 
-    assert candidates == {"Kubernetes": 1, "DeepSeek": 1}
+    assert candidates == {"Taalas": 1, "UnseenTool": 1}
+
+
+def test_the_sol_luna_article_reaches_tera_without_unhandled_english():
+    source = speakable(
+        "OpenAI улучшает GPT-5.6 Sol для ChatGPT и GPT-5.6 Luna; "
+        "есть think harder, Sol medium, high, reasoning и Help Center, как у Claude."
+    )
+    spoken = tera_text(source)
+
+    assert "Оупен Эй-Ай" in spoken
+    assert "джи-пи-ти-пять точка шесть Сол" in spoken
+    assert "Чат-джи-пи-ти" in spoken
+    assert "синк хардер" in spoken
+    assert "мидиум" in spoken and "хай" in spoken and "ризонинг" in spoken
+    assert "Хелп Сентер" in spoken and "Клод" in spoken
+    assert pronunciation_candidates(source) == {}
+
+
+def test_cheap_model_suggestions_do_not_bypass_the_reviewed_lexicon():
+    assert tera_text("Taalas") == "Taalas"
+
+
+def test_cheap_model_pronunciations_are_validated_against_the_issue():
+    from scripts.dev_narrate_article import _parse_pronunciation_review
+
+    response = """```json
+    {"entries":[
+      {"written":"Sol","spoken":"Сол","reason":"model name"},
+      {"written":"Sol","spoken":"Другое","reason":"duplicate"},
+      {"written":"missing","spoken":"Миссинг","reason":"not in source"},
+      {"written":"Luna","spoken":"Luna","reason":"still Latin"}
+    ]}
+    ```"""
+
+    assert _parse_pronunciation_review(response, "GPT Sol и Luna") == [
+        {"written": "Sol", "spoken": "Сол"}
+    ]
+
+    with pytest.raises(ValueError, match="entries array"):
+        _parse_pronunciation_review("not json", "Sol")
+
+
+def test_pronunciation_review_sends_full_context_to_the_cheap_client():
+    import asyncio
+
+    from scripts.dev_narrate_article import _review_pronunciations
+
+    class FakeClient:
+        async def complete(self, system, user, **kwargs):
+            self.request = (system, user, kwargs)
+            return '{"entries":[{"written":"Taalas","spoken":"Таалас","reason":"name"}]}'
+
+    client = FakeClient()
+    entries = asyncio.run(
+        _review_pronunciations(
+            {"tech-news-2": "OpenAI описывает Taalas для пользователей."},
+            client,
+        )
+    )
+
+    assert entries == [
+        {"written": "Taalas", "spoken": "Таалас"}
+    ]
+    _, user, kwargs = client.request
+    assert "tech-news-2" in user
+    assert "Taalas для пользователей" in user
+    assert kwargs == {"temperature": 0.0, "max_tokens": 4096}
+
+
+def test_pronunciation_review_refuses_the_primary_model(monkeypatch, capsys, tmp_path):
+    from types import SimpleNamespace
+
+    from scripts import dev_narrate_article as driver
+    from src.storage.manager import StorageManager
+
+    monkeypatch.setattr(driver, "REPO", tmp_path)
+    monkeypatch.setattr(
+        StorageManager,
+        "load_config",
+        lambda self: SimpleNamespace(
+            ai=SimpleNamespace(model="expensive", pronunciation_model="expensive")
+        ),
+    )
+
+    driver._prepare_pronunciations("2026-08-11-ru", {"a": "Luna"})
+
+    assert "refused to use the primary model" in capsys.readouterr().err
+    assert not (tmp_path / "data" / "pronunciation-reviews").exists()
 
 
 def test_tera_says_model_parameter_counts_as_words():

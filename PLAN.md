@@ -362,3 +362,16 @@ to `/srv/digest.ninitux.com`, archive republished as per-article pages
 (`scripts/dev_republish_archive.py`), a real-headlines Telegram test sent
 with links that open the live article pages. The next scheduled run (17:00
 MSK) publishes and links natively.
+
+---
+
+## Phase D — cheap pronunciation review
+
+### [ ] D1. Review current narration with DeepSeek Flash and re-narrate
+
+Run the remaining Latin-token backlog through an explicitly configured cheap
+model with thinking disabled. Keep the model output as a review report rather
+than applying it directly: the first measured run confidently translated
+`Help Center` instead of transcribing it. Promote only reviewed readings to the
+Tera-only lexicon, regenerate issues 7–10 August, and verify every public audio
+object before marking this shipped.
