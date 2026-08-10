@@ -125,7 +125,7 @@ def test_tera_gets_only_the_pronunciations_it_needs():
         "OpenAI и Claude Code работают через GitHub, Hugging Face, Codex и Qwen"
     )
     assert tera_text(source) == (
-        "Оупен Эй-Ай и Клод Код работают через Гитхаб, Хаггинг Фэйс, "
+        "Оупен Эй Ай и Клод Код работают через Гитхаб, Хаггинг Фэйс, "
         "Кодекс и Квэн"
     )
     # The general text path, including the Qwen fallback, still receives the
@@ -169,7 +169,7 @@ def test_the_sol_luna_article_reaches_tera_without_unhandled_english():
     )
     spoken = tera_text(source)
 
-    assert "Оупен Эй-Ай" in spoken
+    assert "Оупен Эй Ай" in spoken
     assert "джи-пи-ти-пять точка шесть Сол" in spoken
     assert "Чат-джи-пи-ти" in spoken
     assert "синк хардер" in spoken
