@@ -19,15 +19,18 @@ object storage, and linked from the page.
 The player uses one `<audio>` element for both its inline and sticky views.
 Every screen gets the same transport controls (−10 seconds, play/pause, +15
 seconds), a draggable progress range, elapsed/remaining time, and a native
-speed selector. On current phones it is presented as a compact button opening
-a native Popover menu; browsers without Popover support keep the system
-selector. The choice is remembered. Desktop alone adds volume; volume is
-deliberately not remembered, so an old zero setting cannot produce moving
-progress with no sound. Playback position is saved per article and resumes four
-seconds before the saved point. The sticky view appears only after playback has
-started and the inline player has scrolled above the viewport. On phones the
-inline card uses a tighter reader-first rhythm, while the sticky view omits
-duplicate time labels and enters with a short, reduced-motion-aware transition.
+speed selector. Browsers with the Popover API present it as a compact Horizon
+button and accessible menu; browsers without Popover support keep the system
+selector. The choice is remembered. Desktop alone adds volume: its speaker
+opens a slider through hover, focus, or click, and the whole button-to-slider
+area remains interactive while the pointer crosses it. Volume is deliberately
+not remembered, so an old zero setting cannot produce moving progress with no
+sound. Playback position is saved per article and resumes four seconds before
+the saved point. The sticky view appears only after playback has started and
+the inline player has scrolled above the viewport. On phones the inline card
+uses a tighter reader-first rhythm and the sticky view omits duplicate time
+labels; on desktop sticky is narrower, lighter, and less visually dominant.
+Both enter with a short, reduced-motion-aware transition.
 
 The source HTML still contains `<audio controls>`. JavaScript removes
 `controls` only after both custom views mount; a script error, disabled

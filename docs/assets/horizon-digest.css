@@ -1547,6 +1547,14 @@ audio.hz-narration:not([controls]) {
   display: none;
 }
 
+.hz-player__speed--popover .hz-player__speed-select {
+  display: none;
+}
+
+.hz-player__speed--popover .hz-player__speed-button {
+  display: inline-flex;
+}
+
 .hz-player__speed-menu[popover] {
   position: fixed;
   inset: auto;
@@ -1596,6 +1604,34 @@ audio.hz-narration:not([controls]) {
   position: relative;
 }
 
+/* Bridge the visual gap to the absolutely positioned slider. Without this,
+   moving the pointer upward briefly leaves the whole control and closes it. */
+.hz-player__volume::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: 100%;
+  width: 5.5rem;
+  height: 0.4rem;
+  transform: translateX(-50%);
+}
+
+.hz-player__volume::after {
+  content: "";
+  position: absolute;
+  z-index: 3;
+  left: 50%;
+  bottom: calc(100% + 0.1rem);
+  width: 0.4rem;
+  height: 0.4rem;
+  background: var(--hz-surface);
+  border-left: var(--hz-hairline) solid var(--hz-border-strong);
+  border-bottom: var(--hz-hairline) solid var(--hz-border-strong);
+  opacity: 0;
+  pointer-events: none;
+  transform: translateX(-50%) rotate(-45deg);
+}
+
 .hz-player__mute {
   min-width: 2rem;
   min-height: 2rem;
@@ -1606,7 +1642,7 @@ audio.hz-narration:not([controls]) {
   position: absolute;
   z-index: 2;
   left: 50%;
-  bottom: calc(100% + 0.35rem);
+  bottom: calc(100% + 0.3rem);
   width: 5.5rem;
   height: 1.8rem;
   margin: 0;
@@ -1620,14 +1656,22 @@ audio.hz-narration:not([controls]) {
   opacity: 0;
   pointer-events: none;
   transform: translateX(-50%);
+  transition: opacity 120ms ease;
   -webkit-appearance: none;
   appearance: none;
 }
 
 .hz-player__volume:hover input,
-.hz-player__volume:focus-within input {
+.hz-player__volume:focus-within input,
+.hz-player__volume--open input {
   opacity: 1;
   pointer-events: auto;
+}
+
+.hz-player__volume:hover::after,
+.hz-player__volume:focus-within::after,
+.hz-player__volume--open::after {
+  opacity: 1;
 }
 
 .hz-player__status {
@@ -1671,6 +1715,50 @@ audio.hz-narration:not([controls]) {
 
 .hz-player-is-sticky body {
   padding-bottom: calc(5.5rem + env(safe-area-inset-bottom));
+}
+
+@media screen and (min-width: 600px) {
+  .hz-player--sticky {
+    max-width: 60ch;
+    gap: var(--hz-space-1);
+    padding: 0.4rem 0.6rem;
+    border-radius: var(--hz-radius-sm);
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.12);
+  }
+
+  .hz-player--sticky .hz-player__seek {
+    height: 1.1rem;
+  }
+
+  .hz-player--sticky .hz-player__controls {
+    min-height: 2rem;
+  }
+
+  .hz-player--sticky .hz-player__transport {
+    gap: 0.3rem;
+  }
+
+  .hz-player--sticky .hz-player__play,
+  .hz-player--sticky .hz-player__skip {
+    min-width: 2rem;
+    min-height: 2rem;
+  }
+
+  .hz-player--sticky .hz-player__play {
+    color: var(--hz-text);
+    background: var(--hz-surface-2);
+    border-color: var(--hz-border-strong);
+  }
+
+  .hz-player--sticky .hz-player__play .hz-i {
+    font-size: 0.85rem;
+  }
+
+  .hz-player--sticky .hz-player__speed-select,
+  .hz-player--sticky .hz-player__speed-button {
+    min-height: 2rem;
+    padding-inline: var(--hz-space-2);
+  }
 }
 
 @media screen and (max-width: 599px) {
@@ -1718,14 +1806,6 @@ audio.hz-narration:not([controls]) {
     text-align-last: center;
     -webkit-appearance: none;
     appearance: none;
-  }
-
-  .hz-player__speed--popover .hz-player__speed-select {
-    display: none;
-  }
-
-  .hz-player__speed--popover .hz-player__speed-button {
-    display: inline-flex;
   }
 
   .hz-player--sticky {

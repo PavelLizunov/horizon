@@ -9,6 +9,16 @@ recoverable by reading the code.
 
 ## Unreleased
 
+### Final player controls no longer feel like form widgets
+
+Speed now uses the same accessible Horizon Popover on desktop and mobile,
+with the select kept only as an old-browser fallback. The desktop volume
+slider has one continuous hover target from speaker to track, also opens by
+focus or click, and closes outside without muting the audio as a side effect.
+The desktop sticky player is 12% narrower, about 16% shorter, carries a lighter
+shadow, and gives play/pause less visual weight. Audio state and layout
+architecture are unchanged.
+
 ### Mobile narration controls stay out of the article's way
 
 The mobile inline player is shorter and leaves less dead space before the

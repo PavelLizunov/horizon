@@ -123,6 +123,12 @@ def test_narration_player_uses_native_inputs_and_keeps_a_fallback():
     assert "mediaSession" in player
     assert 'typeof menu.showPopover === "function"' in player
     assert 'menu.popover = "auto"' in player
+    assert 'event.key === "Escape"' in player
+    assert 'event.key === "ArrowDown"' in player
+    assert 'menu.matches(":popover-open")' in player
+    assert '"hz-player__volume--open"' in player
+    assert ".hz-player__volume::before" in css
+    assert "@media screen and (min-width: 600px)" in css
     assert 'classList.toggle("hz-player--visible", visible)' in player
     assert "this.sticky.inert = !visible" in player
     assert "env(safe-area-inset-bottom)" in css

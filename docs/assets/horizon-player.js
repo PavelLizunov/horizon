@@ -191,6 +191,31 @@
       this.listen(menu, "toggle", function () {
         trigger.setAttribute("aria-expanded", menu.matches(":popover-open") ? "true" : "false");
       });
+      this.listen(menu, "keydown", function (event) {
+        if (event.key === "Escape") {
+          menu.hidePopover();
+          trigger.focus();
+          event.preventDefault();
+          return;
+        }
+        var current = options.indexOf(document.activeElement);
+        var next = event.key === "Home" ? 0 : event.key === "End" ? options.length - 1 : current;
+        if (event.key === "ArrowDown") next = (current + 1) % options.length;
+        if (event.key === "ArrowUp") next = current <= 0 ? options.length - 1 : current - 1;
+        if (next !== current) {
+          options[next].focus();
+          event.preventDefault();
+        }
+      });
+      this.listen(document, "pointerdown", function (event) {
+        if (
+          menu.matches(":popover-open") &&
+          !menu.contains(event.target) &&
+          event.target !== trigger
+        ) {
+          menu.hidePopover();
+        }
+      });
       group.appendChild(trigger);
       group.appendChild(menu);
     }
@@ -246,9 +271,31 @@
     slider.value = String(this.audio.volume);
     slider.setAttribute("aria-label", "Громкость");
 
+    mute.setAttribute("aria-expanded", "false");
+    function setOpen(open) {
+      group.classList.toggle("hz-player__volume--open", open);
+      mute.setAttribute("aria-expanded", open ? "true" : "false");
+      mute.setAttribute("aria-label", open ? "Закрыть громкость" : "Открыть громкость");
+    }
+
     this.listen(mute, "click", function () {
-      self.audio.muted = !self.audio.muted;
-      if (!self.audio.muted && self.audio.volume === 0) self.audio.volume = 1;
+      var open = group.classList.contains("hz-player__volume--open");
+      setOpen(!open);
+      if (open) mute.blur();
+    });
+    this.listen(group, "mouseleave", function () {
+      if (!group.contains(document.activeElement)) setOpen(false);
+    });
+    this.listen(group, "focusout", function () {
+      window.setTimeout(function () {
+        if (!group.contains(document.activeElement)) setOpen(false);
+      }, 0);
+    });
+    this.listen(document, "pointerdown", function (event) {
+      if (!group.contains(event.target)) {
+        setOpen(false);
+        if (group.contains(document.activeElement)) document.activeElement.blur();
+      }
     });
     this.listen(slider, "input", function () {
       self.audio.volume = parseFloat(slider.value);
@@ -259,8 +306,8 @@
       slider.value = String(shown);
       slider.style.setProperty("--hz-level", shown);
       glyph.className = "hz-i hz-i--" + (shown ? "volume" : "muted");
-      mute.setAttribute("aria-label", shown ? "Приглушить" : "Включить звук");
     });
+    setOpen(false);
     slider.style.setProperty("--hz-level", this.audio.volume);
     group.appendChild(mute);
     group.appendChild(slider);
