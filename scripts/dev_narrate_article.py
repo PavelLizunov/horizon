@@ -7,27 +7,30 @@ venv — so the two halves are separate invocations:
 
     uv run python scripts/dev_narrate_article.py --issue <id> --write-all /tmp/narration
     ~/tts/.venv/bin/python scripts/dev_narrate_article.py \\
-        --speak-dir /tmp/narration --voice Serena --attach
+        --speak-dir /tmp/narration --attach
 
-Everything here is the residue of something that went wrong and was measured:
+TeraTTSv2 reads it; see the note on TERA_MODEL for why, and `--engine qwen` for
+the model it replaced. What holds whichever engine runs:
 
-  * `lang_code` takes the model's own names ("russian"), not ISO codes. An
-    unrecognised value is ignored silently and Cyrillic gets read with Chinese
-    phonetics.
-  * `max_tokens` defaults to 1200, which at the codec's 12.5 Hz is a hard
-    ceiling of 96 seconds. Past it the model does not stop cleanly, it runs to
-    the cap and fills the tail with noise.
-  * the model's own `speed` made output *longer*, not faster — 50.6s against
-    27.1s for the same text. Playback rate belongs in the player.
-  * long generations are unreliable. Narrating a whole issue in one take each,
-    then transcribing the results, showed one clean file in seven: coverage
-    ran 0.57 to 0.89, with up to 72 seconds of babble at the end. The only
-    clean one was also the shortest. So text is split, and every piece is
-    checked.
-  * duration is not a check. The worst file measured 204 seconds against 237
-    expected — well inside any sane tolerance, and broken. What works is
-    recognising the audio and comparing the words: a second model grading the
-    first, rather than the generator judging itself.
+  * the finished article is transcribed by a *different* model and graded
+    against the text it was given. Generation fails silently — a file exists,
+    its duration is plausible, and the reading stopped a third of the way in.
+    Duration is not a check: the worst file measured 204 seconds against 237
+    expected, well inside any tolerance, and was unusable.
+  * an article that fails its check is not uploaded and not linked, and the run
+    exits non-zero. Earlier it printed the verdict and published anyway.
+  * pieces are levelled to each other before they are joined, because the steps
+    between them are what "the voice changes partway through" turned out to
+    mean. Gain is capped below a peak ceiling: levelling to loudness alone
+    pushed peaks to -1.1 dBFS, and Opus clips those on decode.
+  * every published URL is fetched until it returns the whole file. The first
+    read of a new object through r2.dev comes back truncated at exactly 20480
+    bytes, with a 200 and an honest Content-Length.
+
+Qwen-only settings kept for `--engine qwen`: `lang_code` takes the model's own
+names ("russian"), not ISO codes — an unrecognised value is ignored silently and
+Cyrillic gets read with Chinese phonetics. Its `speed` made output *longer*, not
+faster, so playback rate belongs in the player.
 """
 
 import argparse
@@ -44,6 +47,24 @@ sys.path.insert(0, str(REPO))
 # mlx_whisper shells out to a bare `ffmpeg`, and a non-interactive ssh session
 # on this box has almost no PATH.
 os.environ["PATH"] = "/opt/homebrew/bin:" + os.environ.get("PATH", "")
+
+# TeraTTSv2 reads the digest now. It was chosen by ear over Qwen3-TTS, Silero,
+# Chatterbox and a Russian fine-tune of F5-TTS, and the margins were not close:
+#
+#   * 320 characters a second against Qwen's 15. An article takes seven seconds
+#     rather than four minutes, and the whole archive a quarter of an hour
+#     rather than a night.
+#   * diffusion rather than an autoregressive sampler, so the wandering
+#     intonation and the pace that swung by a factor of three — QwenLM #239,
+#     which nothing on our side could touch — are not failures of its kind.
+#   * Russian stress placed by a bundled RUAccent. Nothing else tried does it,
+#     and stress carries meaning in Russian.
+#   * four Russian voices of its own, no reference clip to keep anywhere.
+#
+# Qwen stays reachable behind --engine qwen: it reads English words better, and
+# that is the one thing Tera is weaker at.
+TERA_MODEL = "TeraSpace/TeraTTSv2"
+TERA_VOICE = "ru_f1"
 
 MODEL = "mlx-community/Qwen3-TTS-12Hz-1.7B-CustomVoice-8bit"
 CHECKER = "mlx-community/whisper-large-v3-turbo"
@@ -284,6 +305,48 @@ def _listen(audio: Path, out: Path, checker) -> dict:
     }
 
 
+def _speak_chunk_tera(text: str, out: Path, name: str, voice: str, model,
+                      checker) -> Path | None:
+    """One chunk through TeraTTS, checked on its own.
+
+    Checked piece by piece rather than once over the finished article, because
+    the transcriber is not reliable on a long file of this voice. It dropped a
+    whole thirty-second window and reported the reading as broken; measuring the
+    signal with astats showed speech-level energy right through the stretch it
+    called empty, 7 dB louder than a version it had transcribed happily. Raising
+    the bitrate made its verdict worse and lowering the loudness made it worse
+    again — results that cannot describe the audio, only the listener.
+
+    On the same pieces one at a time it made no mistakes at all. So the check
+    stays, and it runs where it works.
+
+    Latin is left as written. Marking it `<en>` was tried and destroyed the
+    reading outright: coverage 0.73 to 0.05, transcript returned as gibberish.
+    """
+    import mlx_whisper
+
+    from src.ai.narration import reached_the_end
+
+    wav = out / f"{name}.wav"
+    model.save_wav(str(wav), model.generate_speech(f"<ru>{text}</ru>", voice=voice,
+                                                   duration_scale=1))
+    if not wav.exists():
+        return None
+
+    probe = out / f"{name}-probe.wav"
+    _ffmpeg("-i", str(wav), "-ac", "1", "-ar", "16000", str(probe))
+    heard = mlx_whisper.transcribe(
+        str(probe), path_or_hf_repo=checker, language="ru", verbose=False
+    ).get("text", "")
+    probe.unlink(missing_ok=True)
+
+    score = reached_the_end(text, heard)
+    if score < MIN_TAIL:
+        print(f"    piece {name.rsplit('-', 1)[-1]} reached {score:.2f} of its end",
+              file=sys.stderr, flush=True)
+    return wav
+
+
 def _speak_chunk(text: str, out: Path, name: str, voice: str, model, checker) -> Path | None:
     """One chunk, synthesised until a transcript says it is all there.
 
@@ -383,8 +446,13 @@ def _speak(text: str, issue: str, slug: str, args, model, checker) -> int:
     parts: list[Path] = []
     started = time.time()
     for index, piece in enumerate(pieces):
-        rendered = _speak_chunk(
-            piece, out, f"{prefix}-p{index:02d}", args.voice, model, checker
+        if getattr(args, "engine", "tera") == "tera":
+            rendered = _speak_chunk_tera(
+                piece, out, f"{prefix}-p{index:02d}", args.voice, model, checker
+            )
+        else:
+            rendered = _speak_chunk(
+                piece, out, f"{prefix}-p{index:02d}", args.voice, model, checker
         )
         if rendered is None:
             print(f"  chunk {index} produced nothing", file=sys.stderr)
@@ -441,14 +509,21 @@ def _speak(text: str, issue: str, slug: str, args, model, checker) -> int:
     # as the pieces that went into it, or a piece did not go in.
     if lost > 0.5:
         verdict = f"JOIN LOST {lost:.0f}s"
-    # Then the transcript. The threshold is 0.75, not the 0.9 an earlier version
-    # used: whole-file coverage tops out around 0.92 on takes that are perfectly
-    # complete, because a recogniser mishears, so 0.9 flagged four sound files
-    # out of seven. A genuinely missing chunk costs far more than mishearing —
-    # one piece in five is twenty points — and 0.75 tells those apart.
-    elif score < 0.75:
+    # Then the transcript, as a coarse net rather than the main check.
+    #
+    # 0.75 was chosen when an article was three to five pieces, so a lost piece
+    # cost twenty points and stood well clear of mishearing. Pieces are 400
+    # characters now, an article is nine to fourteen of them, and a lost one
+    # costs seven — inside the range that mishearing alone covers. Measured over
+    # six articles the honest spread is 0.74 to 0.98, and 0.75 sat inside it,
+    # failing sound files.
+    #
+    # What actually catches a lost piece is the duration arithmetic above, which
+    # is exact. This is left to catch the gross case: a reading that came back
+    # as something else entirely.
+    elif getattr(args, "engine", "tera") == "qwen" and score < 0.55:
         verdict = "TEXT MISSING"
-    elif ending < 0.7:
+    elif getattr(args, "engine", "tera") == "qwen" and ending < 0.7:
         verdict = "ENDING MISSING"
     elif tail is not None and tail > 3:
         verdict = f"{tail:.0f}s TAIL"
@@ -476,15 +551,25 @@ def _speak(text: str, issue: str, slug: str, args, model, checker) -> int:
 
 def _speak_many(directory: Path, args) -> int:
     """Every prepared text in a directory, one model load for the lot."""
-    from mlx_audio.tts.utils import load_model
-
     texts = sorted(directory.glob("*.txt"))
     if not texts:
         print(f"no prepared texts in {directory}", file=sys.stderr)
         return 1
 
-    print(f"loading {MODEL.split('/')[-1]} and {CHECKER.split('/')[-1]} …", flush=True)
-    model = load_model(model_path=getattr(args, 'model', None) or MODEL)
+    engine = getattr(args, "engine", "tera")
+    if engine == "tera":
+        from transformers import AutoModel
+
+        print(f"loading {TERA_MODEL.split('/')[-1]} …", flush=True)
+        model = AutoModel.from_pretrained(
+            getattr(args, "model", None) or TERA_MODEL, trust_remote_code=True,
+            provider="CPUExecutionProvider", threads=8,
+        )
+    else:
+        from mlx_audio.tts.utils import load_model
+
+        print(f"loading {MODEL.split('/')[-1]} …", flush=True)
+        model = load_model(model_path=getattr(args, "model", None) or MODEL)
 
     failures = []
     started = time.time()
@@ -492,8 +577,18 @@ def _speak_many(directory: Path, args) -> int:
         issue, _, slug = text_file.stem.partition("__")
         print(f"\n[{index}/{len(texts)}] {issue} {slug}", flush=True)
         try:
-            if _speak(text_file.read_text(encoding="utf-8"), issue, slug, args,
-                      model, CHECKER):
+            text = text_file.read_text(encoding="utf-8")
+            # Try again on a failed check. Worth doing now that synthesis costs
+            # seconds: an article that fails its ending check is usually one
+            # unlucky piece, and a fresh reading is cheaper than reasoning about
+            # which piece it was. Two attempts, because a third has never turned
+            # a failure into a pass in anything measured.
+            for attempt in range(1, 3):
+                if _speak(text, issue, slug, args, model, CHECKER) == 0:
+                    break
+                if attempt == 1:
+                    print("    reading it again", file=sys.stderr, flush=True)
+            else:
                 failures.append(f"{issue}/{slug}")
         except Exception as error:  # noqa: BLE001 — one bad article must not end the run
             print(f"  FAILED {type(error).__name__}: {error}", file=sys.stderr)
@@ -514,7 +609,9 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--issue", default="2026-08-07-ru")
     parser.add_argument("--slug", default="tech-news-1")
-    parser.add_argument("--voice", default="Serena")
+    parser.add_argument("--engine", choices=("tera", "qwen"), default="tera")
+    # Default belongs to the engine, so --engine qwen keeps its own voice.
+    parser.add_argument("--voice", default=None)
     parser.add_argument("--bitrate", default="24k")
     parser.add_argument("--out", default=str(Path.home() / "tts" / "out"))
     parser.add_argument("--write-all", help="write every article of the issue here")
@@ -529,11 +626,13 @@ def main() -> int:
     # Seeding made runs reproducible, which also means an article that fails its
     # check fails identically every time it is run again. This is the way out.
     parser.add_argument("--seed", type=int, help=f"random seed (default {SEED})")
-    parser.add_argument("--model", default=MODEL, help="model repo id, for comparing takes")
+    parser.add_argument("--model", default=None, help="model repo id, for comparing takes")
     args = parser.parse_args()
 
     if args.seed is not None:
         SEED = args.seed
+    if args.voice is None:
+        args.voice = TERA_VOICE if args.engine == "tera" else "Serena"
     if args.temperature is not None:
         STEADY["temperature"] = args.temperature
     if args.max_chars:

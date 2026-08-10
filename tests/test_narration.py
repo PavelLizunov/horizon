@@ -395,6 +395,26 @@ def test_coverage_is_recall_not_precision():
     assert coverage("раз два", "раз два три четыре пять") == 1.0
 
 
+def test_a_spelled_acronym_matches_the_letters_it_stands_for():
+    """The pipeline writes "джи-пи-ю" so the model says it correctly; a
+    recogniser hears that and writes "GPU" straight back. Counting the two as
+    different took a sound article from 0.84 to 0.73 and failed its gate."""
+    source = "целые джи-пи-ю через эм-си-пи"
+    assert coverage(source, "целые GPU через MCP") == 1.0
+    assert coverage(source, "целые джи-пи-ю через эм-си-пи") == 1.0
+    assert reached_the_end("язык ди-ар-эй тут", "язык DRA тут") == 1.0
+
+
+def test_a_letter_whose_name_has_a_hyphen_in_it():
+    """W is "дабл-ю". Splitting a spelled acronym on hyphens tore it in half and
+    raised KeyError('дабл') on the first article that used one."""
+    assert coverage("через эй-дабл-ю-эс", "через AWS") == 1.0
+
+
+def test_unspelling_does_not_hide_a_real_loss():
+    assert coverage("целые джи-пи-ю через эм-си-пи", "целые через") < 0.6
+
+
 def test_spelling_of_yo_does_not_cost_points():
     """Russian writes ё and е for the same sound and transcribers pick freely.
     "остаётся" came back as "остается" and cost real points — the measurement

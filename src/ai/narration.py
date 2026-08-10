@@ -324,6 +324,34 @@ def narration_text(
 _WORD_RE = re.compile(r"[\w-]+", re.UNICODE)
 
 
+_SPELLED_ACRONYM_RE = re.compile(
+    "(?:" + "|".join(sorted(set(_LETTER_NAMES.values()), key=len, reverse=True)) + ")"
+    "(?:-(?:" + "|".join(sorted(set(_LETTER_NAMES.values()), key=len, reverse=True)) + "))+"
+)
+_NAME_TO_LETTER = {name: letter.lower() for letter, name in _LETTER_NAMES.items()}
+_NAME_RE = re.compile(
+    "|".join(sorted(set(_LETTER_NAMES.values()), key=len, reverse=True))
+)
+
+
+def _unspell(text: str) -> str:
+    """Turn a spelled-out acronym back into its letters: "джи-пи-ю" -> "gpu".
+
+    Only for comparison. The pipeline writes acronyms out so they are said
+    correctly; a recogniser hears them and writes "GPU" straight back. Without
+    this the two never match and the score falls for a reading that was right —
+    which is exactly what happened when acronym spelling was introduced, and it
+    took the coverage of a sound article from 0.84 to 0.73.
+    """
+    # Matched by name rather than split on hyphens: "дабл-ю" is one letter and
+    # contains one, so splitting tore it in half and raised KeyError('дабл') on
+    # the first article with a W in an acronym.
+    return _SPELLED_ACRONYM_RE.sub(
+        lambda m: "".join(_NAME_TO_LETTER[name] for name in _NAME_RE.findall(m.group(0))),
+        text,
+    )
+
+
 def _words(text: str) -> List[str]:
     """The words of a passage, as something worth comparing.
 
@@ -332,7 +360,7 @@ def _words(text: str) -> List[str]:
     points, which is the measurement being wrong about the audio rather than the
     audio being wrong.
     """
-    return _WORD_RE.findall(text.lower().replace("ё", "е"))
+    return _WORD_RE.findall(_unspell(text.lower().replace("ё", "е")))
 
 
 def coverage(source: str, heard: str) -> float:
