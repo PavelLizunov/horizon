@@ -39,6 +39,7 @@ import subprocess
 import sys
 import time
 import wave
+from collections import Counter
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[1]
@@ -688,7 +689,7 @@ def main() -> int:
     # Imported here, not at module scope: the archive parser drags in the
     # project's dependencies, and synthesis runs from a venv without them.
     from scripts.dev_reindex_archive import SUMMARIES_DIR, parse_summary
-    from src.ai.narration import chunks, narration_text
+    from src.ai.narration import chunks, narration_text, pronunciation_candidates
 
     date, _, language = args.issue.rpartition("-")
     summary = SUMMARIES_DIR / f"horizon-{date}-{language}.md"
@@ -700,6 +701,7 @@ def main() -> int:
     target = Path(args.write_all or ".")
     target.mkdir(parents=True, exist_ok=True)
     total = 0
+    candidates: Counter[str] = Counter()
     for document in documents:
         slug = document["id"].removeprefix(f"{date}-{language}-")
         if not args.write_all and slug != args.slug:
@@ -708,11 +710,23 @@ def main() -> int:
             document["title"], document["lead"], document["blocks"], date=date
         )
         total += len(text)
+        candidates.update(pronunciation_candidates(text))
         (target / f"{args.issue}__{slug}.txt").write_text(text, encoding="utf-8")
         print(
             f"{args.issue}__{slug}.txt  {len(text):>5} chars  "
             f"{len(chunks(text))} chunks  ~{len(text) * SECONDS_PER_CHAR / 60:.1f} min"
         )
+    if args.write_all:
+        report = REPO / "data" / "pronunciation-candidates" / f"{args.issue}.tsv"
+        report.parent.mkdir(parents=True, exist_ok=True)
+        rows = ["count\tword"] + [
+            f"{count}\t{word}"
+            for word, count in sorted(
+                candidates.items(), key=lambda item: (-item[1], item[0].casefold())
+            )
+        ]
+        report.write_text("\n".join(rows) + "\n", encoding="utf-8")
+        print(f"pronunciation candidates: {len(candidates)} -> {report}")
     print(f"\n~{total * SECONDS_PER_CHAR / 60:.0f} min of speech to synthesise")
     return 0
 

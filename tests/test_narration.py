@@ -16,6 +16,7 @@ from src.ai.narration import (
     chunks,
     coverage,
     narration_text,
+    pronunciation_candidates,
     reached_the_end,
     speakable,
     speech_ends_at,
@@ -151,6 +152,14 @@ def test_tera_separates_mixed_script_words_without_transliterating_the_long_tail
     assert tera_text(source) == (
         "admission вебхуки, runtime библиотеки so и сценарии второго дня"
     )
+
+
+def test_pronunciation_candidates_are_only_words_still_sent_as_latin():
+    candidates = pronunciation_candidates(
+        "OpenAI и GitHub работают с Kubernetes-подами, DeepSeek и A3B."
+    )
+
+    assert candidates == {"Kubernetes": 1, "DeepSeek": 1}
 
 
 def test_tera_says_model_parameter_counts_as_words():

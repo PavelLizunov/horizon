@@ -88,10 +88,17 @@ mixed speech (the checker heard only “одну одну одну”), while th
 previously distorted or omitted names recognisable. Unknown English remains
 English until a real narration demonstrates that it needs an entry.
 
-Two archived articles (`2026-08-04-ru-tech-blog-5` and `tech-blog-14`) contain
-whole English sections despite the `-ru` issue id. That is an upstream content
-language problem, not a pronunciation problem; growing this lexicon to translate
-their prose would hide the wrong failure.
+Every full issue preparation also rewrites
+`data/pronunciation-candidates/<issue>.tsv`. It counts the Latin tokens that
+still reach Tera after the current lexicon, so new names have one reviewable
+backlog instead of being rediscovered by scanning the archive. The reports are
+runtime state and are gitignored; after confirming a bad reading, add its
+spelling to `_TERA_PRONUNCIATIONS` and regenerate that issue.
+
+The original audit also found two English sections in the now-retired 4 August
+legacy issue. That was an upstream content-language problem, not a pronunciation
+problem; growing this lexicon to translate whole prose would hide the wrong
+failure.
 
 The finished file is checked again, because the pieces being individually sound
 says nothing about the join. Four checks, cheapest first:

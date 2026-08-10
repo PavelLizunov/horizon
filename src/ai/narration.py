@@ -28,6 +28,7 @@ wrong on real text.
 import hashlib
 import html
 import re
+from collections import Counter
 from typing import Iterable, List, Sequence, Tuple
 
 from num2words import num2words
@@ -39,6 +40,7 @@ __all__ = [
     "coverage",
     "reached_the_end",
     "narration_text",
+    "pronunciation_candidates",
     "speakable",
     "speech_ends_at",
     "spoken_number",
@@ -365,6 +367,10 @@ _TERA_CROSS_SCRIPT_RE = re.compile(
     r"(?<=[A-Za-z0-9])[-/.](?=[А-Яа-яЁё])|"
     r"(?<=[А-Яа-яЁё])[-/.](?=[A-Za-z0-9])"
 )
+_TERA_LATIN_TOKEN_RE = re.compile(
+    r"(?<![A-Za-z0-9])(?=[A-Za-z0-9._/+:-]*[A-Za-z])"
+    r"[A-Za-z0-9]+(?:[._/+:-][A-Za-z0-9]+)*(?![A-Za-z0-9])"
+)
 
 
 def tera_text(text: str) -> str:
@@ -415,6 +421,11 @@ def tera_text(text: str) -> str:
     # its own word. Slashes and dots have the same failure shape as hyphens.
     text = _TERA_CROSS_SCRIPT_RE.sub(" ", text)
     return _WHITESPACE_RE.sub(" ", text).strip()
+
+
+def pronunciation_candidates(text: str) -> Counter[str]:
+    """Latin tokens that still reach Tera after known readings are applied."""
+    return Counter(_TERA_LATIN_TOKEN_RE.findall(tera_text(text)))
 
 
 def speakable(text: str) -> str:
