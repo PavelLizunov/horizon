@@ -153,10 +153,11 @@ caddyfile` **before** reloading, and curl the neighbouring sites **after**, so a
 mistake surfaces immediately instead of at the next visitor.
 
 Known and accepted: a **404 window of a few seconds**. Today's page reaches the
-target only after the copy, which runs after the digest job has already sent its
-Telegram links. Only the current day's link is affected; pulling `mkdocs build`
-into the pipeline would couple it to a site toolchain for a few seconds of
-polish.
+target only after the first copy, which runs after the digest job has already
+sent its Telegram links. `run-daily.sh` deliberately ships the text pages before
+narration, then ships again with the audio players. Do not move narration ahead
+of the first ship: on 2026-08-10 it stretched this window from seconds to nine
+minutes (including a cold model download).
 
 ## Linux via cron (sketch)
 

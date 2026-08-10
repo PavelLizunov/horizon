@@ -1,19 +1,19 @@
 #!/bin/zsh
-# Daily job: run the pipeline, narrate what it published, then build and ship.
+# Daily job: run the pipeline, publish its pages, then add narration and refresh.
 #
 # These were two steps and only the first was scheduled, so the digest ran,
 # Telegram headlines went out, and every link 404'd because the site was never
 # rebuilt. launchd should call THIS, not `horizon` directly.
 #
-# Ordering matters in one place: narration edits the published markdown to add
-# the player, so it has to finish before mkdocs reads those files. Everything
-# after the pipeline is best-effort — a failure there leaves a readable digest
-# rather than none.
+# Ordering matters: publish the readable pages before narration. Telegram goes
+# out inside the pipeline, and narration can take minutes (or download a model
+# on a cold cache); making it wait left every new link on a 404 until speech was
+# finished. A second build adds the players after narration.
 #
 # Ordering note: the pipeline sends its headlines before this script builds, so
 # links are dead for the few seconds the build takes. That window is accepted —
 # closing it would mean pulling a site toolchain into the pipeline itself.
-# Narration adds about twenty seconds per article to that window.
+# Narration no longer adds to that window.
 
 set -u
 cd "${HORIZON_DIR:-$HOME/horizon}" || exit 1
@@ -22,6 +22,28 @@ cd "${HORIZON_DIR:-$HOME/horizon}" || exit 1
 export PATH="$HOME/bin:/opt/homebrew/bin:/usr/local/bin:$PATH"
 
 log() { printf '%s %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$*"; }
+
+: "${HORIZON_SITE_HOST:=root@192.168.0.210}"
+: "${HORIZON_SITE_PATH:=/srv/digest.ninitux.com}"
+
+ship_site() {
+  log "site: build"
+  if ! "$HOME/bin/mkdocs" build --quiet; then
+    log "site: build FAILED — not shipping, previous site stays up"
+    return 1
+  fi
+
+  log "site: ship to $HORIZON_SITE_HOST:$HORIZON_SITE_PATH"
+  # tar over ssh rather than rsync: the ingress container has no rsync, and
+  # installing packages on an edge proxy to copy static files is a poor trade.
+  if (cd site && tar czf - .) | ssh -o BatchMode=yes "$HORIZON_SITE_HOST" \
+        "rm -rf '$HORIZON_SITE_PATH'/* && tar xzf - -C '$HORIZON_SITE_PATH'"; then
+    log "site: shipped"
+  else
+    log "site: ship FAILED — pages built locally but the live site is stale"
+    return 1
+  fi
+}
 
 log "pipeline: start"
 .venv/bin/horizon --hours "${HORIZON_HOURS:-24}"
@@ -36,6 +58,14 @@ log "index: regenerate"
 .venv/bin/python -c \
   'from src.storage.manager import StorageManager; StorageManager.write_site_index()' \
   || log "index: FAILED — the archive page may list nothing"
+
+# Publish text immediately. The pipeline has already sent Telegram by now, so
+# every minute spent before this call is another minute of broken links.
+if [[ ! -x "$HOME/bin/mkdocs" ]]; then
+  log "site: SKIPPED — ~/bin/mkdocs missing (uv tool install mkdocs --with mkdocs-material)"
+  exit $pipeline_status
+fi
+ship_site || exit 1
 
 # Narration. Two interpreters on purpose: preparing the text needs the project's
 # dependencies, and TeraTTSv2 needs onnxruntime and transformers, which live in
@@ -55,44 +85,19 @@ else
   log "narration: $issue"
   if .venv/bin/python scripts/dev_narrate_article.py --issue "$issue" \
         --write-all "$work" >/dev/null; then
-    # --attach edits the published pages, so this has to finish before mkdocs
-    # reads them. An article that fails its check is left unlinked rather than
-    # published, and that exit code is reported, not obeyed.
+    # --attach edits the published pages. An article that fails its check is
+    # left unlinked rather than published, and that exit code is reported, not
+    # obeyed; the second site build below reads whatever passed.
     "$narrator" scripts/dev_narrate_article.py --speak-dir "$work" --attach \
       || log "narration: some articles did not pass their check and were not linked"
   else
     log "narration: FAILED to prepare text — pages keep whatever audio they had"
   fi
   rm -rf "$work"
-fi
 
-# Build and ship even when the pipeline failed partway: it may still have
-# published pages before dying, and shipping a stale site helps nobody.
-# mkdocs comes from `uv tool install` under ~/bin — deliberately not /tmp,
-# which is wiped on reboot.
-if [[ ! -x "$HOME/bin/mkdocs" ]]; then
-  log "site: SKIPPED — ~/bin/mkdocs missing (uv tool install mkdocs --with mkdocs-material)"
-  exit $pipeline_status
-fi
-
-log "site: build"
-if ! "$HOME/bin/mkdocs" build --quiet; then
-  log "site: build FAILED — not shipping, previous site stays up"
-  exit 1
-fi
-
-: "${HORIZON_SITE_HOST:=root@192.168.0.210}"
-: "${HORIZON_SITE_PATH:=/srv/digest.ninitux.com}"
-
-log "site: ship to $HORIZON_SITE_HOST:$HORIZON_SITE_PATH"
-# tar over ssh rather than rsync: the ingress container has no rsync, and
-# installing packages on an edge proxy to copy static files is a poor trade.
-if (cd site && tar czf - .) | ssh -o BatchMode=yes "$HORIZON_SITE_HOST" \
-      "rm -rf '$HORIZON_SITE_PATH'/* && tar xzf - -C '$HORIZON_SITE_PATH'"; then
-  log "site: shipped"
-else
-  log "site: ship FAILED — pages built locally but the live site is stale"
-  exit 1
+  # --attach edits the markdown. Refresh the already-readable site so players
+  # appear, without making the text pages wait for synthesis and grading.
+  ship_site || exit 1
 fi
 
 exit $pipeline_status

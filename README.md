@@ -137,8 +137,8 @@ uv run horizon --hours 24        # or: docker compose run --rm horizon --hours 2
 
 The briefing lands in `data/summaries/`. To schedule it, see
 [deploy/README.md](deploy/README.md) — on the deployed box launchd calls
-`deploy/run-daily.sh`, which runs the pipeline, narrates what it published, then
-builds and ships the site.
+`deploy/run-daily.sh`, which runs the pipeline, immediately publishes the text
+pages, then narrates them and republishes the pages with audio players.
 
 ## Sources
 

@@ -20,7 +20,8 @@ Horizon is an AI-driven news digest pipeline:
 ```
 fetch (scrapers) → analyze/score (LLM) → dedup/filter → enrich (LLM + web search)
     → digest markdown → delivery (file / webhook / email / MCP)
-                      → site pages → narration → build → ship   (deploy/run-daily.sh)
+                      → site pages → build/ship → narration → build/ship
+                                                        (deploy/run-daily.sh)
 ```
 
 Sources: Hacker News, RSS, Reddit, Telegram, Twitter/X, GitHub, OpenBB, OSS Insight,
@@ -53,8 +54,8 @@ tests/               # pytest suite (offline; network code is mocked)
 scripts/             # dev/debug utilities (dev_check_*.py need a real config to run)
 deploy/              # launchd templates + RUNBOOK.md for driving the deployed box
                      #   run-daily.sh is what launchd calls: pipeline, index,
-                     #   narration, build, ship — in that order, and the order
-                     #   matters (narration edits the pages mkdocs then reads)
+                     #   build/ship, narration, build/ship — text goes live
+                     #   first so speech cannot hold Telegram links on a 404
 docs/                # long-form docs; video-source.md is the video module deep dive,
                      #   pipeline.md maps orchestrator.py's seven stages,
                      #   narration.md carries the speech measurements
@@ -208,7 +209,9 @@ Shape: `src/ai/narration.py` prepares the text and is pure, tested and offline �
 no models, no network. `scripts/dev_narrate_article.py` drives synthesis and runs
 on the Mac in a **separate venv** (`~/tts/.venv`), because TeraTTSv2 needs
 onnxruntime and transformers and neither belongs in the project's dependencies.
-`deploy/run-daily.sh` calls both, between the pipeline and the site build.
+`deploy/run-daily.sh` publishes the text pages first, then calls both and ships
+again. Narration must never delay the first publish: a cold model download plus
+eight articles measured nine minutes of 404s after Telegram had already sent.
 
     .venv/bin/python scripts/dev_narrate_article.py --issue <id> --write-all <dir>
     ~/tts/.venv/bin/python scripts/dev_narrate_article.py --speak-dir <dir> --attach

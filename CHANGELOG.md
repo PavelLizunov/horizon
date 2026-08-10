@@ -9,13 +9,22 @@ recoverable by reading the code.
 
 ## Unreleased
 
+### Site pages no longer wait for narration
+
+Telegram is sent inside the pipeline, before `deploy/run-daily.sh` can build the
+site. Narration was then placed ahead of that build: on 2026-08-10 the webhook
+finished at 17:14:54 and the site shipped at 17:23:54, leaving all eight new
+article links on a 404 for nine minutes. The daily job now ships readable text
+pages immediately and performs a second build after narration attaches players.
+The unavoidable dead-link window is back to the build-and-copy time only.
+
 ### Narration — every article gets a voice, and something checks it
 
 The digest is read aloud in Russian by **TeraTTSv2** (`ru_f1`), locally, as part
 of the daily job. Text preparation lives in `src/ai/narration.py` — pure, tested,
 offline. Synthesis runs from a separate venv on the Mac. `deploy/run-daily.sh`
-calls both between the pipeline and the site build, because attaching a player
-edits the markdown that mkdocs then reads.
+first ships the readable pages, then calls both and ships again, because
+attaching a player edits the markdown that mkdocs reads.
 
 The reason there is a checking layer at all: **speech models fail silently.** A
 file exists, its duration is plausible, and the reading stopped a third of the
