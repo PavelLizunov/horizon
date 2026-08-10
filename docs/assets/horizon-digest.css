@@ -1314,24 +1314,9 @@ a.hz-tag:hover {
 /* ===========================================================================
    §17  ПЛЕЕР ОЗВУЧКИ                                            [дополнение]
 
-   Механика заимствована у YouTube намеренно — динамик рядом с пуском, шкала
-   скорости, — но одно отличие сознательное: **ползунки видны всегда и ничего
-   не выезжает**.
-
-   Выезжающие ползунки были ошибкой, и её видно в замере: при наведении полоса
-   перемотки сжималась с 199 до 109 пикселей, то есть на 45 %. Строка дёргалась
-   на каждое движение мыши. У YouTube этот приём оправдан — там управление
-   лежит поверх видео и место дорого; здесь колонка в 68 знаков, места хватает,
-   и платить прыжками не за что. Плюс на тач-экране наведения нет вовсе, а
-   значит выезжающий ползунок там просто недоступен.
-
-   Две строки, а не одна — и это тоже с замера. В один ряд пять групп не
-   помещаются: перемотка ужималась до 80 пикселей, 15 % ширины, то есть самый
-   важный контрол оказывался самым мелким. У YouTube полоса и не стоит в ряду
-   с кнопками, она над ними во всю ширину; так и сделано.
-
-   Иерархия задана размером: перемотка занимает всю строку и её дорожка толще
-   (4px против 3px у регуляторов).
+   Одна система управления на всех экранах: −10, пуск/пауза, +15, настоящая
+   шкала позиции и дискретная скорость. Inline- и sticky-представления управляют
+   одним <audio>; исходные controls скрываются только после успешного запуска JS.
    =========================================================================== */
 
 :root {
@@ -1339,9 +1324,6 @@ a.hz-tag:hover {
   --hz-i-pause: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='%23000'%3E%3Crect x='4' y='3' width='3' height='10' rx='1'/%3E%3Crect x='9' y='3' width='3' height='10' rx='1'/%3E%3C/svg%3E");
   --hz-i-volume: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='%23000' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3 6.2h2.2L8 3.6v8.8L5.2 9.8H3z' fill='%23000'/%3E%3Cpath d='M10.4 6.2a2.6 2.6 0 0 1 0 3.6M12.4 4.4a5.2 5.2 0 0 1 0 7.2'/%3E%3C/svg%3E");
   --hz-i-muted: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='%23000' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3 6.2h2.2L8 3.6v8.8L5.2 9.8H3z' fill='%23000'/%3E%3Cpath d='M10.6 6.4l3.2 3.2M13.8 6.4l-3.2 3.2'/%3E%3C/svg%3E");
-
-  --hz-player-track: 3px;
-  --hz-player-seek: 4px;
 }
 
 .hz-i--play { --hz-i: var(--hz-i-play); }
@@ -1349,210 +1331,328 @@ a.hz-tag:hover {
 .hz-i--volume { --hz-i: var(--hz-i-volume); }
 .hz-i--muted { --hz-i: var(--hz-i-muted); }
 
+audio.hz-narration:not([controls]) {
+  display: none;
+}
+
 .hz-player {
   display: flex;
   flex-direction: column;
+  box-sizing: border-box;
   gap: var(--hz-space-2);
+  width: 100%;
   max-width: var(--hz-measure);
-  margin: 0 0 var(--hz-space-6);
   padding: var(--hz-space-3) var(--hz-space-4);
+  color: var(--hz-muted);
   background: var(--hz-surface);
   border: var(--hz-hairline) solid var(--hz-border);
   border-radius: var(--hz-radius);
   font-family: var(--hz-font-meta);
   font-size: var(--hz-t-meta);
-  color: var(--hz-muted);
 }
 
-/* 2.1rem, not the 2.5 it started at: at 40px in a 74px row the button was the
-   heaviest thing on screen, and it is not the most important one. */
-.hz-player__button {
+.hz-player[hidden] {
+  display: none !important;
+}
+
+.hz-player--inline {
+  margin: 0 0 var(--hz-space-6);
+}
+
+.hz-player__timeline {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  column-gap: var(--hz-space-3);
+}
+
+.hz-player__seek {
+  grid-column: 1 / -1;
+  width: 100%;
+  height: 1.4rem;
+  margin: 0;
+  padding: 0;
+  color: var(--hz-text);
+  background: transparent;
+  cursor: pointer;
+  touch-action: pan-y;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.hz-player__seek:disabled {
+  cursor: default;
+  opacity: 0.45;
+}
+
+.hz-player__seek::-webkit-slider-runnable-track,
+.hz-player__volume input::-webkit-slider-runnable-track {
+  height: 4px;
+  border-radius: 999px;
+  background:
+    linear-gradient(to right, currentColor 0 0) left /
+      calc(var(--hz-level, 0) * 100%) 100% no-repeat,
+    var(--hz-score-track);
+}
+
+.hz-player__seek::-moz-range-track,
+.hz-player__volume input::-moz-range-track {
+  height: 4px;
+  border-radius: 999px;
+  background: var(--hz-score-track);
+}
+
+.hz-player__seek::-moz-range-progress,
+.hz-player__volume input::-moz-range-progress {
+  height: 4px;
+  border-radius: 999px;
+  background: currentColor;
+}
+
+.hz-player__seek::-webkit-slider-thumb,
+.hz-player__volume input::-webkit-slider-thumb {
+  width: 0.8rem;
+  height: 0.8rem;
+  margin-top: -0.3rem;
+  background: currentColor;
+  border: 0;
+  border-radius: 50%;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.hz-player__seek::-moz-range-thumb,
+.hz-player__volume input::-moz-range-thumb {
+  width: 0.8rem;
+  height: 0.8rem;
+  background: currentColor;
+  border: 0;
+  border-radius: 50%;
+}
+
+.hz-player__time {
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+}
+
+.hz-player__time--elapsed {
+  justify-self: start;
+}
+
+.hz-player__time--remaining {
+  justify-self: end;
+}
+
+.hz-player__controls,
+.hz-player__transport,
+.hz-player__secondary,
+.hz-player__volume {
+  display: flex;
+  align-items: center;
+}
+
+.hz-player__controls {
+  justify-content: space-between;
+  gap: var(--hz-space-3);
+}
+
+.hz-player__transport {
+  gap: var(--hz-space-2);
+}
+
+.hz-player__secondary {
+  gap: var(--hz-space-3);
+}
+
+.hz-player__play,
+.hz-player__skip,
+.hz-player__mute {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   flex: none;
-  width: 1.7rem;
-  height: 1.7rem;
+  min-width: 2.2rem;
+  min-height: 2.2rem;
   padding: 0;
   color: var(--hz-text);
   background: transparent;
   border: var(--hz-hairline) solid var(--hz-border-strong);
   border-radius: 999px;
+  font: inherit;
   cursor: pointer;
+  touch-action: manipulation;
 }
 
-.hz-player__button:hover {
+.hz-player__play {
   color: var(--hz-bg);
   background: var(--hz-text);
   border-color: var(--hz-text);
 }
 
-/* Its own row, full width. Size is what says which control matters. */
-.hz-player__bar {
-  width: 100%;
-  height: 1.1rem;
-  display: flex;
-  align-items: center;
-  cursor: pointer;
-  border: 0;
-  padding: 0;
-  background: transparent;
+.hz-player__play .hz-i {
+  font-size: 1rem;
 }
 
-.hz-player__bar::before {
-  content: "";
-  display: block;
-  width: 100%;
-  height: var(--hz-player-seek);
-  border-radius: 999px;
-  background:
-    linear-gradient(to right, currentColor 0 0) left /
-      calc(var(--hz-played, 0) * 100%) 100% no-repeat,
-    var(--hz-score-track);
-  color: var(--hz-text);
-}
-
-.hz-player__controls {
-  display: flex;
-  align-items: center;
-  gap: var(--hz-space-3);
-  width: 100%;
-}
-
-/* Pushed right, so the row reads as two clusters — transport on the left,
-   readouts on the right — instead of five things in a queue. */
-.hz-player__time {
-  flex: none;
-  margin-left: auto;
+.hz-player__skip {
+  border-color: transparent;
   font-variant-numeric: tabular-nums;
-  letter-spacing: -0.01em;
 }
 
-.hz-player__group {
-  display: inline-flex;
-  align-items: center;
-  flex: none;
-  gap: var(--hz-space-2);
+.hz-player__play:hover,
+.hz-player__skip:hover,
+.hz-player__mute:hover {
+  border-color: var(--hz-text);
 }
 
-.hz-player__flat {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 1.2rem;
-  height: 1.2rem;
-  padding: 0;
-  color: var(--hz-muted);
-  background: transparent;
-  border: 0;
-  cursor: pointer;
+.hz-player__skip:hover,
+.hz-player__mute:hover {
+  background: var(--hz-surface-2);
 }
 
-.hz-player__flat:hover {
-  color: var(--hz-text);
+.hz-player__play:focus-visible,
+.hz-player__skip:focus-visible,
+.hz-player__mute:focus-visible,
+.hz-player__seek:focus-visible,
+.hz-player__speed:focus-visible,
+.hz-player__volume input:focus-visible {
+  outline: 2px solid var(--hz-accent);
+  outline-offset: 2px;
 }
 
-/* Fixed width, always visible. Whatever these do, the seek bar keeps its size. */
-.hz-player__slider {
-  flex: none;
-  width: 2.6rem;
-  height: 1.1rem;
+.hz-player__speed {
+  min-height: 2.2rem;
   margin: 0;
-  padding: 0;
-  background: transparent;
+  padding: 0 var(--hz-space-3);
+  color: var(--hz-text);
+  background: var(--hz-surface);
+  border: var(--hz-hairline) solid var(--hz-border-strong);
+  border-radius: 999px;
+  font: inherit;
+  font-variant-numeric: tabular-nums;
   cursor: pointer;
+}
+
+.hz-player__volume {
+  position: relative;
+}
+
+.hz-player__mute {
+  min-width: 2rem;
+  min-height: 2rem;
+  border-color: transparent;
+}
+
+.hz-player__volume input {
+  position: absolute;
+  z-index: 2;
+  left: 50%;
+  bottom: calc(100% + 0.35rem);
+  width: 5.5rem;
+  height: 1.8rem;
+  margin: 0;
+  padding: 0.65rem;
+  color: var(--hz-text);
+  background: var(--hz-surface);
+  border: var(--hz-hairline) solid var(--hz-border-strong);
+  border-radius: 999px;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.14);
+  cursor: pointer;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateX(-50%);
   -webkit-appearance: none;
   appearance: none;
 }
 
-.hz-player__slider::-webkit-slider-runnable-track {
-  height: var(--hz-player-track);
-  border-radius: 999px;
-  background:
-    linear-gradient(to right, currentColor 0 0) left /
-      calc(var(--hz-level, 1) * 100%) 100% no-repeat,
-    var(--hz-score-track);
+.hz-player__volume:hover input,
+.hz-player__volume:focus-within input {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.hz-player__status {
   color: var(--hz-muted);
 }
 
-.hz-player__slider::-moz-range-track {
-  height: var(--hz-player-track);
-  border-radius: 999px;
-  background: var(--hz-score-track);
+.hz-player__status:empty {
+  display: none;
 }
 
-.hz-player__slider::-moz-range-progress {
-  height: var(--hz-player-track);
-  border-radius: 999px;
-  background: var(--hz-muted);
+.hz-player--sticky {
+  position: fixed;
+  z-index: 20;
+  left: 50%;
+  bottom: max(0.5rem, env(safe-area-inset-bottom));
+  width: min(calc(100% - 1rem), 720px);
+  margin: 0;
+  padding: var(--hz-space-2) var(--hz-space-3);
+  box-shadow: 0 10px 35px rgba(0, 0, 0, 0.2);
+  transform: translateX(-50%);
 }
 
-.hz-player__slider::-webkit-slider-thumb {
-  -webkit-appearance: none;
-  appearance: none;
-  width: 0.6rem;
-  height: 0.6rem;
-  margin-top: -0.22rem;
-  border: 0;
-  border-radius: 999px;
-  background: var(--hz-muted);
+.hz-player--sticky .hz-player__controls {
+  min-height: 2.2rem;
 }
 
-.hz-player__slider::-moz-range-thumb {
-  width: 0.6rem;
-  height: 0.6rem;
-  border: 0;
-  border-radius: 999px;
-  background: var(--hz-muted);
-}
-
-.hz-player__group:hover .hz-player__slider,
-.hz-player__group:focus-within .hz-player__slider {
-  color: var(--hz-text);
-}
-
-.hz-player__group:hover .hz-player__slider::-webkit-slider-thumb,
-.hz-player__group:focus-within .hz-player__slider::-webkit-slider-thumb {
-  background: var(--hz-text);
-}
-
-.hz-player__rate {
-  flex: none;
-  min-width: 3.1em;
-  text-align: right;
-  font-variant-numeric: tabular-nums;
+.hz-player-is-sticky body {
+  padding-bottom: calc(5.5rem + env(safe-area-inset-bottom));
 }
 
 @media screen and (max-width: 599px) {
-  audio.hz-narration[controls] {
-    display: block;
-    width: 100%;
-    max-width: var(--hz-measure);
-    margin: 0 0 var(--hz-space-2);
+  .hz-player {
+    padding: var(--hz-space-2) var(--hz-space-3);
   }
 
-  .hz-player__mobile-rate {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
+  .hz-player__controls {
+    gap: var(--hz-space-2);
+  }
+
+  .hz-player__transport {
+    gap: var(--hz-space-1);
+  }
+
+  .hz-player__play {
+    min-width: 2.4rem;
+    min-height: 2.4rem;
+  }
+
+  .hz-player__skip {
+    min-width: 2.2rem;
     min-height: 2.2rem;
-    margin: 0 0 var(--hz-space-6);
-    padding: 0 var(--hz-space-3);
-    color: var(--hz-text);
-    background: var(--hz-surface);
-    border: var(--hz-hairline) solid var(--hz-border-strong);
-    border-radius: 999px;
-    font: inherit;
-    font-family: var(--hz-font-meta);
-    font-size: var(--hz-t-meta);
-    cursor: pointer;
-    touch-action: manipulation;
   }
 
-  .hz-player__mobile-rate:active,
-  .hz-player__mobile-rate:focus-visible {
-    color: var(--hz-bg);
-    background: var(--hz-text);
-    outline: none;
+  .hz-player__volume {
+    display: none;
+  }
+
+  .hz-player__speed {
+    min-height: 2.2rem;
+    padding-inline: var(--hz-space-2);
+  }
+
+  .hz-player--sticky {
+    bottom: max(0.35rem, env(safe-area-inset-bottom));
+    width: calc(100% - 0.7rem);
+  }
+
+  .hz-player-is-sticky body {
+    padding-bottom: calc(6.5rem + env(safe-area-inset-bottom));
+  }
+}
+
+@media (hover: none) {
+  .hz-player__play:hover,
+  .hz-player__skip:hover,
+  .hz-player__mute:hover {
+    border-color: var(--hz-border-strong);
+  }
+
+  .hz-player__play:hover {
+    border-color: var(--hz-text);
+  }
+
+  .hz-player__skip:hover,
+  .hz-player__mute:hover {
+    background: transparent;
   }
 }

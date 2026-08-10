@@ -98,14 +98,29 @@ def test_the_site_chrome_and_the_document_agree_on_the_name():
     )
 
 
-def test_mobile_player_keeps_native_controls_and_taps_through_speed():
-    css = (REPO / "docs/assets/horizon-digest.css").read_text(encoding="utf-8")
+def test_narration_player_has_one_controller_on_every_screen():
     player = (REPO / "docs/assets/horizon-player.js").read_text(encoding="utf-8")
-    mobile = css.split("@media screen and (max-width: 599px)", 1)[1]
 
-    assert "audio.hz-narration[controls]" in mobile
-    assert ".hz-player__mobile-rate" in mobile
-    assert "var TAP_SPEEDS = [1, 1.25, 1.5, 2]" in player
-    assert 'window.matchMedia("(max-width: 599px)").matches' in player
-    assert re.search(r"if \(mobile\) \{\s*nativeRateControl\(players\[i\]\)", player)
-    assert re.search(r"else \{\s*build\(players\[i\]\)", player)
+    assert "function PlayerController(audio)" in player
+    assert 'document.querySelector("audio.hz-narration")' in player
+    assert 'createElement("audio")' not in player
+    assert "matchMedia" not in player
+    assert "nativeRateControl" not in player
+    assert "−10" in player
+    assert "+15" in player
+    assert "IntersectionObserver" in player
+
+
+def test_narration_player_uses_native_inputs_and_keeps_a_fallback():
+    player = (REPO / "docs/assets/horizon-player.js").read_text(encoding="utf-8")
+
+    assert 'seek.type = "range"' in player
+    assert 'document.createElement("select")' in player
+    assert "var SPEEDS = [0.75, 1, 1.25, 1.5, 1.75, 2, 2.5]" in player
+    assert "VOLUME_KEY" not in player
+    assert "RESUME_PREFIX" in player
+    assert "mediaSession" in player
+    assert player.index('document.body.appendChild(this.sticky)') < player.index(
+        'this.audio.removeAttribute("controls")'
+    )
+    assert re.search(r"catch \(error\) \{\s*this\.destroy\(\);\s*throw error", player)

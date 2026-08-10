@@ -59,11 +59,14 @@ What that discipline caught, in order of how much time each cost:
   Content-Length. Reproduced deliberately. Pages declare the audio immutable for
   a year, so a browser that saw the short copy kept it. Publishing now fetches
   what it published until the bytes match.
-- **The mobile player belongs to the phone.** Shrinking the desktop controls
-  produced tiny sliders and let saved custom volume state yield the baffling
-  combination of moving progress with no sound. Phones now keep the browser's
-  native audio controls and add one large speed button that cycles through
-  `1×`, `1.25×`, `1.5×`, and `2×`; desktop keeps the custom player.
+- **One player now belongs to every screen.** The native-phone/custom-desktop
+  split made the same control mean different things and saved custom volume
+  could yield the baffling combination of moving progress with no sound. Both
+  layouts now operate one audio element with −10/play/+15, a real seek range,
+  elapsed and remaining time, and a native discrete speed picker. Desktop adds
+  non-persistent volume. A sticky view follows active playback, each article
+  resumes near its saved position, and native `<audio controls>` remains the
+  fallback until JavaScript has mounted successfully.
 
 Chunk bounds (120–400 characters, packed evenly) and the 1.25× encode are
 correctness properties with measurements behind them; `AGENTS.md` §6.5 lists

@@ -11,9 +11,25 @@ object storage, and linked from the page.
 
 - **Text preparation**: `src/ai/narration.py` — pure, no models, no network
 - **Driver**: `scripts/dev_narrate_article.py` — runs on the Mac, in its own venv
-- **Player**: native browser controls plus a tap speed button on phones; custom
-  controls on desktop (`docs/assets/horizon-player.js`, CSS §17)
+- **Player**: one adaptive controller for phone and desktop, with the original
+  native controls as its no-JavaScript/error fallback
+  (`docs/assets/horizon-player.js`, CSS §17)
 - **Tests**: `tests/test_narration.py` (offline)
+
+The player uses one `<audio>` element for both its inline and sticky views.
+Every screen gets the same transport controls (−10 seconds, play/pause, +15
+seconds), a draggable progress range, elapsed/remaining time, and a native
+speed selector. The selector opens as the phone's familiar system picker and
+remembers the choice. Desktop alone adds volume; volume is deliberately not
+remembered, so an old zero setting cannot produce moving progress with no
+sound. Playback position is saved per article and resumes four seconds before
+the saved point. The sticky view appears only after playback has started and
+the inline player has scrolled above the viewport.
+
+The source HTML still contains `<audio controls>`. JavaScript removes
+`controls` only after both custom views mount; a script error, disabled
+JavaScript, or an older browser therefore leaves a usable native player rather
+than an empty gap.
 
 ## Pipeline
 

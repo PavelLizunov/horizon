@@ -1,50 +1,37 @@
-/* Narration player.
+/* Unified narration player.
  *
- * Progressive enhancement, deliberately: the page ships a plain <audio
- * controls> element. Phones keep that familiar native player and get only a
- * tap-to-cycle speed button; desktop replaces it with the roomier custom UI.
- * With JavaScript off, the reader still gets a working native player.
- *
- * The desktop layout follows the player everyone already knows: the seek bar
- * across the top, then play with volume beside it, and the clock and speed on
- * the right.
- *
- * Speed starts at 1x, and 1x is already brisk: the files are encoded a quarter
- * faster than the model read them, because a digest is something people want to
- * hear faster than it was read and most will never touch the control. The
- * control is here anyway — Chrome and Safari bury playback rate in a context
- * menu — but it starts where the listener already wanted to be.
- *
- * Skip buttons stay out: furniture on a three-minute file.
+ * The page always ships a working <audio controls>. JavaScript replaces it
+ * only after both custom views have mounted successfully. Inline and sticky
+ * controls operate the same audio element, so playback never restarts when the
+ * reader scrolls.
  */
 (function () {
   "use strict";
 
-  // The files are already encoded a quarter faster than the model read them,
-  // so 1x here is the speed a listener asked for. Anything else would compound:
-  // the old default of 1.25 on top of a 1.25 file plays at 1.56.
-  var SPEED = { min: 0.75, max: 2.5, step: 0.25, fallback: 1 };
-  var TAP_SPEEDS = [1, 1.25, 1.5, 2];
-  // Key renamed with the meaning. A listener who had chosen 1.25 would
-  // otherwise keep it and hear the compounded rate without ever asking for it.
+  var SPEEDS = [0.75, 1, 1.25, 1.5, 1.75, 2, 2.5];
   var SPEED_KEY = "hz-narration-speed-of-encoded";
-  var VOLUME_KEY = "hz-narration-volume";
+  var RESUME_PREFIX = "hz-narration-position:";
+  var activeController = null;
 
   function clock(seconds) {
-    if (!isFinite(seconds)) return "--:--";
+    if (!isFinite(seconds) || seconds < 0) return "--:--";
     var whole = Math.floor(seconds);
-    var minutes = Math.floor(whole / 60);
+    var hours = Math.floor(whole / 3600);
+    var minutes = Math.floor((whole % 3600) / 60);
     var rest = whole % 60;
-    return minutes + ":" + (rest < 10 ? "0" : "") + rest;
+    var short = minutes + ":" + (rest < 10 ? "0" : "") + rest;
+    return hours ? hours + ":" + (minutes < 10 ? "0" : "") + short : short;
   }
 
-  function stored(key, fallback, low, high) {
+  function rateText(value) {
+    return value.toFixed(2).replace(/\.?0+$/, "") + "×";
+  }
+
+  function readNumber(key) {
     try {
-      var saved = parseFloat(window.localStorage.getItem(key));
-      return saved >= low && saved <= high ? saved : fallback;
+      return parseFloat(window.localStorage.getItem(key));
     } catch (error) {
-      // Private mode and blocked storage both throw; the default is fine.
-      return fallback;
+      return NaN;
     }
   }
 
@@ -52,258 +39,501 @@
     try {
       window.localStorage.setItem(key, String(value));
     } catch (error) {
-      /* nothing to do — the preference just will not survive the page */
+      /* Private browsing may block storage; playback still works. */
     }
   }
 
-  function rateText(value) {
-    return value.toFixed(2).replace(/\.?0+$/, "") + "×";
-  }
-
-  /* A label that is always visible, plus a slider that opens beside it. Used
-   * for both volume and speed, because they are the same interaction and
-   * writing it twice would let the two drift apart.
-   *
-   * Opens on focus as well as hover: these are real <input type="range">
-   * elements, so arrow keys work without a line of code here, but only if the
-   * keyboard can reach them at all. */
-  function slidingControl(options) {
-    var group = document.createElement("div");
-    group.className = "hz-player__group";
-
-    var slider = document.createElement("input");
-    slider.type = "range";
-    slider.className = "hz-player__slider";
-    slider.min = String(options.min);
-    slider.max = String(options.max);
-    slider.step = String(options.step);
-    slider.setAttribute("aria-label", options.label);
-
-    if (options.handle) {
-      group.appendChild(options.handle);
-      group.appendChild(slider);
-    } else {
-      group.appendChild(slider);
-      group.appendChild(options.readout);
+  function forget(key) {
+    try {
+      window.localStorage.removeItem(key);
+    } catch (error) {
+      /* Nothing to clear when storage is unavailable. */
     }
-
-    slider.addEventListener("input", function () {
-      options.onChange(parseFloat(slider.value));
-    });
-
-    group.sync = function (value) {
-      slider.value = String(value);
-      var span = options.max - options.min;
-      slider.style.setProperty("--hz-level", (value - options.min) / span);
-    };
-    return group;
   }
 
-  function volumeControl(audio) {
-    var button = document.createElement("button");
-    button.type = "button";
-    button.className = "hz-player__flat";
-    var icon = document.createElement("span");
-    icon.className = "hz-i hz-i--volume";
-    icon.setAttribute("aria-hidden", "true");
-    button.appendChild(icon);
+  function storedSpeed() {
+    var saved = readNumber(SPEED_KEY);
+    return SPEEDS.indexOf(saved) === -1 ? 1 : saved;
+  }
 
-    var group = slidingControl({
-      min: 0,
-      max: 1,
-      step: 0.05,
-      label: "Громкость",
-      handle: button,
-      onChange: function (value) {
-        audio.volume = value;
-        audio.muted = value === 0;
-        remember(VOLUME_KEY, value);
-      },
+  function button(className, label, text) {
+    var control = document.createElement("button");
+    control.type = "button";
+    control.className = className;
+    control.setAttribute("aria-label", label);
+    if (text) control.textContent = text;
+    return control;
+  }
+
+  function PlayerController(audio) {
+    this.audio = audio;
+    this.inline = null;
+    this.sticky = null;
+    this.observer = null;
+    this.bindings = [];
+    this.views = [];
+    this.playButtons = [];
+    this.playGlyphs = [];
+    this.seeks = [];
+    this.elapsed = [];
+    this.remaining = [];
+    this.rates = [];
+    this.statuses = [];
+    this.started = false;
+    this.inlineAbove = false;
+    this.restored = false;
+    this.positionDirty = false;
+    this.resumeFloor = 0;
+    this.lastSavedAt = 0;
+    this.resumeKey = RESUME_PREFIX + window.location.pathname;
+  }
+
+  PlayerController.prototype.listen = function (target, name, handler) {
+    target.addEventListener(name, handler);
+    this.bindings.push([target, name, handler]);
+  };
+
+  PlayerController.prototype.makeSeek = function () {
+    var self = this;
+    var seek = document.createElement("input");
+    seek.type = "range";
+    seek.className = "hz-player__seek";
+    seek.min = "0";
+    seek.max = "0";
+    seek.step = "0.1";
+    seek.value = "0";
+    seek.disabled = true;
+    seek.setAttribute("aria-label", "Положение воспроизведения");
+    this.listen(seek, "input", function () {
+      if (isFinite(self.audio.duration)) {
+        self.positionDirty = true;
+        self.resumeFloor = 0;
+        self.audio.currentTime = parseFloat(seek.value);
+        self.sync();
+      }
     });
+    this.seeks.push(seek);
+    return seek;
+  };
 
-    function paint() {
-      var shown = audio.muted ? 0 : audio.volume;
-      group.sync(shown);
-      icon.className = "hz-i hz-i--" + (shown ? "volume" : "muted");
-      button.setAttribute("aria-label", shown ? "Приглушить" : "Включить звук");
+  PlayerController.prototype.makeRate = function () {
+    var self = this;
+    var select = document.createElement("select");
+    select.className = "hz-player__speed";
+    select.setAttribute("aria-label", "Скорость воспроизведения");
+    for (var i = 0; i < SPEEDS.length; i++) {
+      var option = document.createElement("option");
+      option.value = String(SPEEDS[i]);
+      option.textContent = rateText(SPEEDS[i]);
+      select.appendChild(option);
     }
-
-    button.addEventListener("click", function () {
-      audio.muted = !audio.muted;
-      // Unmuting from a slider dragged to zero would look broken, so give it
-      // something to come back to.
-      if (!audio.muted && audio.volume === 0) audio.volume = 1;
+    this.listen(select, "change", function () {
+      self.audio.playbackRate = parseFloat(select.value);
+      remember(SPEED_KEY, self.audio.playbackRate);
     });
-    audio.addEventListener("volumechange", paint);
+    this.rates.push(select);
+    return select;
+  };
 
-    audio.volume = stored(VOLUME_KEY, 1, 0, 1);
-    paint();
-    return group;
-  }
-
-  function rateControl(audio) {
-    var readout = document.createElement("span");
-    readout.className = "hz-player__rate";
-
-    var group = slidingControl({
-      min: SPEED.min,
-      max: SPEED.max,
-      step: SPEED.step,
-      label: "Скорость воспроизведения",
-      readout: readout,
-      onChange: function (value) {
-        audio.playbackRate = value;
-        remember(SPEED_KEY, value);
-      },
-    });
-
-    function paint() {
-      group.sync(audio.playbackRate);
-      readout.textContent = rateText(audio.playbackRate);
-    }
-
-    audio.addEventListener("ratechange", paint);
-    // Some browsers reset the rate when the source loads; others do not.
-    audio.addEventListener("loadeddata", function () {
-      audio.playbackRate = stored(SPEED_KEY, SPEED.fallback, SPEED.min, SPEED.max);
-    });
-
-    audio.playbackRate = stored(SPEED_KEY, SPEED.fallback, SPEED.min, SPEED.max);
-    paint();
-    return group;
-  }
-
-  function nativeRateControl(audio) {
-    var button = document.createElement("button");
-    button.type = "button";
-    button.className = "hz-player__mobile-rate";
-
-    function paint() {
-      var text = rateText(audio.playbackRate);
-      button.textContent = "Скорость " + text;
-      button.setAttribute(
-        "aria-label",
-        "Скорость воспроизведения " + text + ". Нажмите, чтобы изменить"
-      );
-    }
-
-    button.addEventListener("click", function () {
-      var current = TAP_SPEEDS.indexOf(audio.playbackRate);
-      audio.playbackRate = TAP_SPEEDS[(current + 1) % TAP_SPEEDS.length];
-      remember(SPEED_KEY, audio.playbackRate);
-    });
-    audio.addEventListener("ratechange", paint);
-    audio.addEventListener("loadeddata", function () {
-      audio.playbackRate = stored(SPEED_KEY, SPEED.fallback, SPEED.min, SPEED.max);
-    });
-
-    audio.playbackRate = stored(SPEED_KEY, SPEED.fallback, SPEED.min, SPEED.max);
-    paint();
-    audio.parentNode.insertBefore(button, audio.nextSibling);
-  }
-
-  function build(audio) {
-    var player = document.createElement("div");
-    player.className = "hz-player";
-
-    var button = document.createElement("button");
-    button.type = "button";
-    button.className = "hz-player__button";
-    button.setAttribute("aria-label", "Слушать");
+  PlayerController.prototype.makePlay = function () {
+    var self = this;
+    var play = button("hz-player__play", "Слушать");
     var glyph = document.createElement("span");
     glyph.className = "hz-i hz-i--play";
     glyph.setAttribute("aria-hidden", "true");
-    button.appendChild(glyph);
+    play.appendChild(glyph);
+    this.listen(play, "click", function () {
+      self.togglePlay();
+    });
+    this.playButtons.push(play);
+    this.playGlyphs.push(glyph);
+    return play;
+  };
 
-    // A real <button> rather than a div: it lands in the tab order and answers
-    // to space and enter without any of that being written here.
-    var bar = document.createElement("button");
-    bar.type = "button";
-    bar.className = "hz-player__bar";
-    bar.setAttribute("aria-label", "Перемотка");
+  PlayerController.prototype.makeTransport = function () {
+    var self = this;
+    var transport = document.createElement("div");
+    transport.className = "hz-player__transport";
+    var back = button("hz-player__skip", "Назад на 10 секунд", "−10");
+    var forward = button("hz-player__skip", "Вперёд на 15 секунд", "+15");
+    this.listen(back, "click", function () { self.seekBy(-10); });
+    this.listen(forward, "click", function () { self.seekBy(15); });
+    transport.appendChild(back);
+    transport.appendChild(this.makePlay());
+    transport.appendChild(forward);
+    return transport;
+  };
 
-    var time = document.createElement("span");
-    time.className = "hz-player__time";
-    time.textContent = "0:00";
+  PlayerController.prototype.makeVolume = function () {
+    var self = this;
+    var group = document.createElement("div");
+    group.className = "hz-player__volume";
+    var mute = button("hz-player__mute", "Приглушить");
+    var glyph = document.createElement("span");
+    glyph.className = "hz-i hz-i--volume";
+    glyph.setAttribute("aria-hidden", "true");
+    mute.appendChild(glyph);
 
-    // Two rows: the seek bar owns the first one outright, the transport and
-    // readouts share the second. In one row the bar was squeezed to 15% of the
-    // width — the most important control ending up the smallest.
+    var slider = document.createElement("input");
+    slider.type = "range";
+    slider.min = "0";
+    slider.max = "1";
+    slider.step = "0.05";
+    slider.value = String(this.audio.volume);
+    slider.setAttribute("aria-label", "Громкость");
+
+    this.listen(mute, "click", function () {
+      self.audio.muted = !self.audio.muted;
+      if (!self.audio.muted && self.audio.volume === 0) self.audio.volume = 1;
+    });
+    this.listen(slider, "input", function () {
+      self.audio.volume = parseFloat(slider.value);
+      self.audio.muted = self.audio.volume === 0;
+    });
+    this.listen(this.audio, "volumechange", function () {
+      var shown = self.audio.muted ? 0 : self.audio.volume;
+      slider.value = String(shown);
+      slider.style.setProperty("--hz-level", shown);
+      glyph.className = "hz-i hz-i--" + (shown ? "volume" : "muted");
+      mute.setAttribute("aria-label", shown ? "Приглушить" : "Включить звук");
+    });
+    slider.style.setProperty("--hz-level", this.audio.volume);
+    group.appendChild(mute);
+    group.appendChild(slider);
+    return group;
+  };
+
+  PlayerController.prototype.makeView = function (sticky) {
+    var root = document.createElement("div");
+    root.className = "hz-player" + (sticky ? " hz-player--sticky" : " hz-player--inline");
+    root.setAttribute("role", "region");
+    root.setAttribute("aria-label", sticky ? "Плеер озвучки" : "Озвучка статьи");
+    if (sticky) {
+      root.hidden = true;
+      root.setAttribute("aria-hidden", "true");
+    }
+
+    var timeline = document.createElement("div");
+    timeline.className = "hz-player__timeline";
+    var elapsed = document.createElement("span");
+    elapsed.className = "hz-player__time hz-player__time--elapsed";
+    elapsed.textContent = "0:00";
+    var remaining = document.createElement("span");
+    remaining.className = "hz-player__time hz-player__time--remaining";
+    remaining.textContent = "−--:--";
+    timeline.appendChild(this.makeSeek());
+    timeline.appendChild(elapsed);
+    timeline.appendChild(remaining);
+    this.elapsed.push(elapsed);
+    this.remaining.push(remaining);
+
     var controls = document.createElement("div");
     controls.className = "hz-player__controls";
-    controls.appendChild(button);
-    controls.appendChild(volumeControl(audio));
-    controls.appendChild(time);
-    controls.appendChild(rateControl(audio));
+    controls.appendChild(this.makeTransport());
+    var secondary = document.createElement("div");
+    secondary.className = "hz-player__secondary";
+    if (!sticky) secondary.appendChild(this.makeVolume());
+    secondary.appendChild(this.makeRate());
+    controls.appendChild(secondary);
 
-    player.appendChild(bar);
-    player.appendChild(controls);
+    var status = document.createElement("span");
+    status.className = "hz-player__status";
+    status.setAttribute("aria-live", "polite");
+    this.statuses.push(status);
 
-    function paint() {
-      var done = audio.duration ? audio.currentTime / audio.duration : 0;
-      bar.style.setProperty("--hz-played", done.toFixed(4));
-      time.textContent = clock(audio.currentTime) + " / " + clock(audio.duration);
+    root.appendChild(timeline);
+    root.appendChild(controls);
+    root.appendChild(status);
+    this.views.push(root);
+    return root;
+  };
+
+  PlayerController.prototype.mount = function () {
+    var self = this;
+    try {
+      this.inline = this.makeView(false);
+      this.sticky = this.makeView(true);
+      this.audio.parentNode.insertBefore(this.inline, this.audio);
+      document.body.appendChild(this.sticky);
+
+      this.listen(this.audio, "play", function () {
+        self.started = true;
+        self.positionDirty = true;
+        self.setStatus("");
+        self.sync();
+        self.updateSticky();
+        self.updateMediaSession();
+      });
+      this.listen(this.audio, "pause", function () {
+        self.savePosition(true);
+        self.sync();
+        self.updateMediaSession();
+      });
+      this.listen(this.audio, "timeupdate", function () {
+        self.sync();
+        self.savePosition(false);
+        self.updateMediaPosition();
+      });
+      this.listen(this.audio, "durationchange", function () { self.sync(); });
+      this.listen(this.audio, "loadedmetadata", function () {
+        self.restorePosition();
+        self.audio.playbackRate = storedSpeed();
+        self.sync();
+      });
+      this.listen(this.audio, "ratechange", function () { self.sync(); });
+      this.listen(this.audio, "waiting", function () { self.setStatus("Звук загружается…"); });
+      this.listen(this.audio, "playing", function () { self.setStatus(""); });
+      this.listen(this.audio, "canplay", function () { self.setStatus(""); });
+      this.listen(this.audio, "error", function () {
+        self.setStatus("Не удалось загрузить аудио. Попробуйте обновить страницу.");
+      });
+      this.listen(this.audio, "ended", function () {
+        self.started = false;
+        forget(self.resumeKey);
+        self.sync();
+        self.updateSticky();
+      });
+      this.listen(window, "pagehide", function () { self.savePosition(true); });
+      this.listen(document, "keydown", function (event) { self.onKeydown(event); });
+
+      this.watchInline();
+      this.setupMediaSession();
+      this.audio.playbackRate = storedSpeed();
+      this.sync();
+
+      // Keep this last: if any setup above throws, destroy() leaves the native
+      // browser controls intact instead of stranding the reader.
+      this.audio.removeAttribute("controls");
+      this.audio.dataset.hzEnhanced = "1";
+    } catch (error) {
+      this.destroy();
+      throw error;
     }
+  };
 
-    button.addEventListener("click", function () {
-      if (audio.paused) {
-        audio.play();
-      } else {
-        audio.pause();
+  PlayerController.prototype.watchInline = function () {
+    var self = this;
+    function measure(entry) {
+      var box = entry ? entry.boundingClientRect : self.inline.getBoundingClientRect();
+      self.inlineAbove = box.bottom <= 0;
+      self.updateSticky();
+    }
+    if ("IntersectionObserver" in window) {
+      this.observer = new IntersectionObserver(function (entries) { measure(entries[0]); });
+      this.observer.observe(this.inline);
+    } else {
+      this.listen(window, "scroll", function () { measure(); });
+      measure();
+    }
+  };
+
+  PlayerController.prototype.togglePlay = function () {
+    var self = this;
+    if (!this.audio.paused) {
+      this.audio.pause();
+      return;
+    }
+    var request = this.audio.play();
+    if (request && request.catch) {
+      request.catch(function () {
+        self.setStatus("Не удалось начать воспроизведение.");
+      });
+    }
+  };
+
+  PlayerController.prototype.seekBy = function (seconds) {
+    if (!isFinite(this.audio.duration)) return;
+    this.positionDirty = true;
+    this.resumeFloor = 0;
+    this.audio.currentTime = Math.max(0, Math.min(this.audio.duration, this.audio.currentTime + seconds));
+    this.sync();
+  };
+
+  PlayerController.prototype.changeRate = function (direction) {
+    var nearest = 0;
+    for (var i = 1; i < SPEEDS.length; i++) {
+      if (Math.abs(SPEEDS[i] - this.audio.playbackRate) < Math.abs(SPEEDS[nearest] - this.audio.playbackRate)) {
+        nearest = i;
       }
-    });
+    }
+    nearest = Math.max(0, Math.min(SPEEDS.length - 1, nearest + direction));
+    this.audio.playbackRate = SPEEDS[nearest];
+    remember(SPEED_KEY, this.audio.playbackRate);
+  };
 
-    audio.addEventListener("play", function () {
-      glyph.className = "hz-i hz-i--pause";
-      button.setAttribute("aria-label", "Пауза");
-    });
-    audio.addEventListener("pause", function () {
-      glyph.className = "hz-i hz-i--play";
-      button.setAttribute("aria-label", "Слушать");
-    });
-    audio.addEventListener("timeupdate", paint);
-    audio.addEventListener("loadedmetadata", paint);
-    audio.addEventListener("ended", paint);
+  PlayerController.prototype.sync = function () {
+    var duration = this.audio.duration;
+    var ready = isFinite(duration) && duration > 0;
+    var progress = ready ? this.audio.currentTime / duration : 0;
+    for (var i = 0; i < this.seeks.length; i++) {
+      this.seeks[i].disabled = !ready;
+      this.seeks[i].max = ready ? String(duration) : "0";
+      this.seeks[i].value = ready ? String(this.audio.currentTime) : "0";
+      this.seeks[i].style.setProperty("--hz-level", progress);
+    }
+    for (var j = 0; j < this.elapsed.length; j++) {
+      this.elapsed[j].textContent = clock(this.audio.currentTime);
+      this.remaining[j].textContent = "−" + clock(ready ? duration - this.audio.currentTime : NaN);
+    }
+    for (var k = 0; k < this.rates.length; k++) {
+      this.rates[k].value = String(this.audio.playbackRate);
+    }
+    for (var n = 0; n < this.playButtons.length; n++) {
+      var playing = !this.audio.paused && !this.audio.ended;
+      this.playGlyphs[n].className = "hz-i hz-i--" + (playing ? "pause" : "play");
+      this.playButtons[n].setAttribute("aria-label", playing ? "Пауза" : "Слушать");
+    }
+  };
 
-    bar.addEventListener("click", function (event) {
-      if (!audio.duration) return;
-      var box = bar.getBoundingClientRect();
-      audio.currentTime = audio.duration * ((event.clientX - box.left) / box.width);
-      paint();
-    });
+  PlayerController.prototype.setStatus = function (message) {
+    for (var i = 0; i < this.statuses.length; i++) this.statuses[i].textContent = message;
+  };
 
-    audio.removeAttribute("controls");
-    audio.parentNode.insertBefore(player, audio);
-    paint();
-  }
+  PlayerController.prototype.updateSticky = function () {
+    if (!this.sticky) return;
+    var visible = this.started && this.inlineAbove && !this.audio.ended;
+    this.sticky.hidden = !visible;
+    this.sticky.setAttribute("aria-hidden", visible ? "false" : "true");
+    document.documentElement.classList.toggle("hz-player-is-sticky", visible);
+  };
+
+  PlayerController.prototype.restorePosition = function () {
+    if (this.restored || !isFinite(this.audio.duration)) return;
+    this.restored = true;
+    var saved = readNumber(this.resumeKey);
+    if (saved > 5 && saved < this.audio.duration - 10) {
+      this.resumeFloor = saved;
+      this.lastSavedAt = Date.now();
+      this.audio.currentTime = Math.max(0, saved - 4);
+    }
+  };
+
+  PlayerController.prototype.savePosition = function (force) {
+    if (!this.positionDirty) return;
+    if (!isFinite(this.audio.duration) || !this.audio.currentTime) return;
+    var now = Date.now();
+    if (!force && now - this.lastSavedAt < 5000) return;
+    this.lastSavedAt = now;
+    if (this.audio.ended || this.audio.duration - this.audio.currentTime < 10) {
+      forget(this.resumeKey);
+    } else if (this.audio.currentTime >= 5) {
+      remember(this.resumeKey, Math.floor(Math.max(this.audio.currentTime, this.resumeFloor)));
+    }
+  };
+
+  PlayerController.prototype.onKeydown = function (event) {
+    if (event.defaultPrevented || event.altKey || event.ctrlKey || event.metaKey) return;
+    var target = event.target;
+    if (target && target.closest && target.closest("input, select, textarea, button, a, [contenteditable='true']")) return;
+    if (!this.started && !this.inline.contains(document.activeElement)) return;
+    var key = event.key.toLowerCase();
+    if (key === " " || key === "k") this.togglePlay();
+    else if (key === "j") this.seekBy(-10);
+    else if (key === "l") this.seekBy(15);
+    else if (key === "arrowleft") this.seekBy(-5);
+    else if (key === "arrowright") this.seekBy(5);
+    else if (key === "m") this.audio.muted = !this.audio.muted;
+    else if (key === ",") this.changeRate(-1);
+    else if (key === ".") this.changeRate(1);
+    else return;
+    event.preventDefault();
+  };
+
+  PlayerController.prototype.setupMediaSession = function () {
+    if (!("mediaSession" in navigator)) return;
+    var self = this;
+    try {
+      if ("MediaMetadata" in window) {
+        var heading = document.querySelector("h1");
+        var logo = document.querySelector(".md-header__button.md-logo img");
+        var metadata = {
+          title: heading ? heading.textContent.trim() : document.title,
+          artist: "Digest Ninitux",
+        };
+        if (logo && logo.src) metadata.artwork = [{ src: logo.src }];
+        navigator.mediaSession.metadata = new MediaMetadata(metadata);
+      }
+      var actions = {
+        play: function () { self.togglePlay(); },
+        pause: function () { self.audio.pause(); },
+        seekbackward: function (details) { self.seekBy(-(details.seekOffset || 10)); },
+        seekforward: function (details) { self.seekBy(details.seekOffset || 15); },
+        seekto: function (details) {
+          if (isFinite(self.audio.duration)) {
+            self.positionDirty = true;
+            self.resumeFloor = 0;
+            self.audio.currentTime = Math.max(0, Math.min(self.audio.duration, details.seekTime));
+          }
+        },
+      };
+      Object.keys(actions).forEach(function (name) {
+        try { navigator.mediaSession.setActionHandler(name, actions[name]); } catch (error) { /* unsupported action */ }
+      });
+    } catch (error) {
+      /* Lock-screen integration is optional; the player is not. */
+    }
+  };
+
+  PlayerController.prototype.updateMediaSession = function () {
+    if ("mediaSession" in navigator) {
+      navigator.mediaSession.playbackState = this.audio.paused ? "paused" : "playing";
+    }
+  };
+
+  PlayerController.prototype.updateMediaPosition = function () {
+    if (!("mediaSession" in navigator) || !navigator.mediaSession.setPositionState) return;
+    if (!isFinite(this.audio.duration) || !this.audio.duration) return;
+    try {
+      navigator.mediaSession.setPositionState({
+        duration: this.audio.duration,
+        playbackRate: this.audio.playbackRate,
+        position: Math.min(this.audio.currentTime, this.audio.duration),
+      });
+    } catch (error) {
+      /* Some browsers expose the API but reject it for remote audio. */
+    }
+  };
+
+  PlayerController.prototype.destroy = function () {
+    this.savePosition(true);
+    if (this.observer) this.observer.disconnect();
+    for (var i = 0; i < this.bindings.length; i++) {
+      this.bindings[i][0].removeEventListener(this.bindings[i][1], this.bindings[i][2]);
+    }
+    this.bindings = [];
+    if (this.inline && this.inline.parentNode) this.inline.parentNode.removeChild(this.inline);
+    if (this.sticky && this.sticky.parentNode) this.sticky.parentNode.removeChild(this.sticky);
+    document.documentElement.classList.remove("hz-player-is-sticky");
+    this.audio.pause();
+    this.audio.controls = true;
+    delete this.audio.dataset.hzEnhanced;
+    if ("mediaSession" in navigator) {
+      ["play", "pause", "seekbackward", "seekforward", "seekto"].forEach(function (name) {
+        try { navigator.mediaSession.setActionHandler(name, null); } catch (error) { /* unsupported action */ }
+      });
+    }
+  };
 
   function enhance() {
-    var players = document.querySelectorAll("audio.hz-narration");
-    var mobile = window.matchMedia("(max-width: 599px)").matches;
-    for (var i = 0; i < players.length; i++) {
-      if (!players[i].dataset.hzEnhanced) {
-        players[i].dataset.hzEnhanced = "1";
-        if (mobile) {
-          nativeRateControl(players[i]);
-        } else {
-          build(players[i]);
-        }
-      }
+    var audio = document.querySelector("audio.hz-narration");
+    if (activeController && activeController.audio === audio) return;
+    if (activeController) {
+      activeController.destroy();
+      activeController = null;
+    }
+    if (!audio) return;
+    var controller = new PlayerController(audio);
+    try {
+      controller.mount();
+      activeController = controller;
+    } catch (error) {
+      // The original <audio controls> is deliberately the error boundary.
+      window.console.warn("Narration player enhancement failed", error);
     }
   }
 
-  // navigation.instant swaps the page body over XHR and never re-runs this
-  // file, so binding to DOMContentLoaded alone enhances the first page visited
-  // and nothing after it — the reader gets the browser's default controls until
-  // they reload by hand. Material publishes `document$` for exactly this; it
-  // emits on the first load and on every instant navigation.
-  //
-  // An earlier version listened for "DOMContentSwitch", which is not an event
-  // Material fires, or anything else does. It looked like the instant-navigation
-  // case was handled and it did nothing at all.
-  //
-  // `typeof` rather than a truthiness check: `document$` is an undeclared
-  // global when instant navigation is off, and touching it directly throws.
+  // Material's instant navigation swaps the article without re-running this
+  // file. document$ emits both on first load and after every such swap.
   if (typeof document$ !== "undefined" && document$ && document$.subscribe) {
     document$.subscribe(enhance);
   } else if (document.readyState === "loading") {
