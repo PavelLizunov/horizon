@@ -137,7 +137,7 @@ def test_tera_reads_product_ids_and_common_word_acronyms():
     source = speakable("MI300X, ARM64, NASA, NVIDIA, README и GPT-4o")
     assert tera_text(source) == (
         "эм-ай триста икс, эй-ар-эм шестьдесят четыре, наса, энвидиа, "
-        "ридми и джи-пи-ти четыре-оу"
+        "ридми и джипити четыре-оу"
     )
     assert tera_text(speakable("A3B, FL2VA и MI350P")) == (
         "эй три би, эф-эл два ви-эй и эм-ай триста пятьдесят пи"
@@ -170,8 +170,8 @@ def test_the_sol_luna_article_reaches_tera_without_unhandled_english():
     spoken = tera_text(source)
 
     assert "Оупен Эй Ай" in spoken
-    assert "джи-пи-ти-пять точка шесть Сол" in spoken
-    assert "Чат-джи-пи-ти" in spoken
+    assert "джипити-пять точка шесть Сол" in spoken
+    assert "Чат-джипити" in spoken
     assert "синк хардер" in spoken
     assert "мидиум" in spoken and "хай" in spoken and "ризонинг" in spoken
     assert "Хелп Сентер" in spoken and "Клод" in spoken
