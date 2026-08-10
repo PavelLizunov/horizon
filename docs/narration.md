@@ -11,7 +11,8 @@ object storage, and linked from the page.
 
 - **Text preparation**: `src/ai/narration.py` — pure, no models, no network
 - **Driver**: `scripts/dev_narrate_article.py` — runs on the Mac, in its own venv
-- **Player**: `docs/assets/horizon-player.js`, styles in `docs/assets/horizon-digest.css` §17
+- **Player**: native browser controls plus a tap speed button on phones; custom
+  controls on desktop (`docs/assets/horizon-player.js`, CSS §17)
 - **Tests**: `tests/test_narration.py` (offline)
 
 ## Pipeline

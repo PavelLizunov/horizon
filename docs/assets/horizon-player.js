@@ -1,15 +1,13 @@
 /* Narration player.
  *
  * Progressive enhancement, deliberately: the page ships a plain <audio
- * controls> element, and this script replaces it only once it has run. With
- * JavaScript off, or if this file fails to load, the reader still gets a
- * working player — just the browser's own.
+ * controls> element. Phones keep that familiar native player and get only a
+ * tap-to-cycle speed button; desktop replaces it with the roomier custom UI.
+ * With JavaScript off, the reader still gets a working native player.
  *
- * The layout follows the player everyone already knows: the seek bar across
- * the top, then play with volume beside it, and the clock and speed on the
- * right. Desktop and phones keep plain sliders for both; the narrow layout
- * drops only the clock so volume stays beside the speaker and speed stays
- * beside its 1x readout.
+ * The desktop layout follows the player everyone already knows: the seek bar
+ * across the top, then play with volume beside it, and the clock and speed on
+ * the right.
  *
  * Speed starts at 1x, and 1x is already brisk: the files are encoded a quarter
  * faster than the model read them, because a digest is something people want to
@@ -26,6 +24,7 @@
   // so 1x here is the speed a listener asked for. Anything else would compound:
   // the old default of 1.25 on top of a 1.25 file plays at 1.56.
   var SPEED = { min: 0.75, max: 2.5, step: 0.25, fallback: 1 };
+  var TAP_SPEEDS = [1, 1.25, 1.5, 2];
   // Key renamed with the meaning. A listener who had chosen 1.25 would
   // otherwise keep it and hear the compounded rate without ever asking for it.
   var SPEED_KEY = "hz-narration-speed-of-encoded";
@@ -55,6 +54,10 @@
     } catch (error) {
       /* nothing to do — the preference just will not survive the page */
     }
+  }
+
+  function rateText(value) {
+    return value.toFixed(2).replace(/\.?0+$/, "") + "×";
   }
 
   /* A label that is always visible, plus a slider that opens beside it. Used
@@ -156,7 +159,7 @@
 
     function paint() {
       group.sync(audio.playbackRate);
-      readout.textContent = audio.playbackRate.toFixed(2).replace(/\.?0+$/, "") + "×";
+      readout.textContent = rateText(audio.playbackRate);
     }
 
     audio.addEventListener("ratechange", paint);
@@ -168,6 +171,35 @@
     audio.playbackRate = stored(SPEED_KEY, SPEED.fallback, SPEED.min, SPEED.max);
     paint();
     return group;
+  }
+
+  function nativeRateControl(audio) {
+    var button = document.createElement("button");
+    button.type = "button";
+    button.className = "hz-player__mobile-rate";
+
+    function paint() {
+      var text = rateText(audio.playbackRate);
+      button.textContent = "Скорость " + text;
+      button.setAttribute(
+        "aria-label",
+        "Скорость воспроизведения " + text + ". Нажмите, чтобы изменить"
+      );
+    }
+
+    button.addEventListener("click", function () {
+      var current = TAP_SPEEDS.indexOf(audio.playbackRate);
+      audio.playbackRate = TAP_SPEEDS[(current + 1) % TAP_SPEEDS.length];
+      remember(SPEED_KEY, audio.playbackRate);
+    });
+    audio.addEventListener("ratechange", paint);
+    audio.addEventListener("loadeddata", function () {
+      audio.playbackRate = stored(SPEED_KEY, SPEED.fallback, SPEED.min, SPEED.max);
+    });
+
+    audio.playbackRate = stored(SPEED_KEY, SPEED.fallback, SPEED.min, SPEED.max);
+    paint();
+    audio.parentNode.insertBefore(button, audio.nextSibling);
   }
 
   function build(audio) {
@@ -247,10 +279,15 @@
 
   function enhance() {
     var players = document.querySelectorAll("audio.hz-narration");
+    var mobile = window.matchMedia("(max-width: 599px)").matches;
     for (var i = 0; i < players.length; i++) {
       if (!players[i].dataset.hzEnhanced) {
         players[i].dataset.hzEnhanced = "1";
-        build(players[i]);
+        if (mobile) {
+          nativeRateControl(players[i]);
+        } else {
+          build(players[i]);
+        }
       }
     }
   }

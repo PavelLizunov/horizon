@@ -1524,17 +1524,35 @@ a.hz-tag:hover {
 }
 
 @media screen and (max-width: 599px) {
-  .hz-player {
-    gap: var(--hz-space-2);
-    padding: var(--hz-space-2) var(--hz-space-3);
+  audio.hz-narration[controls] {
+    display: block;
+    width: 100%;
+    max-width: var(--hz-measure);
+    margin: 0 0 var(--hz-space-2);
   }
-  /* Keep the desktop control order on phones: speaker + volume, then speed +
-     its 1× readout. Only the clock yields the space; the seek bar already shows
-     position and both interactive controls must stay visible. */
-  .hz-player__time {
-    display: none;
+
+  .hz-player__mobile-rate {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 2.2rem;
+    margin: 0 0 var(--hz-space-6);
+    padding: 0 var(--hz-space-3);
+    color: var(--hz-text);
+    background: var(--hz-surface);
+    border: var(--hz-hairline) solid var(--hz-border-strong);
+    border-radius: 999px;
+    font: inherit;
+    font-family: var(--hz-font-meta);
+    font-size: var(--hz-t-meta);
+    cursor: pointer;
+    touch-action: manipulation;
   }
-  .hz-player__slider {
-    width: 2.4rem;
+
+  .hz-player__mobile-rate:active,
+  .hz-player__mobile-rate:focus-visible {
+    color: var(--hz-bg);
+    background: var(--hz-text);
+    outline: none;
   }
 }

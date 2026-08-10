@@ -59,10 +59,11 @@ What that discipline caught, in order of how much time each cost:
   Content-Length. Reproduced deliberately. Pages declare the audio immutable for
   a year, so a browser that saw the short copy kept it. Publishing now fetches
   what it published until the bytes match.
-- **The mobile speed slider looked like volume.** The narrow layout hid only the
-  volume slider, leaving its speaker icon immediately beside the speed slider.
-  Phones now keep both desktop control groups in the same order — speaker plus
-  volume, then speed plus `1×` — and omit only the clock to make them fit.
+- **The mobile player belongs to the phone.** Shrinking the desktop controls
+  produced tiny sliders and let saved custom volume state yield the baffling
+  combination of moving progress with no sound. Phones now keep the browser's
+  native audio controls and add one large speed button that cycles through
+  `1×`, `1.25×`, `1.5×`, and `2×`; desktop keeps the custom player.
 
 Chunk bounds (120–400 characters, packed evenly) and the 1.25× encode are
 correctness properties with measurements behind them; `AGENTS.md` §6.5 lists

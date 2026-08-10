@@ -542,6 +542,7 @@ def test_the_player_lands_under_the_byline():
     assert result.index("hz-narration") > result.index("hz-byline")
     assert result.index("hz-narration") < result.index("Текст статьи.")
     assert 'src="https://audio.example/a.opus"' in result
+    assert '<audio class="hz-narration" controls' in result
 
 
 def test_re_narrating_replaces_the_player_instead_of_stacking_them():

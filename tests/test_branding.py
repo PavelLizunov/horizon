@@ -98,19 +98,14 @@ def test_the_site_chrome_and_the_document_agree_on_the_name():
     )
 
 
-def test_mobile_player_keeps_distinct_volume_and_speed_controls():
+def test_mobile_player_keeps_native_controls_and_taps_through_speed():
     css = (REPO / "docs/assets/horizon-digest.css").read_text(encoding="utf-8")
     player = (REPO / "docs/assets/horizon-player.js").read_text(encoding="utf-8")
     mobile = css.split("@media screen and (max-width: 599px)", 1)[1]
 
-    assert re.search(
-        r"\.hz-player__time\s*\{\s*display:\s*none;",
-        mobile,
-    )
-    assert ".hz-player__group:first-of-type" not in mobile
-    assert ".hz-player__group:last-of-type" not in mobile
-    assert player.index("controls.appendChild(volumeControl(audio))") < player.index(
-        "controls.appendChild(rateControl(audio))"
-    )
-    assert "audio.volume = value" in player
-    assert "audio.playbackRate = value" in player
+    assert "audio.hz-narration[controls]" in mobile
+    assert ".hz-player__mobile-rate" in mobile
+    assert "var TAP_SPEEDS = [1, 1.25, 1.5, 2]" in player
+    assert 'window.matchMedia("(max-width: 599px)").matches' in player
+    assert re.search(r"if \(mobile\) \{\s*nativeRateControl\(players\[i\]\)", player)
+    assert re.search(r"else \{\s*build\(players\[i\]\)", player)
