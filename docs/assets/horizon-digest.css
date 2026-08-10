@@ -1528,12 +1528,17 @@ a.hz-tag:hover {
     gap: var(--hz-space-2);
     padding: var(--hz-space-2) var(--hz-space-3);
   }
-  /* On a phone the row cannot hold five controls without the seek bar
-     becoming a stub. Volume has hardware keys; the clock is what the bar
-     already shows. Speed stays — it is the reason this player exists. */
+  /* Phone volume belongs to the hardware keys. Hiding only its slider left the
+     speaker icon beside the speed slider, making speed look like broken volume.
+     Hide that whole group and put the 1× readout before the remaining slider. */
   .hz-player__time,
-  .hz-player .hz-player__group:first-of-type .hz-player__slider {
+  .hz-player .hz-player__group:first-of-type {
     display: none;
+  }
+  .hz-player .hz-player__group:last-of-type .hz-player__rate {
+    order: -1;
+    min-width: 2.4em;
+    text-align: left;
   }
   .hz-player__slider {
     width: 2.4rem;

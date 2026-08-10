@@ -96,3 +96,21 @@ def test_the_site_chrome_and_the_document_agree_on_the_name():
         f"mkdocs.yml says {match.group(1)!r} while the digest says "
         f"{DEFAULT_BRAND!r}; rename both together."
     )
+
+
+def test_mobile_player_does_not_label_speed_with_the_volume_icon():
+    css = (REPO / "docs/assets/horizon-digest.css").read_text(encoding="utf-8")
+    mobile = css.split("@media screen and (max-width: 599px)", 1)[1]
+
+    assert re.search(
+        r"\.hz-player__time,\s*"
+        r"\.hz-player \.hz-player__group:first-of-type\s*"
+        r"\{\s*display:\s*none;",
+        mobile,
+    )
+    assert re.search(
+        r"\.hz-player \.hz-player__group:last-of-type \.hz-player__rate\s*"
+        r"\{[^}]*order:\s*-1;",
+        mobile,
+        re.DOTALL,
+    )

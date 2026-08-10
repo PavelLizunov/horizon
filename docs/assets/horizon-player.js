@@ -7,9 +7,9 @@
  *
  * The layout follows the player everyone already knows: the seek bar across
  * the top, then play with volume beside it, and the clock and speed on the
- * right. Volume and speed are plain sliders, always visible — familiar beats
- * clever, and there is nothing to gain from making someone learn a new volume
- * control.
+ * right. Desktop keeps plain sliders for both. Phones keep only speed because
+ * their volume belongs to the hardware buttons; leaving the speaker beside the
+ * speed slider made the latter look like a broken volume control.
  *
  * Speed starts at 1x, and 1x is already brisk: the files are encoded a quarter
  * faster than the model read them, because a digest is something people want to
