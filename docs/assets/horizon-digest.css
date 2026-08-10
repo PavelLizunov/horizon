@@ -1528,17 +1528,11 @@ a.hz-tag:hover {
     gap: var(--hz-space-2);
     padding: var(--hz-space-2) var(--hz-space-3);
   }
-  /* Phone volume belongs to the hardware keys. Hiding only its slider left the
-     speaker icon beside the speed slider, making speed look like broken volume.
-     Hide that whole group and put the 1× readout before the remaining slider. */
-  .hz-player__time,
-  .hz-player .hz-player__group:first-of-type {
+  /* Keep the desktop control order on phones: speaker + volume, then speed +
+     its 1× readout. Only the clock yields the space; the seek bar already shows
+     position and both interactive controls must stay visible. */
+  .hz-player__time {
     display: none;
-  }
-  .hz-player .hz-player__group:last-of-type .hz-player__rate {
-    order: -1;
-    min-width: 2.4em;
-    text-align: left;
   }
   .hz-player__slider {
     width: 2.4rem;

@@ -61,8 +61,8 @@ What that discipline caught, in order of how much time each cost:
   what it published until the bytes match.
 - **The mobile speed slider looked like volume.** The narrow layout hid only the
   volume slider, leaving its speaker icon immediately beside the speed slider.
-  Phones now hide the whole hardware-volume group and show `1×` before speed;
-  the desktop player is unchanged.
+  Phones now keep both desktop control groups in the same order — speaker plus
+  volume, then speed plus `1×` — and omit only the clock to make them fit.
 
 Chunk bounds (120–400 characters, packed evenly) and the 1.25× encode are
 correctness properties with measurements behind them; `AGENTS.md` §6.5 lists
