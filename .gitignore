@@ -38,6 +38,11 @@ ENV/
 
 # Data files (keep structure, ignore content)
 data/config.json
+# Backups of it too. A stray `data/config.json.bak` on the deployed box was not
+# ignored, and this repository is public — one `git add -A` there would have
+# published the live configuration.
+data/config.json.*
+data/*.bak
 data/youtube-cookies*.txt
 data/seen.json
 data/video-inbox.json
