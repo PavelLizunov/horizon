@@ -100,6 +100,13 @@ KEEP_AFTER_SPEECH = 1.0
 # instead of stopping against the edge of the file.
 PAD_SECONDS = 2.0
 
+# The reading is encoded a quarter faster than the model spoke it, so that a
+# listener who never touches the speed control hears the pace they wanted. The
+# player's default moved to 1x to match; leaving it at 1.25 on top of this would
+# play at 1.56. `atempo` shifts the tempo without shifting the pitch, so the
+# voice is the same voice, just less patient.
+TEMPO = 1.25
+
 # "Consistent" preset from the model's generation-parameter documentation, and
 # identical for every chunk including retries. Varying it per chunk is what
 # made an earlier attempt wander between a whisper and a shout.
@@ -476,9 +483,15 @@ def _speak(text: str, issue: str, slug: str, args, model, checker) -> int:
     listing.unlink()
 
     seconds = _duration(joined)
+    # What the finished file lasts, which is not what was synthesised: the
+    # encode speeds it up. Everything the listener is told — the player's label,
+    # the trailing-noise check — has to be in this timebase, not the other.
+    spoken = seconds / TEMPO
     target = out / f"{prefix}.opus"
     _ffmpeg(
-        "-i", str(joined), "-af", f"apad=pad_dur={PAD_SECONDS}",
+        "-i", str(joined),
+        # Tempo before the pad, so the two seconds of silence stay two seconds.
+        "-af", f"atempo={TEMPO},apad=pad_dur={PAD_SECONDS}",
         "-ac", "1", "-ar", "24000", "-c:a", "libopus",
         "-b:a", args.bitrate, "-application", "audio", "-vbr", "on",
         "-compression_level", "10", str(target),
@@ -501,7 +514,7 @@ def _speak(text: str, issue: str, slug: str, args, model, checker) -> int:
     # to zero reads as "no trailing noise", which is a measurement that did not
     # happen dressed up as a clean result. I misread exactly that and concluded
     # six articles were clipped when they were not.
-    tail = None if whole["speech_end"] > seconds else seconds - whole["speech_end"]
+    tail = None if whole["speech_end"] > spoken else spoken - whole["speech_end"]
     lost = expected - seconds
 
     verdict = "ok"
@@ -528,7 +541,7 @@ def _speak(text: str, issue: str, slug: str, args, model, checker) -> int:
     elif tail is not None and tail > 3:
         verdict = f"{tail:.0f}s TAIL"
     print(
-        f"  {len(pieces)} chunks, {seconds / 60:.1f} min, {synth:.0f}s wall, "
+        f"  {len(pieces)} chunks, {spoken / 60:.1f} min, {synth:.0f}s wall, "
         f"{target.stat().st_size / 1024:.0f} KB, coverage {score:.2f}, "
         f"ending {ending:.2f}, tail {'n/a' if tail is None else f'{tail:.0f}s'}"
         f"  {verdict}",
@@ -544,7 +557,7 @@ def _speak(text: str, issue: str, slug: str, args, model, checker) -> int:
 
     if args.attach:
         url = _upload(target, issue, slug)
-        _attach(issue, slug, url, seconds)
+        _attach(issue, slug, url, spoken)
         print(f"  {url}", flush=True)
     return 0
 

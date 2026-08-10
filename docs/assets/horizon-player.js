@@ -11,17 +11,24 @@
  * clever, and there is nothing to gain from making someone learn a new volume
  * control.
  *
- * Speed starts at 1.25x: a digest is something people want to hear faster
- * than it was read, and Chrome and Safari bury playback rate in a context
- * menu.
+ * Speed starts at 1x, and 1x is already brisk: the files are encoded a quarter
+ * faster than the model read them, because a digest is something people want to
+ * hear faster than it was read and most will never touch the control. The
+ * control is here anyway — Chrome and Safari bury playback rate in a context
+ * menu — but it starts where the listener already wanted to be.
  *
  * Skip buttons stay out: furniture on a three-minute file.
  */
 (function () {
   "use strict";
 
-  var SPEED = { min: 0.75, max: 2.5, step: 0.25, fallback: 1.25 };
-  var SPEED_KEY = "hz-narration-speed";
+  // The files are already encoded a quarter faster than the model read them,
+  // so 1x here is the speed a listener asked for. Anything else would compound:
+  // the old default of 1.25 on top of a 1.25 file plays at 1.56.
+  var SPEED = { min: 0.75, max: 2.5, step: 0.25, fallback: 1 };
+  // Key renamed with the meaning. A listener who had chosen 1.25 would
+  // otherwise keep it and hear the compounded rate without ever asking for it.
+  var SPEED_KEY = "hz-narration-speed-of-encoded";
   var VOLUME_KEY = "hz-narration-volume";
 
   function clock(seconds) {
