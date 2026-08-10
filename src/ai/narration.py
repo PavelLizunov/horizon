@@ -66,6 +66,19 @@ MONTHS = (
     "сентября октября ноября декабря"
 ).split()
 
+# Comparison operators, said aloud. Longest first, so ">=" is not read as ">"
+# followed by a stray "=". These have to go: TeraTTS takes "<" and ">" for
+# language tags and refuses the whole passage, so "llm>=0.32" in one article
+# cost it its narration outright.
+_COMPARISONS: Sequence[Tuple[str, str]] = (
+    (">=", " не ниже "),
+    ("<=", " не выше "),
+    ("=>", " не ниже "),
+    ("=<", " не выше "),
+    (">", " больше "),
+    ("<", " меньше "),
+)
+
 # Written shorthand that a reader says as words. Ordered longest-first so that
 # "т.д." is not eaten by a shorter key.
 _SHORTHAND: Sequence[Tuple[str, str]] = (
@@ -276,6 +289,13 @@ def speakable(text: str) -> str:
     # the entity being recognised.
     text = text.replace("\\#", "#")
     text = html.unescape(text)
+    # Comparison operators are read, not skipped — and one of them stopped a
+    # reading dead: TeraTTS takes "<" and ">" for language tags, so a version
+    # constraint like "llm>=0.32" raised "invalid language tags" and cost that
+    # article its narration. Unescaping above can also put a bare "<" back into
+    # the text, which is the same hazard by another route.
+    for symbol, spoken in _COMPARISONS:
+        text = text.replace(symbol, spoken)
     text = text.replace("\u00a0", " ")
     for written, spoken in _SHORTHAND:
         text = text.replace(written, spoken)

@@ -93,6 +93,13 @@ SEED = 42
 # it landed at 189.6s in a file 188.2s long, which took the final word ("нет")
 # with it. So trim only a tail long enough to be babble, and keep a full second
 # past where the words are thought to stop.
+# A piece that took far longer than its text warrants is mostly silence, and
+# silence joins into an article without complaint. One had twenty-four seconds
+# of nothing in the middle and still ended on real speech, so the trailing-noise
+# check saw a clean tail and passed it. Half the slowest honest reading measured
+# across an issue (14 a second) leaves room for a slow one and none for a hole.
+QUIET_CHARS_PER_SECOND = 6.0
+
 BABBLE_SECONDS = 4.0
 KEEP_AFTER_SPEECH = 1.0
 
@@ -338,6 +345,26 @@ def _speak_chunk_tera(text: str, out: Path, name: str, voice: str, model,
     model.save_wav(str(wav), model.generate_speech(f"<ru>{text}</ru>", voice=voice,
                                                    duration_scale=1))
     if not wav.exists():
+        return None
+
+    # A piece can come back as silence, and silence joins into an article
+    # without complaint: one had twenty-four seconds of nothing in the middle
+    # and still ended on real speech, so the trailing-noise check saw a clean
+    # tail and passed it. Loudness settles it without asking a model — this is
+    # arithmetic on samples. -70 LUFS is far below any speech; the level step
+    # already used that number to decide there was nothing to level, and said
+    # nothing about it.
+    # Integrated loudness is too coarse to catch this: a piece of fifteen silent
+    # seconds and three spoken ones still measures well above any silence
+    # threshold. What separates them is how much text the piece got through per
+    # second. A reading runs 14 to 17 characters a second, measured across an
+    # issue; the article this was written for had a piece at 3.
+    seconds = _duration(wav)
+    density = len(text) / max(seconds, 0.01)
+    if density < QUIET_CHARS_PER_SECOND:
+        print(f"    piece {name.rsplit('-', 1)[-1]}: {seconds:.0f}s for {len(text)} "
+              f"characters — {density:.1f} a second, mostly silence",
+              file=sys.stderr, flush=True)
         return None
 
     probe = out / f"{name}-probe.wav"

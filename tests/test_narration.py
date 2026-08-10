@@ -599,3 +599,13 @@ def test_the_key_is_grouped_by_issue_and_named_for_the_article():
     key = audio_key("2026-08-07-ru", "tech-news-2", b"x")
     assert key.startswith("2026-08-07-ru/tech-news-2-")
     assert key.endswith(".opus")
+
+
+def test_comparison_operators_are_said_and_never_left_in():
+    """TeraTTS reads "<" and ">" as language tags and refuses the passage. One
+    article carried "llm>=0.32" and lost its narration to it."""
+    assert speakable("требует llm>=0.32") == "требует llm не ниже ноль точка тридцать два"
+    assert speakable("если a < b то") == "если a меньше b то"
+    for source in ("llm>=0.32", "a < b", "5 <= 6", "&lt;script&gt;"):
+        spoken = speakable(source)
+        assert "<" not in spoken and ">" not in spoken, spoken
