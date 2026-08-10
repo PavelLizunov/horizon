@@ -125,6 +125,11 @@ def test_narration_player_uses_native_inputs_and_keeps_a_fallback():
     assert 'menu.popover = "auto"' in player
     assert 'event.key === "Escape"' in player
     assert 'event.key === "ArrowDown"' in player
+    assert "var LOAD_RETRY_MS = 6000" in player
+    assert 'this.listen(this.audio, "stalled"' in player
+    assert '"hz_retry=" + Date.now()' in player
+    assert "self.loadRetryCount >= 2" in player
+    assert "this.clearLoadRetry();" in player
     assert 'menu.matches(":popover-open")' in player
     assert '"hz-player__volume--open"' in player
     assert ".hz-player__volume::before" in css

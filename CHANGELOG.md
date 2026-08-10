@@ -9,6 +9,16 @@ recoverable by reading the code.
 
 ## Unreleased
 
+### Narration recovers from a poisoned media cache
+
+The public R2 development endpoint has returned a 200 response whose body
+stopped at 20,480 bytes. A browser could cache that incomplete media response
+under the year-long immutable URL and leave the player waiting at 0:00 until a
+hard refresh. A start that has neither metadata nor progress now retries twice
+with a cache-busting query, then stops with an actionable error instead of
+spinning forever. Publishing also fails before attaching the player when the
+public copy cannot be downloaded at its full size.
+
 ### TeraTTS gets a measured pronunciation lexicon
 
 The full seven-day archive was audited before changing speech text: 86 articles,

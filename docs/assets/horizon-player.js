@@ -11,6 +11,7 @@
   var SPEEDS = [0.75, 1, 1.25, 1.5, 1.75, 2, 2.5];
   var SPEED_KEY = "hz-narration-speed-of-encoded";
   var RESUME_PREFIX = "hz-narration-position:";
+  var LOAD_RETRY_MS = 6000;
   var activeController = null;
 
   function clock(seconds) {
@@ -86,6 +87,9 @@
     this.resumeFloor = 0;
     this.lastSavedAt = 0;
     this.resumeKey = RESUME_PREFIX + window.location.pathname;
+    this.source = audio.getAttribute("src") || audio.src;
+    this.loadRetryTimer = null;
+    this.loadRetryCount = 0;
   }
 
   PlayerController.prototype.listen = function (target, name, handler) {
@@ -392,10 +396,12 @@
         self.sync();
       });
       this.listen(this.audio, "ratechange", function () { self.sync(); });
-      this.listen(this.audio, "waiting", function () { self.setStatus("Звук загружается…"); });
-      this.listen(this.audio, "playing", function () { self.setStatus(""); });
-      this.listen(this.audio, "canplay", function () { self.setStatus(""); });
+      this.listen(this.audio, "waiting", function () { self.waitForAudio(); });
+      this.listen(this.audio, "stalled", function () { self.waitForAudio(); });
+      this.listen(this.audio, "playing", function () { self.audioReady(); });
+      this.listen(this.audio, "canplay", function () { self.audioReady(); });
       this.listen(this.audio, "error", function () {
+        self.clearLoadRetry();
         self.setStatus("Не удалось загрузить аудио. Попробуйте обновить страницу.");
       });
       this.listen(this.audio, "ended", function () {
@@ -442,14 +448,58 @@
     var self = this;
     if (!this.audio.paused) {
       this.audio.pause();
+      this.clearLoadRetry();
+      this.setStatus("");
       return;
     }
+    if (!isFinite(this.audio.duration)) this.loadRetryCount = 0;
     var request = this.audio.play();
     if (request && request.catch) {
       request.catch(function () {
         self.setStatus("Не удалось начать воспроизведение.");
       });
     }
+  };
+
+  PlayerController.prototype.clearLoadRetry = function () {
+    if (this.loadRetryTimer !== null) window.clearTimeout(this.loadRetryTimer);
+    this.loadRetryTimer = null;
+  };
+
+  PlayerController.prototype.audioReady = function () {
+    this.clearLoadRetry();
+    this.setStatus("");
+  };
+
+  PlayerController.prototype.waitForAudio = function () {
+    var self = this;
+    this.setStatus("Звук загружается…");
+    if (
+      this.loadRetryTimer !== null ||
+      isFinite(this.audio.duration) ||
+      this.audio.currentTime > 0 ||
+      this.audio.paused
+    ) return;
+    this.loadRetryTimer = window.setTimeout(function () {
+      self.loadRetryTimer = null;
+      if (isFinite(self.audio.duration) || self.audio.currentTime > 0 || self.audio.paused) return;
+      if (self.loadRetryCount >= 2) {
+        self.audio.pause();
+        self.sync();
+        self.setStatus("Не удалось загрузить аудио. Нажмите «Слушать» ещё раз.");
+        return;
+      }
+      self.loadRetryCount += 1;
+      self.audio.src = self.source + (self.source.indexOf("?") === -1 ? "?" : "&") +
+        "hz_retry=" + Date.now();
+      self.audio.load();
+      var request = self.audio.play();
+      if (request && request.catch) request.catch(function () {
+        self.clearLoadRetry();
+        self.setStatus("Не удалось загрузить аудио. Нажмите «Слушать» ещё раз.");
+      });
+      self.waitForAudio();
+    }, LOAD_RETRY_MS);
   };
 
   PlayerController.prototype.seekBy = function (seconds) {
@@ -618,6 +668,7 @@
 
   PlayerController.prototype.destroy = function () {
     this.savePosition(true);
+    this.clearLoadRetry();
     if (this.observer) this.observer.disconnect();
     for (var i = 0; i < this.bindings.length; i++) {
       this.bindings[i][0].removeEventListener(this.bindings[i][1], this.bindings[i][2]);

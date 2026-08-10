@@ -660,6 +660,20 @@ def test_the_same_audio_keeps_its_address():
     )
 
 
+def test_incomplete_public_audio_is_never_attached(monkeypatch):
+    from scripts import dev_narrate_article as driver
+
+    monkeypatch.setattr(
+        driver.subprocess,
+        "run",
+        lambda *args, **kwargs: type("Result", (), {"stdout": "20480"})(),
+    )
+    monkeypatch.setattr(driver.time, "sleep", lambda seconds: None)
+
+    with pytest.raises(RuntimeError, match="is not 100000 bytes"):
+        driver._wait_until_whole("https://audio.example/a.opus", 100000, attempts=2)
+
+
 def test_the_key_is_grouped_by_issue_and_named_for_the_article():
     key = audio_key("2026-08-07-ru", "tech-news-2", b"x")
     assert key.startswith("2026-08-07-ru/tech-news-2-")

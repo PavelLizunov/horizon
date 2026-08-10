@@ -206,7 +206,7 @@ rather than trade them for worse.
 | --- | --- |
 | Cleanup glob `{name}*.wav` deleted the kept best take | separate namespaces: `-gen*` for output, `-best` for what is kept |
 | `immutable` cache headers on a reusable filename served stale audio | the object key carries a sha256 of the audio |
-| Caddy sent `Host: …r2.dev:443`; R2 truncated the body at 20480 bytes, silently | `header_up Host` is a bare hostname; see `deploy/search/README.md` |
+| R2 returned a 200 response truncated at 20480 bytes and the browser cached it | publishing refuses a short public copy; the player retries a stuck start with a fresh query |
 | Re-narrating stacked a second player onto the page | `attach_player()` removes the old one, and is tested for stability |
 | A page with no byline silently gained no player | `attach_player()` raises instead of returning unchanged |
 

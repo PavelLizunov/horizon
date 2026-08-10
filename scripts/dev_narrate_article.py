@@ -274,8 +274,7 @@ def _wait_until_whole(url: str, expected: int, attempts: int = 5) -> None:
         print(f"    published copy is {got} of {expected} bytes, refetching "
               f"{attempt}/{attempts}", file=sys.stderr)
         time.sleep(2)
-    print(f"    WARNING: {url} still does not serve {expected} bytes",
-          file=sys.stderr)
+    raise RuntimeError(f"published copy of {url} is not {expected} bytes")
 
 
 def _attach(issue: str, slug: str, url: str, seconds: float) -> None:
