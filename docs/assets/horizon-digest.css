@@ -1513,13 +1513,24 @@ audio.hz-narration:not([controls]) {
 .hz-player__skip:focus-visible,
 .hz-player__mute:focus-visible,
 .hz-player__seek:focus-visible,
-.hz-player__speed:focus-visible,
+.hz-player__speed-select:focus-visible,
+.hz-player__speed-button:focus-visible,
+.hz-player__speed-option:focus-visible,
 .hz-player__volume input:focus-visible {
   outline: 2px solid var(--hz-accent);
   outline-offset: 2px;
 }
 
 .hz-player__speed {
+  position: relative;
+  flex: none;
+}
+
+.hz-player__speed-select,
+.hz-player__speed-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   min-height: 2.2rem;
   margin: 0;
   padding: 0 var(--hz-space-3);
@@ -1530,6 +1541,55 @@ audio.hz-narration:not([controls]) {
   font: inherit;
   font-variant-numeric: tabular-nums;
   cursor: pointer;
+}
+
+.hz-player__speed-button {
+  display: none;
+}
+
+.hz-player__speed-menu[popover] {
+  position: fixed;
+  inset: auto;
+  min-width: 4.6rem;
+  margin: 0;
+  padding: var(--hz-space-1);
+  color: var(--hz-text);
+  background: var(--hz-surface);
+  border: var(--hz-hairline) solid var(--hz-border-strong);
+  border-radius: var(--hz-radius-sm);
+  box-shadow: 0 10px 35px rgba(0, 0, 0, 0.2);
+  font-family: var(--hz-font-meta);
+  font-size: var(--hz-t-meta);
+}
+
+.hz-player__speed-menu::backdrop {
+  background: transparent;
+}
+
+.hz-player__speed-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  min-height: 2.2rem;
+  padding: 0 var(--hz-space-2);
+  color: var(--hz-text);
+  background: transparent;
+  border: 0;
+  border-radius: var(--hz-radius-sm);
+  font: inherit;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+}
+
+.hz-player__speed-option:hover,
+.hz-player__speed-option[aria-checked="true"] {
+  background: var(--hz-surface-2);
+}
+
+.hz-player__speed-option[aria-checked="true"]::after {
+  content: "✓";
+  margin-left: var(--hz-space-2);
 }
 
 .hz-player__volume {
@@ -1587,7 +1647,22 @@ audio.hz-narration:not([controls]) {
   margin: 0;
   padding: var(--hz-space-2) var(--hz-space-3);
   box-shadow: 0 10px 35px rgba(0, 0, 0, 0.2);
-  transform: translateX(-50%);
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transform: translate(-50%, calc(100% + 1rem));
+  transition:
+    opacity 160ms ease,
+    transform 160ms ease,
+    visibility 0s linear 160ms;
+}
+
+.hz-player--sticky.hz-player--visible {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+  transform: translate(-50%, 0);
+  transition-delay: 0s;
 }
 
 .hz-player--sticky .hz-player__controls {
@@ -1600,11 +1675,20 @@ audio.hz-narration:not([controls]) {
 
 @media screen and (max-width: 599px) {
   .hz-player {
-    padding: var(--hz-space-2) var(--hz-space-3);
+    gap: var(--hz-space-1);
+    padding: 0.3rem 0.6rem;
+  }
+
+  .hz-player--inline {
+    margin-bottom: var(--hz-space-4);
+  }
+
+  .hz-player__seek {
+    height: 1.1rem;
   }
 
   .hz-player__controls {
-    gap: var(--hz-space-2);
+    gap: var(--hz-space-1);
   }
 
   .hz-player__transport {
@@ -1612,8 +1696,8 @@ audio.hz-narration:not([controls]) {
   }
 
   .hz-player__play {
-    min-width: 2.4rem;
-    min-height: 2.4rem;
+    min-width: 2.2rem;
+    min-height: 2.2rem;
   }
 
   .hz-player__skip {
@@ -1625,18 +1709,38 @@ audio.hz-narration:not([controls]) {
     display: none;
   }
 
-  .hz-player__speed {
+  .hz-player__speed-select,
+  .hz-player__speed-button {
+    width: 2.9rem;
     min-height: 2.2rem;
-    padding-inline: var(--hz-space-2);
+    padding: 0 var(--hz-space-1);
+    text-align: center;
+    text-align-last: center;
+    -webkit-appearance: none;
+    appearance: none;
+  }
+
+  .hz-player__speed--popover .hz-player__speed-select {
+    display: none;
+  }
+
+  .hz-player__speed--popover .hz-player__speed-button {
+    display: inline-flex;
   }
 
   .hz-player--sticky {
     bottom: max(0.35rem, env(safe-area-inset-bottom));
     width: calc(100% - 0.7rem);
+    gap: 0.15rem;
+    padding: 0.25rem 0.5rem;
+  }
+
+  .hz-player--sticky .hz-player__time {
+    display: none;
   }
 
   .hz-player-is-sticky body {
-    padding-bottom: calc(6.5rem + env(safe-area-inset-bottom));
+    padding-bottom: calc(4.7rem + env(safe-area-inset-bottom));
   }
 }
 
@@ -1654,5 +1758,11 @@ audio.hz-narration:not([controls]) {
   .hz-player__skip:hover,
   .hz-player__mute:hover {
     background: transparent;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hz-player--sticky {
+    transition: none;
   }
 }

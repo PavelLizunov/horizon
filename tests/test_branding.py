@@ -113,6 +113,7 @@ def test_narration_player_has_one_controller_on_every_screen():
 
 def test_narration_player_uses_native_inputs_and_keeps_a_fallback():
     player = (REPO / "docs/assets/horizon-player.js").read_text(encoding="utf-8")
+    css = (REPO / "docs/assets/horizon-digest.css").read_text(encoding="utf-8")
 
     assert 'seek.type = "range"' in player
     assert 'document.createElement("select")' in player
@@ -120,6 +121,12 @@ def test_narration_player_uses_native_inputs_and_keeps_a_fallback():
     assert "VOLUME_KEY" not in player
     assert "RESUME_PREFIX" in player
     assert "mediaSession" in player
+    assert 'typeof menu.showPopover === "function"' in player
+    assert 'menu.popover = "auto"' in player
+    assert 'classList.toggle("hz-player--visible", visible)' in player
+    assert "this.sticky.inert = !visible" in player
+    assert "env(safe-area-inset-bottom)" in css
+    assert "@media (prefers-reduced-motion: reduce)" in css
     assert player.index('document.body.appendChild(this.sticky)') < player.index(
         'this.audio.removeAttribute("controls")'
     )

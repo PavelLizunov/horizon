@@ -19,12 +19,15 @@ object storage, and linked from the page.
 The player uses one `<audio>` element for both its inline and sticky views.
 Every screen gets the same transport controls (−10 seconds, play/pause, +15
 seconds), a draggable progress range, elapsed/remaining time, and a native
-speed selector. The selector opens as the phone's familiar system picker and
-remembers the choice. Desktop alone adds volume; volume is deliberately not
-remembered, so an old zero setting cannot produce moving progress with no
-sound. Playback position is saved per article and resumes four seconds before
-the saved point. The sticky view appears only after playback has started and
-the inline player has scrolled above the viewport.
+speed selector. On current phones it is presented as a compact button opening
+a native Popover menu; browsers without Popover support keep the system
+selector. The choice is remembered. Desktop alone adds volume; volume is
+deliberately not remembered, so an old zero setting cannot produce moving
+progress with no sound. Playback position is saved per article and resumes four
+seconds before the saved point. The sticky view appears only after playback has
+started and the inline player has scrolled above the viewport. On phones the
+inline card uses a tighter reader-first rhythm, while the sticky view omits
+duplicate time labels and enters with a short, reduced-motion-aware transition.
 
 The source HTML still contains `<audio controls>`. JavaScript removes
 `controls` only after both custom views mount; a script error, disabled

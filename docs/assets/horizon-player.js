@@ -118,8 +118,10 @@
 
   PlayerController.prototype.makeRate = function () {
     var self = this;
+    var group = document.createElement("div");
+    group.className = "hz-player__speed";
     var select = document.createElement("select");
-    select.className = "hz-player__speed";
+    select.className = "hz-player__speed-select";
     select.setAttribute("aria-label", "Скорость воспроизведения");
     for (var i = 0; i < SPEEDS.length; i++) {
       var option = document.createElement("option");
@@ -131,8 +133,70 @@
       self.audio.playbackRate = parseFloat(select.value);
       remember(SPEED_KEY, self.audio.playbackRate);
     });
-    this.rates.push(select);
-    return select;
+
+    var trigger = button("hz-player__speed-button", "Скорость воспроизведения", "1×");
+    var menu = document.createElement("div");
+    var options = [];
+    group.appendChild(select);
+
+    // Native popovers close on outside click and Escape without another state
+    // machine. Older browsers simply keep the select above.
+    if (typeof menu.showPopover === "function") {
+      group.classList.add("hz-player__speed--popover");
+      menu.className = "hz-player__speed-menu";
+      menu.popover = "auto";
+      menu.setAttribute("role", "menu");
+      menu.setAttribute("aria-label", "Скорость воспроизведения");
+      trigger.setAttribute("aria-haspopup", "menu");
+      trigger.setAttribute("aria-expanded", "false");
+
+      for (var j = 0; j < SPEEDS.length; j++) {
+        var choice = button(
+          "hz-player__speed-option",
+          "Скорость " + rateText(SPEEDS[j]),
+          rateText(SPEEDS[j])
+        );
+        choice.setAttribute("role", "menuitemradio");
+        choice.dataset.rate = String(SPEEDS[j]);
+        this.listen(choice, "click", function (event) {
+          self.audio.playbackRate = parseFloat(event.currentTarget.dataset.rate);
+          remember(SPEED_KEY, self.audio.playbackRate);
+          menu.hidePopover();
+          trigger.focus();
+        });
+        menu.appendChild(choice);
+        options.push(choice);
+      }
+
+      this.listen(trigger, "click", function () {
+        if (menu.matches(":popover-open")) {
+          menu.hidePopover();
+          return;
+        }
+        menu.showPopover();
+        var anchor = trigger.getBoundingClientRect();
+        var left = Math.max(
+          8,
+          Math.min(window.innerWidth - menu.offsetWidth - 8, anchor.right - menu.offsetWidth)
+        );
+        var below = anchor.bottom + 6;
+        var top = below + menu.offsetHeight <= window.innerHeight - 8
+          ? below
+          : Math.max(8, anchor.top - menu.offsetHeight - 6);
+        menu.style.left = left + "px";
+        menu.style.top = top + "px";
+        var checked = menu.querySelector("[aria-checked='true']");
+        if (checked) checked.focus();
+      });
+      this.listen(menu, "toggle", function () {
+        trigger.setAttribute("aria-expanded", menu.matches(":popover-open") ? "true" : "false");
+      });
+      group.appendChild(trigger);
+      group.appendChild(menu);
+    }
+
+    this.rates.push({ select: select, button: trigger, options: options });
+    return group;
   };
 
   PlayerController.prototype.makePlay = function () {
@@ -209,8 +273,8 @@
     root.setAttribute("role", "region");
     root.setAttribute("aria-label", sticky ? "Плеер озвучки" : "Озвучка статьи");
     if (sticky) {
-      root.hidden = true;
       root.setAttribute("aria-hidden", "true");
+      root.inert = true;
     }
 
     var timeline = document.createElement("div");
@@ -376,7 +440,17 @@
       this.remaining[j].textContent = "−" + clock(ready ? duration - this.audio.currentTime : NaN);
     }
     for (var k = 0; k < this.rates.length; k++) {
-      this.rates[k].value = String(this.audio.playbackRate);
+      var rate = this.rates[k];
+      var text = rateText(this.audio.playbackRate);
+      rate.select.value = String(this.audio.playbackRate);
+      rate.button.textContent = text;
+      rate.button.setAttribute("aria-label", "Скорость воспроизведения " + text);
+      for (var m = 0; m < rate.options.length; m++) {
+        rate.options[m].setAttribute(
+          "aria-checked",
+          parseFloat(rate.options[m].dataset.rate) === this.audio.playbackRate ? "true" : "false"
+        );
+      }
     }
     for (var n = 0; n < this.playButtons.length; n++) {
       var playing = !this.audio.paused && !this.audio.ended;
@@ -392,7 +466,8 @@
   PlayerController.prototype.updateSticky = function () {
     if (!this.sticky) return;
     var visible = this.started && this.inlineAbove && !this.audio.ended;
-    this.sticky.hidden = !visible;
+    this.sticky.classList.toggle("hz-player--visible", visible);
+    this.sticky.inert = !visible;
     this.sticky.setAttribute("aria-hidden", visible ? "false" : "true");
     document.documentElement.classList.toggle("hz-player-is-sticky", visible);
   };

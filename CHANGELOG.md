@@ -9,6 +9,16 @@ recoverable by reading the code.
 
 ## Unreleased
 
+### Mobile narration controls stay out of the article's way
+
+The mobile inline player is shorter and leaves less dead space before the
+article. Its transport remains one 44 px touch cluster, speed is a compact
+button backed by the native Popover API (with the select retained as fallback),
+and the sticky view drops duplicate clocks. Sticky now enters from the bottom
+with a short reduced-motion-aware transition instead of appearing abruptly.
+The audio element and controller are unchanged: this is presentation polish,
+not a second mobile player.
+
 ### Site pages no longer wait for narration
 
 Telegram is sent inside the pipeline, before `deploy/run-daily.sh` can build the
