@@ -1,9 +1,17 @@
 # AGENTS.md — Guide for AI Agents Working in This Repo
 
 This repository is a maintained fork of [Thysrael/Horizon](https://github.com/Thysrael/Horizon)
-(MIT) with one major addition: a **YouTube video source** (`sources.video`) that ingests
-channel videos as timestamped transcripts, with ASR and vision fallbacks. Everything below is
-written so an AI coding agent (or a human) can work here safely without any outside context.
+(MIT) with three additions of its own:
+
+- a **YouTube video source** (`sources.video`) that ingests channel videos as timestamped
+  transcripts, with ASR and vision fallbacks (§6);
+- a **published site** — the digest is rendered by MkDocs Material and shipped to an ingress,
+  and Telegram carries only headlines that deep-link into it (§8);
+- **narration** — every published article gets a Russian voice track, generated locally,
+  graded by a second model, and linked from the page with a custom player (§6.5).
+
+Everything below is written so an AI coding agent (or a human) can work here safely without
+any outside context.
 
 ## 1. What This Project Does
 
@@ -12,6 +20,7 @@ Horizon is an AI-driven news digest pipeline:
 ```
 fetch (scrapers) → analyze/score (LLM) → dedup/filter → enrich (LLM + web search)
     → digest markdown → delivery (file / webhook / email / MCP)
+                      → site pages → narration → build → ship   (deploy/run-daily.sh)
 ```
 
 Sources: Hacker News, RSS, Reddit, Telegram, Twitter/X, GitHub, OpenBB, OSS Insight,
@@ -27,6 +36,7 @@ configured in `data/config.json` (see §4) — never hardcoded.
 src/
   scrapers/          # one module per source; video.py is the YouTube scraper
   ai/                # LLM clients, analyzer (scoring), enricher, summarizer
+                     #   narration.py prepares text for speech — pure and tested
   processing/        # profiles engine, dedup, tools (web search)
   services/          # webhook delivery
   mcp/               # MCP server exposing pipeline stages as tools
@@ -42,8 +52,16 @@ data/
 tests/               # pytest suite (offline; network code is mocked)
 scripts/             # dev/debug utilities (dev_check_*.py need a real config to run)
 deploy/              # launchd templates + RUNBOOK.md for driving the deployed box
+                     #   run-daily.sh is what launchd calls: pipeline, index,
+                     #   narration, build, ship — in that order, and the order
+                     #   matters (narration edits the pages mkdocs then reads)
 docs/                # long-form docs; video-source.md is the video module deep dive,
-                     #   pipeline.md maps orchestrator.py's seven stages
+                     #   pipeline.md maps orchestrator.py's seven stages,
+                     #   narration.md carries the speech measurements
+  digest/index.md    # GENERATED but tracked: a fresh clone needs it to build, so
+                     #   it holds an empty-state placeholder. Any git operation on
+                     #   the deployed box restores that over the real listing —
+                     #   run-daily.sh regenerates it before every build
 CHANGELOG.md         # what this fork added and WHY — read before "fixing" something
                      #   that looks odd; several oddities are load-bearing
 PLAN.md              # WORK IN PROGRESS checklist — if it exists, start there:
@@ -180,6 +198,75 @@ The short version:
    file it is supposed to write. Bump `INBOX_VERSION` in `video.py` whenever the
    on-disk shape changes; the reader ignores a mismatch instead of guessing.
 
+## 6.5 Narration (the second thing this fork adds)
+
+Every published article gets a Russian voice track. Read `docs/narration.md`
+before touching it; that file carries the measurements, this one carries the
+rules.
+
+Shape: `src/ai/narration.py` prepares the text and is pure, tested and offline —
+no models, no network. `scripts/dev_narrate_article.py` drives synthesis and runs
+on the Mac in a **separate venv** (`~/tts/.venv`), because TeraTTSv2 needs
+onnxruntime and transformers and neither belongs in the project's dependencies.
+`deploy/run-daily.sh` calls both, between the pipeline and the site build.
+
+    .venv/bin/python scripts/dev_narrate_article.py --issue <id> --write-all <dir>
+    ~/tts/.venv/bin/python scripts/dev_narrate_article.py --speak-dir <dir> --attach
+
+### Invariants — do not break these without reading why they exist
+
+1. **The grader is a different model from the generator.** Whisper transcribes
+   what TeraTTS said and the result is compared with the text it was given. A
+   model grading its own output prefers its own output. Duration is not a check:
+   the worst file measured 204 seconds against 237 expected — inside any
+   tolerance, and unusable.
+2. **Grade per piece, not per finished file.** On a long file of this voice the
+   transcriber drops whole thirty-second windows and reports a sound reading as
+   broken. That was chased for an hour as a synthesis bug; measuring the signal
+   with `astats` showed speech-level energy right through the stretch called
+   empty. On the same pieces one at a time it makes no mistakes. The whole-file
+   transcript thresholds are scoped to `--engine qwen`, where they were
+   calibrated, and must not be re-enabled for Tera without new measurements.
+3. **A failed check is not published.** `_speak` returns non-zero, nothing is
+   uploaded, nothing is linked. An earlier version printed the verdict and
+   published anyway, so a run that had just measured its own output as broken
+   reported "7/7 narrated".
+4. **Chunk bounds are a correctness property, not a preference.** 120–400
+   characters, packed evenly. Whole articles in one generation gave one usable
+   file in seven. Two-word inputs produced eleven seconds of noise from nine
+   characters. Below a 400 ceiling pieces start falling under the floor: at 300,
+   eleven do; at 200, the smallest is three characters. Change these only with a
+   sweep over `data/summaries/` showing neither bound is breached.
+5. **Comparison unspells acronyms before matching.** The pipeline writes
+   "джи-пи-ю" so it is said correctly; a recogniser writes "GPU" straight back.
+   Counting those as different took a sound article from 0.84 to 0.73. Unspell by
+   letter *name*, never by splitting on hyphens — "дабл-ю" contains one.
+6. **Latin stays as written.** Marking it `<en>` for TeraTTS destroys the
+   reading: coverage 0.73 → 0.05, transcript returns as gibberish. Transliterating
+   it wholesale was also tried, for Silero, and reverted with it.
+7. **Files are encoded at 1.25x and the player's default is 1x.** The two move
+   together or they compound. The stored-preference key is versioned for the same
+   reason. Every duration shown to a listener is in the encoded timebase.
+8. **Every published URL is fetched until it returns the whole file.** The first
+   read of a new object through `r2.dev` comes back truncated at exactly 20480
+   bytes — with a 200, and a Content-Length that states the full size. Reproduced
+   deliberately. This warms only the edge the Mac reaches; a listener elsewhere
+   can still get the short read, and the durable fix is leaving `r2.dev`.
+
+### Settled by listening, do not relitigate without new audio
+
+TeraTTSv2 / `ru_f1` reads the digest. Rejected, each on the same article and each
+by ear: **Qwen3-TTS** (wandering intonation, threefold pace swings — QwenLM #239,
+nothing on our side touched it; still reachable via `--engine qwen`, and still
+better at English), **Qwen bf16** (identical faults, so quantisation was never the
+cause), **Qwen 25 Hz** (does not exist publicly, under any author), **Silero v5**
+(reads English badly; its Russian model has no Latin graphemes and drops those
+words silently, and 13.5% of a digest is Latin), **Chatterbox Multilingual** (no
+voice of its own, failed the end check outright, wrong stress and an accent),
+**F5-TTS Russian** (60× slower, hangs on the first piece via its API, CC-BY-NC),
+**marking stress with ruaccent** (Qwen garbles combining acutes; `+` marks are
+read aloud as the word).
+
 ## 7. AI Backend Notes
 
 - Any provider works; the deployment this fork is tuned for uses an
@@ -199,8 +286,15 @@ checks, which commands cost money). The host address is deliberately absent from
 this repo; it lives in the operator's local SSH config (§5).
 Key facts for agents:
 
-- The runtime needs `node` on PATH (yt-dlp's JS challenge solver), plus `ffmpeg`
-  only if you add transcoding (not required today).
+- The runtime needs `node` on PATH (yt-dlp's JS challenge solver) and `ffmpeg`
+  (narration levels, joins and encodes with it).
+- Narration runs from its own venv at `~/tts/.venv`. `mlx_whisper` shells out to
+  a bare `ffmpeg`, and a non-interactive ssh session on that box has almost no
+  PATH — the driver prepends `/opt/homebrew/bin` itself. `uv` is in `~/bin`, not
+  on the default PATH either.
+- Audio lives in Cloudflare R2 and is served through a Caddy vhost that rewrites
+  `Host` to the bare bucket hostname. With a port on it, R2 aborts the body at
+  exactly 20480 bytes and reports nothing.
 - Local ASR needs `mlx-whisper` and ~2 GB disk for the whisper model cache; it is
   Apple-Silicon-only. On other platforms set `video.asr: "off"` and rely on
   subtitles + vision fallback.

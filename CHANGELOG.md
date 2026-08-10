@@ -9,6 +9,53 @@ recoverable by reading the code.
 
 ## Unreleased
 
+### Narration — every article gets a voice, and something checks it
+
+The digest is read aloud in Russian by **TeraTTSv2** (`ru_f1`), locally, as part
+of the daily job. Text preparation lives in `src/ai/narration.py` — pure, tested,
+offline. Synthesis runs from a separate venv on the Mac. `deploy/run-daily.sh`
+calls both between the pipeline and the site build, because attaching a player
+edits the markdown that mkdocs then reads.
+
+The reason there is a checking layer at all: **speech models fail silently.** A
+file exists, its duration is plausible, and the reading stopped a third of the
+way in. The worst example measured 204 seconds against 237 expected — inside any
+tolerance anyone would set, and unusable. So a *different* model transcribes what
+was said and it is compared with the text that was sent. An article that fails is
+not uploaded and not linked.
+
+What that discipline caught, in order of how much time each cost:
+
+- **The grader itself, twice.** Whole-word coverage was the gate first; complete
+  takes topped out at 0.92 because a recogniser mishears, so it never separated
+  good from broken. Later, whole-file transcription of the new voice dropped
+  entire thirty-second windows and reported sound readings as broken — chased for
+  an hour as a synthesis bug before `astats` showed speech-level energy right
+  through the stretch called empty. Grading runs per piece now, where the same
+  transcriber makes no mistakes.
+- **A threshold that outlived its reasoning.** 0.75 was derived from articles of
+  three to five pieces, where a lost piece cost twenty points. Pieces became 400
+  characters and articles nine to fourteen of them; a lost piece now costs seven,
+  inside the range mishearing covers. The exact check is the duration arithmetic.
+- **Endings cut off.** Trimming trailing babble ran at 1.5s of quiet and cut at
+  the transcriber's last timestamp, which is an estimate: on one article it
+  landed past the end of the file and took the final word with it. Now 4s of
+  quiet before trimming, a second of margin, and 2s of deliberate silence after.
+- **Numbers.** 63 distinct tokens still held digits after preparation, in 92
+  places — sentence-final numbers (the lookahead blocked on any period), versions
+  and prices (no rule at all), and HTML entities that survived two escaping
+  passes. Digits reach the model as digits and get read in another language.
+- **A cache that made a truncation permanent.** The first read of a new object
+  through `r2.dev` returns exactly 20480 bytes with a 200 and an honest
+  Content-Length. Reproduced deliberately. Pages declare the audio immutable for
+  a year, so a browser that saw the short copy kept it. Publishing now fetches
+  what it published until the bytes match.
+
+Chunk bounds (120–400 characters, packed evenly) and the 1.25× encode are
+correctness properties with measurements behind them; `AGENTS.md` §6.5 lists
+them as invariants, and `docs/narration.md` carries the numbers and the models
+that were tried and rejected.
+
 ### Visual system v3 — the generator now emits what the CSS was written for
 
 The v2 stylesheet described components the generator never produced, so most
