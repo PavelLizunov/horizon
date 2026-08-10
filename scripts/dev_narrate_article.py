@@ -341,55 +341,127 @@ def _level(path: Path) -> None:
 def _upload(audio: Path, issue: str, slug: str) -> str:
     """Put the file in object storage and return the URL the page should use.
 
-    Raises rather than falling back to a local copy: a half-configured setup
-    that quietly wrote to disk would look like it worked and fill the disk.
+    Raises rather than falling back to an unconfigured target: a setup that
+    quietly wrote elsewhere would look like it worked and fill the wrong disk.
     """
-    import boto3
-    from botocore.client import Config
     from dotenv import load_dotenv
 
     load_dotenv(ENV_PATH)
-    missing = [
-        name
-        for name in ("R2_ACCOUNT_ID", "R2_ACCESS_KEY", "R2_SECRET_KEY", "R2_BUCKET",
-                     "NARRATION_PUBLIC_BASE")
-        if not os.environ.get(name)
-    ]
-    if missing:
-        raise SystemExit(
-            "object storage is not configured: missing "
-            + ", ".join(missing)
-            + "\nRun scripts/setup_r2.py first."
-        )
-
     from src.ai.narration import audio_key
 
     key = audio_key(issue, slug, audio.read_bytes())
-    client = boto3.client(
-        "s3",
-        endpoint_url=f"https://{os.environ['R2_ACCOUNT_ID']}.r2.cloudflarestorage.com",
-        aws_access_key_id=os.environ["R2_ACCESS_KEY"],
-        aws_secret_access_key=os.environ["R2_SECRET_KEY"],
-        region_name="auto",
-        config=Config(signature_version="s3v4"),
-    )
-    client.upload_file(
-        str(audio), os.environ["R2_BUCKET"], key,
-        ExtraArgs={"ContentType": "audio/ogg"},
-    )
-    url = f"{os.environ['NARRATION_PUBLIC_BASE'].rstrip('/')}/{key}"
+    public_base = os.environ.get("NARRATION_PUBLIC_BASE", "").rstrip("/")
+    host = os.environ.get("NARRATION_SSH_HOST", "").strip()
+    root = os.environ.get("NARRATION_SSH_PATH", "").rstrip("/")
+    if not public_base:
+        raise SystemExit("audio storage is not configured: missing NARRATION_PUBLIC_BASE")
+
+    if host or root:
+        if not host or not root:
+            raise SystemExit(
+                "server audio storage needs both NARRATION_SSH_HOST and "
+                "NARRATION_SSH_PATH"
+            )
+        _upload_to_server(audio, key, host, root)
+    else:
+        import boto3
+        from botocore.client import Config
+
+        missing = [
+            name
+            for name in ("R2_ACCOUNT_ID", "R2_ACCESS_KEY", "R2_SECRET_KEY", "R2_BUCKET")
+            if not os.environ.get(name)
+        ]
+        if missing:
+            raise SystemExit(
+                "object storage is not configured: missing "
+                + ", ".join(missing)
+                + "\nRun scripts/setup_r2.py first."
+            )
+        client = boto3.client(
+            "s3",
+            endpoint_url=f"https://{os.environ['R2_ACCOUNT_ID']}.r2.cloudflarestorage.com",
+            aws_access_key_id=os.environ["R2_ACCESS_KEY"],
+            aws_secret_access_key=os.environ["R2_SECRET_KEY"],
+            region_name="auto",
+            config=Config(signature_version="s3v4"),
+        )
+        client.upload_file(
+            str(audio), os.environ["R2_BUCKET"], key,
+            ExtraArgs={
+                "ContentType": "audio/ogg",
+                "CacheControl": "public, max-age=31536000, immutable",
+            },
+        )
+
+    url = f"{public_base}/{key}"
     _wait_until_whole(url, audio.stat().st_size)
     return url
+
+
+def _upload_to_server(audio: Path, key: str, host: str, root: str) -> None:
+    """Atomically publish one file over SSH and keep the newest 2 GiB."""
+    if host.startswith("-") or not re.fullmatch(r"[A-Za-z0-9_.@:-]+", host):
+        raise ValueError("unsafe NARRATION_SSH_HOST")
+    parts = [part for part in root.split("/") if part]
+    key_parts = key.split("/")
+    if (
+        not root.startswith("/")
+        or len(parts) < 2
+        or "//" in root
+        or any(part in (".", "..") for part in parts)
+        or not re.fullmatch(r"/[A-Za-z0-9._/-]+", root)
+        or len(key_parts) < 2
+        or any(part in ("", ".", "..") for part in key_parts)
+        or not re.fullmatch(r"[A-Za-z0-9._/-]+\.opus", key)
+    ):
+        raise ValueError("unsafe narration server path")
+    try:
+        limit = int(os.environ.get("NARRATION_MAX_BYTES", str(2 * 1024**3)))
+    except ValueError as error:
+        raise ValueError("NARRATION_MAX_BYTES must be an integer") from error
+    if limit < 1:
+        raise ValueError("NARRATION_MAX_BYTES must be positive")
+
+    name = key.rsplit("/", 1)[-1]
+    temporary = f"/tmp/horizon-audio-{name}.uploading"
+    destination = f"{root}/{key}"
+    issue_dir = destination.rsplit("/", 1)[0]
+    subprocess.run(
+        ["scp", "-q", "-o", "BatchMode=yes", str(audio), f"{host}:{temporary}"],
+        check=True,
+    )
+    command = f"""set -eu
+root={root}
+dest={destination}
+mkdir -p -- {issue_dir}
+mv -- {temporary} $dest
+chmod 0644 $dest
+total=$(find $root -type f -name '*.opus' -printf '%s\\n' | awk '{{sum += $1}} END {{print sum + 0}}')
+if [ "$total" -gt {limit} ]; then
+  find $root -type f -name '*.opus' -printf '%T@ %s %p\\n' | sort -n | while read -r _ size file; do
+    [ "$total" -le {limit} ] && break
+    [ "$file" = "$dest" ] && continue
+    case "$file" in
+      "$root"/*) rm -f -- "$file" ;;
+      *) exit 1 ;;
+    esac
+    total=$((total - size))
+  done
+  find $root -mindepth 1 -type d -empty -delete
+fi"""
+    subprocess.run(
+        ["ssh", "-o", "BatchMode=yes", host, command],
+        check=True,
+    )
 
 
 def _wait_until_whole(url: str, expected: int, attempts: int = 5) -> None:
     """Fetch the published URL until it returns the whole file.
 
-    The first request for a new object comes back truncated — reproducibly, at
-    exactly 20480 bytes, with a 200 and a Content-Length that says the full
-    size. The second request is complete. The bucket holds the whole object
-    throughout, so this is r2.dev cutting a cold read short, and r2.dev is a
-    development endpoint that Cloudflare rate-limits by design.
+    The former r2.dev route sometimes returned exactly 20480 bytes with a 200.
+    Direct Caddy delivery should pass on the first request, but keeping the
+    check makes a broken copy, route, or disk visible before a page links it.
 
     Wearing that first request here means the listener does not. Without it,
     every newly published narration is broken for whoever opens it first — and

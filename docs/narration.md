@@ -223,7 +223,7 @@ rather than trade them for worse.
 | --- | --- |
 | Cleanup glob `{name}*.wav` deleted the kept best take | separate namespaces: `-gen*` for output, `-best` for what is kept |
 | `immutable` cache headers on a reusable filename served stale audio | the object key carries a sha256 of the audio |
-| R2 returned a 200 response truncated at 20480 bytes and the browser cached it | publishing refuses a short public copy; the player retries a stuck start with a fresh query |
+| The R2 development endpoint returned a 200 response truncated at 20480 bytes | production audio is served directly by Caddy; publishing still refuses a short public copy |
 | Re-narrating stacked a second player onto the page | `attach_player()` removes the old one, and is tested for stability |
 | A page with no byline silently gained no player | `attach_player()` raises instead of returning unchanged |
 
@@ -250,5 +250,17 @@ An article whose verdict is not `ok` is **not uploaded and not linked**, and the
 exits non-zero. The audio stays in `~/tts/out/` so you can listen to what the check
 objected to.
 
-Credentials (`R2_*`, `NARRATION_PUBLIC_BASE`) live in `.env` on the Mac, written by
-`scripts/setup_r2.py`, never in the repository — this repository is public.
+Production audio is copied to the ingress host over SSH and served by Caddy. The
+Mac's `.env` contains only deployment-specific values, never the repository:
+
+```dotenv
+NARRATION_PUBLIC_BASE=https://audio.example.com
+NARRATION_SSH_HOST=USER@HOST
+NARRATION_SSH_PATH=/srv/audio.example.com
+NARRATION_MAX_BYTES=2147483648
+```
+
+The publisher writes under a content-hashed name, moves the upload into place
+atomically, and removes the oldest audio after the directory exceeds 2 GiB. The
+Caddy site is shown in `deploy/audio-server.caddy.example`. If the SSH settings
+are absent, the existing `R2_*` configuration remains available as a fallback.

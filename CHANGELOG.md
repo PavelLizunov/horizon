@@ -1,5 +1,8 @@
 # Changelog
 
+- Narration can now publish directly to an SSH-accessible Caddy host and retain
+  only the newest 2 GiB, avoiding the throttled R2 development endpoint.
+
 What this fork adds on top of [Thysrael/Horizon](https://github.com/Thysrael/Horizon).
 Upstream's own history is not repeated here.
 
