@@ -9,6 +9,17 @@ recoverable by reading the code.
 
 ## Unreleased
 
+### TeraTTS gets a measured pronunciation lexicon
+
+The full seven-day archive was audited before changing speech text: 86 articles,
+188,206 characters, 1,212 unique Latin tokens. A Tera-only pass now supplies
+tested Russian readings for names it distorted or dropped, spells product IDs,
+separates Latin bases from Russian suffixes, and reads prerelease suffixes such
+as `0.32rc2` without gluing them to the number. Ordinary English and the Qwen
+fallback remain untouched. Correct adjacent `<en>` spans were tested too; they
+made the installed Tera voice collapse to gibberish, so language switching is
+not used as a speculative fix.
+
 ### Final player controls no longer feel like form widgets
 
 Speed now uses the same accessible Horizon Popover on desktop and mobile,

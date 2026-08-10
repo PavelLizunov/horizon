@@ -1,9 +1,9 @@
 ---
 layout: default
-title: Narration (Qwen3-TTS)
+title: Narration (TeraTTSv2)
 ---
 
-# Narration (Qwen3-TTS)
+# Narration (TeraTTSv2)
 
 Every published article gets a Russian voice track: the text is normalised, spoken
 locally on the Mac, checked by a *different* model, encoded to Opus, uploaded to
@@ -43,7 +43,7 @@ than an empty gap.
 published page (docs/digest/<issue>/<slug>.md)
   └─ narration_text()   strip refs and URLs, expand numbers and dates
       └─ chunks()       120…700 characters, cut on sentence boundaries
-          └─ Qwen3-TTS  up to 3 attempts per chunk
+          └─ TeraTTSv2  Russian voice, Tera-only pronunciation pass
               └─ whisper-large-v3-turbo  transcribe and grade
                   ├─ reached_the_end() ≥ 0.70  → keep
                   └─ speech_ends_at()          → trim the hallucinated tail
@@ -52,6 +52,46 @@ published page (docs/digest/<issue>/<slug>.md)
                   └─ R2, key <issue>/<slug>-<sha256[:10]>.opus
                       └─ attach_player() under the byline
 ```
+
+## Mixed Russian and English pronunciation
+
+`speakable()` stays engine-neutral. It strips page noise and expands numbers,
+but preserves ordinary English words because both engines read many of them
+better than a blanket transliteration. Immediately before Tera synthesis,
+`tera_text()` applies a small measured pronunciation lexicon, says product IDs
+as words, and separates Latin bases from Russian suffixes. The Qwen fallback
+still receives the original spelling.
+
+The lexicon came from all 86 archived articles through 10 August 2026: 188,206
+characters of narration contained 1,212 unique Latin tokens. Of those, 160 were
+mixed-script words (`OpenAI-совместимый`, `Kubernetes-подов`) and 47 were
+letter/number identifiers (`MI300X`, `ARM64`, `30B-модель`). The Tera pass removes
+every mixed-script token and handles 308 observed lexicon occurrences. Examples:
+
+| Written | Given to Tera | Archive occurrences |
+| --- | --- | ---: |
+| OpenAI | Оупен Эй-Ай | 78 |
+| Claude / Claude Code | Клод / Клод Код | 50 |
+| GitHub | Гитхаб | 25 |
+| Muse / Muse Glimmer | Мьюз / Мьюз Глиммер | 21 |
+| Codex | Кодекс | 19 |
+| Hugging Face | Хаггинг Фэйс | 18 |
+| Shieldstral | Шилдстрал | 11 |
+| MI300X | эм-ай триста икс | 10 |
+| NVIDIA | энвидиа | 10 |
+| Qwen | Квэн | 8 |
+| ChatGPT / HackerOne / PostgreSQL | Чат-джи-пи-ти / Хакер Уан / Постгрес-кью-эл | 7 each |
+
+This is deliberately not an English-to-Russian transliterator. A direct A/B
+check with the deployed `ru_f1` voice showed that adjacent `<en>` spans destroy
+mixed speech (the checker heard only “одну одну одну”), while the lexicon made
+previously distorted or omitted names recognisable. Unknown English remains
+English until a real narration demonstrates that it needs an entry.
+
+Two archived articles (`2026-08-04-ru-tech-blog-5` and `tech-blog-14`) contain
+whole English sections despite the `-ru` issue id. That is an upstream content
+language problem, not a pronunciation problem; growing this lexicon to translate
+their prose would hide the wrong failure.
 
 The finished file is checked again, because the pieces being individually sound
 says nothing about the join. Four checks, cheapest first:

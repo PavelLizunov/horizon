@@ -334,15 +334,17 @@ def _speak_chunk_tera(text: str, out: Path, name: str, voice: str, model,
     On the same pieces one at a time it made no mistakes at all. So the check
     stays, and it runs where it works.
 
-    Latin is left as written. Marking it `<en>` was tried and destroyed the
-    reading outright: coverage 0.73 to 0.05, transcript returned as gibberish.
+    Adjacent `<en>` spans were tried and destroyed the reading outright:
+    coverage 0.73 to 0.05, transcript returned as gibberish. A measured,
+    Tera-only pronunciation pass handles the small set it actually misreads.
     """
     import mlx_whisper
 
-    from src.ai.narration import reached_the_end
+    from src.ai.narration import reached_the_end, tera_text
 
     wav = out / f"{name}.wav"
-    model.save_wav(str(wav), model.generate_speech(f"<ru>{text}</ru>", voice=voice,
+    spoken_text = tera_text(text)
+    model.save_wav(str(wav), model.generate_speech(f"<ru>{spoken_text}</ru>", voice=voice,
                                                    duration_scale=1))
     if not wav.exists():
         return None
@@ -360,9 +362,9 @@ def _speak_chunk_tera(text: str, out: Path, name: str, voice: str, model,
     # second. A reading runs 14 to 17 characters a second, measured across an
     # issue; the article this was written for had a piece at 3.
     seconds = _duration(wav)
-    density = len(text) / max(seconds, 0.01)
+    density = len(spoken_text) / max(seconds, 0.01)
     if density < QUIET_CHARS_PER_SECOND:
-        print(f"    piece {name.rsplit('-', 1)[-1]}: {seconds:.0f}s for {len(text)} "
+        print(f"    piece {name.rsplit('-', 1)[-1]}: {seconds:.0f}s for {len(spoken_text)} "
               f"characters — {density:.1f} a second, mostly silence",
               file=sys.stderr, flush=True)
         return None
@@ -374,7 +376,7 @@ def _speak_chunk_tera(text: str, out: Path, name: str, voice: str, model,
     ).get("text", "")
     probe.unlink(missing_ok=True)
 
-    score = reached_the_end(text, heard)
+    score = reached_the_end(spoken_text, heard)
     if score < MIN_TAIL:
         print(f"    piece {name.rsplit('-', 1)[-1]} reached {score:.2f} of its end",
               file=sys.stderr, flush=True)

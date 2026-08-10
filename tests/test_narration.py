@@ -21,6 +21,7 @@ from src.ai.narration import (
     speech_ends_at,
     spoken_date,
     spoken_number,
+    tera_text,
 )
 
 
@@ -77,6 +78,9 @@ def test_reference_markers_and_urls_are_removed_without_stranding_punctuation():
         "подтверждается релизами."
     )
     assert speakable("подробнее https://example.com/a/b тут") == "подробнее тут"
+    assert speakable(r"проверено \(tool-2-2, tool-2-3\), готово") == (
+        "проверено, готово"
+    )
 
 
 def test_shorthand_is_read_as_words():
@@ -115,6 +119,52 @@ def test_a_product_name_with_digits_is_not_taken_for_initials():
     assert "эй-дабл-ю-эс" in speakable("на MI300X через AWS")
 
 
+def test_tera_gets_only_the_pronunciations_it_needs():
+    source = speakable(
+        "OpenAI и Claude Code работают через GitHub, Hugging Face, Codex и Qwen"
+    )
+    assert tera_text(source) == (
+        "Оупен Эй-Ай и Клод Код работают через Гитхаб, Хаггинг Фэйс, "
+        "Кодекс и Квэн"
+    )
+    # The general text path, including the Qwen fallback, still receives the
+    # real spelling rather than a Russian transliteration intended for Tera.
+    assert "OpenAI" in source and "Claude Code" in source
+
+
+def test_tera_reads_product_ids_and_common_word_acronyms():
+    source = speakable("MI300X, ARM64, NASA, NVIDIA, README и GPT-4o")
+    assert tera_text(source) == (
+        "эм-ай триста икс, эй-ар-эм шестьдесят четыре, наса, энвидиа, "
+        "ридми и джи-пи-ти четыре-оу"
+    )
+    assert tera_text(speakable("A3B, FL2VA и MI350P")) == (
+        "эй три би, эф-эл два ви-эй и эм-ай триста пятьдесят пи"
+    )
+    assert tera_text(speakable("5800H и /v1/chat/completions")) == (
+        "пять тысяч восемьсот эйч и ви один, чат комплишнс"
+    )
+
+
+def test_tera_separates_mixed_script_words_without_transliterating_the_long_tail():
+    source = speakable("admission-вебхуки, runtime-библиотеки.so и Day-2-сценарии")
+    assert tera_text(source) == (
+        "admission вебхуки, runtime библиотеки so и сценарии второго дня"
+    )
+
+
+def test_tera_says_model_parameter_counts_as_words():
+    assert tera_text(speakable("открытая 30B-модель")) == (
+        "открытая модель на тридцать миллиардов параметров"
+    )
+    assert tera_text(speakable("модель содержит 31B параметров")) == (
+        "модель содержит тридцать один миллиард параметров"
+    )
+    assert tera_text(speakable("модель содержит 30B.")) == (
+        "модель содержит тридцать миллиардов параметров."
+    )
+
+
 def test_a_number_that_ends_a_sentence_is_still_spoken():
     """The lookahead blocked on any following period, so a number at the end of
     a sentence was never expanded — and digits are what the model reads with
@@ -131,6 +181,11 @@ def test_versions_and_decimals_are_spoken():
     # acronym is the common shape and both halves have to be right.
     assert speakable("GPT-5.6 Sol") == "джи-пи-ти-пять точка шесть Sol"
     assert speakable("версия 2.0 вышла") == "версия два точка ноль вышла"
+
+
+def test_prerelease_suffixes_do_not_stick_to_spoken_versions():
+    assert speakable("llm 0.32rc2") == "llm ноль точка тридцать два эр-си два"
+    assert speakable("версия 2.0a0") == "версия два точка ноль альфа ноль"
 
 
 def test_punctuation_after_a_version_does_not_block_it():

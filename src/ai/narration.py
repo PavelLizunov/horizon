@@ -43,6 +43,7 @@ __all__ = [
     "speech_ends_at",
     "spoken_number",
     "spoken_date",
+    "tera_text",
 ]
 
 
@@ -50,8 +51,10 @@ __all__ = [
 # The optional backslashes matter: summaries frozen in data/summaries/ store the
 # markdown-escaped shape, and matching only the bare one left "\ \ ." in speech.
 _REFERENCE_RE = re.compile(r"[ \t]*(?:\\?\[[^\]]*\\?\])+")
+_BARE_REFERENCE_RE = re.compile(r"(?<!\w)tool-\d+(?:-\d+)+(?!\w)", re.IGNORECASE)
+_EMPTY_PARENS_RE = re.compile(r"\(\s*(?:,\s*)*\)")
 _URL_RE = re.compile(r"\(?https?://\S+\)?")
-_MARKDOWN_ESCAPE_RE = re.compile(r"\\(?=[\s.,;:!?)]|$)")
+_MARKDOWN_ESCAPE_RE = re.compile(r"\\(?=[\s`*_{}\[\]()#+\-.!,;:?|]|$)")
 _RULE_RE = re.compile(r"(?m)^\s*-{3,}\s*$")
 # A section heading that reaches the model is not read as a heading — a stray
 # "## Блоги" at the end of an article came back as twenty seconds the recogniser
@@ -165,7 +168,10 @@ _BARE_NUMBER_RE = re.compile(r"(?<![\w\d.,-])(\d{1,12})(?![\w\d-]|[.,]\d)")
 # The lookahead has the same shape as the bare-number one, and for the same
 # reason: "до v1.36," was left as digits because a comma followed it. A comma
 # or period only continues a number when a digit comes after it.
-_DECIMAL_RE = re.compile(r"(?<![\d.,])(\d+)[.,](\d+)(?!\d|[.,]\d)")
+_DECIMAL_RE = re.compile(
+    r"(?<![\d.,])(\d+)[.,](\d+)(?:(rc|a|b)(\d+))?(?!\d|[.,]\d)",
+    re.IGNORECASE,
+)
 
 
 def _plural(count: int, one: str, few: str, many: str) -> str:
@@ -237,7 +243,12 @@ def _expand_decimals(text: str) -> str:
         start = match.start()
         lead = " " if start and text[start - 1].isalpha() else ""
         whole, part = int(match.group(1)), int(match.group(2))
-        return f"{lead}{spoken_number(whole)} точка {spoken_number(part)}"
+        result = f"{lead}{spoken_number(whole)} точка {spoken_number(part)}"
+        suffix, suffix_number = match.group(3), match.group(4)
+        if suffix:
+            suffix_name = {"rc": "эр-си", "a": "альфа", "b": "бета"}[suffix.lower()]
+            result += f" {suffix_name} {spoken_number(int(suffix_number))}"
+        return result
 
     return _DECIMAL_RE.sub(replace, text)
 
@@ -274,13 +285,147 @@ def _expand_bare(text: str) -> str:
     return _BARE_NUMBER_RE.sub(lambda m: spoken_number(int(m.group(1))), text)
 
 
+# Tera reads most ordinary English words well even inside a Russian sentence,
+# so a blanket transliterator makes the archive worse. This deliberately small
+# lexicon contains names that were distorted or dropped in an A/B synthesis of
+# the real voice, plus product spellings whose digits cannot be guessed. It is
+# Tera-only: Qwen reads the original English better and keeps receiving it.
+_TERA_PRONUNCIATIONS: Sequence[Tuple[str, str]] = (
+    ("/v1/chat/completions", "ви один, чат комплишнс"),
+    ("Day-2-сценарии", "сценарии второго дня"),
+    ("claude-sonnet-5", "Клод Соннет пять"),
+    ("claude-fable-5", "Клод Фэйбл пять"),
+    ("claude-opus-5", "Клод Опус пять"),
+    ("k8s-dra-driver", "кей восемь эс ди-ар-эй драйвер"),
+    ("джи-пи-ти-4o-mini", "джи-пи-ти четыре-оу мини"),
+    ("gpt-4o-mini", "джи-пи-ти четыре-оу мини"),
+    ("gpt-image-2", "джи-пи-ти имидж два"),
+    ("Gemma4-31B", "Гемма четыре, тридцать один миллиард параметров"),
+    ("ди-эй-эл-эл-E", "далли"),
+    ("дабл-ю-эй-эс-эм", "васм"),
+    ("эн-ви-ай-ди-ай-эй", "энвидиа"),
+    ("ар-и-эй-ди-эм-и", "ридми"),
+    ("джи-пи-ти-4o", "джи-пи-ти четыре-оу"),
+    ("эн-эй-эс-эй", "наса"),
+    ("Claude Code", "Клод Код"),
+    ("Hugging Face", "Хаггинг Фэйс"),
+    ("Hacker News", "Хакер Ньюс"),
+    ("MiniMax-H3", "Минимакс эйч три"),
+    ("Os8088", "Оу-эс восемь тысяч восемьдесят восемь"),
+    ("PostgreSQL", "Постгрес-кью-эл"),
+    ("Muse Glimmer", "Мьюз Глиммер"),
+    ("HackerOne", "Хакер Уан"),
+    ("Shieldstral", "Шилдстрал"),
+    ("ChatGPT", "Чат-джи-пи-ти"),
+    ("MI300X", "эм-ай триста икс"),
+    ("5800H", "пять тысяч восемьсот эйч"),
+    ("Border0", "Бордер зиро"),
+    ("OpenAI", "Оупен Эй-Ай"),
+    ("GitHub", "Гитхаб"),
+    ("Claude", "Клод"),
+    ("Codex", "Кодекс"),
+    ("Qwen", "Квэн"),
+    ("Muse", "Мьюз"),
+    ("Zen6", "Зен шесть"),
+    ("8bit", "восемь бит"),
+    ("12c", "двенадцать си"),
+    ("4o", "четыре-оу"),
+    ("4K", "четыре ка"),
+    ("3D", "три дэ"),
+    ("2x", "два икс"),
+)
+_TERA_PRONUNCIATION_BY_SOURCE = {
+    source.casefold(): spoken for source, spoken in _TERA_PRONUNCIATIONS
+}
+_TERA_PRONUNCIATION_RE = re.compile(
+    r"(?<![A-Za-zА-Яа-яЁё0-9])(?:"
+    + "|".join(
+        re.escape(source)
+        for source, _ in sorted(_TERA_PRONUNCIATIONS, key=lambda item: -len(item[0]))
+    )
+    + r")(?![A-Za-zА-Яа-яЁё0-9])",
+    re.IGNORECASE,
+)
+_TERA_MODEL_SIZE_RE = re.compile(
+    r"(?<!\w)(\d+)B-(модел[А-Яа-яЁё]*)(?!\w)", re.IGNORECASE
+)
+_TERA_PARAMETER_COUNT_RE = re.compile(
+    r"(?<!\w)(\d+)B(?=$|[^\w])(?:\s+параметров|-(?=[А-Яа-яЁё]))?",
+    re.IGNORECASE,
+)
+_TERA_SCALE_SUFFIX_RE = re.compile(r"(?<!\w)(\d+)([kM])(?!\w)")
+_TERA_ACRONYM_NUMBER_RE = re.compile(
+    r"(?<![A-Za-z0-9])([A-Z]{1,6})(\d+)(?![A-Za-z0-9])"
+)
+_TERA_ACRONYM_NUMBER_ACRONYM_RE = re.compile(
+    r"(?<![A-Za-z0-9])([A-Z]{1,6})(\d+)([A-Z]{1,6})(?![A-Za-z0-9])"
+)
+_TERA_X_NUMBER_RE = re.compile(r"(?<!\w)x(\d+)(?!\w)", re.IGNORECASE)
+_TERA_CROSS_SCRIPT_RE = re.compile(
+    r"(?<=[A-Za-z0-9])[-/.](?=[А-Яа-яЁё])|"
+    r"(?<=[А-Яа-яЁё])[-/.](?=[A-Za-z0-9])"
+)
+
+
+def tera_text(text: str) -> str:
+    """Prepare already-normalised prose specifically for Russian TeraTTS."""
+    text = _TERA_PRONUNCIATION_RE.sub(
+        lambda match: _TERA_PRONUNCIATION_BY_SOURCE[match.group(0).casefold()], text
+    )
+
+    def model_size(match: re.Match) -> str:
+        count = int(match.group(1))
+        scale = _plural(count, "миллиард", "миллиарда", "миллиардов")
+        return f"{match.group(2)} на {spoken_number(count)} {scale} параметров"
+
+    def parameter_count(match: re.Match) -> str:
+        count = int(match.group(1))
+        scale = _plural(count, "миллиард", "миллиарда", "миллиардов")
+        separator = " " if match.group(0).endswith("-") else ""
+        return f"{spoken_number(count)} {scale} параметров{separator}"
+
+    def scaled_number(match: re.Match) -> str:
+        count = int(match.group(1))
+        forms = (
+            ("тысяча", "тысячи", "тысяч")
+            if match.group(2) == "k"
+            else ("миллион", "миллиона", "миллионов")
+        )
+        return f"{spoken_number(count)} {_plural(count, *forms)}"
+
+    def acronym_number(match: re.Match) -> str:
+        letters = "-".join(_LETTER_NAMES[letter] for letter in match.group(1))
+        return f"{letters} {spoken_number(int(match.group(2)))}"
+
+    def acronym_number_acronym(match: re.Match) -> str:
+        before = "-".join(_LETTER_NAMES[letter] for letter in match.group(1))
+        after = "-".join(_LETTER_NAMES[letter] for letter in match.group(3))
+        return f"{before} {spoken_number(int(match.group(2)))} {after}"
+
+    text = _TERA_MODEL_SIZE_RE.sub(model_size, text)
+    text = _TERA_PARAMETER_COUNT_RE.sub(parameter_count, text)
+    text = _TERA_SCALE_SUFFIX_RE.sub(scaled_number, text)
+    text = _TERA_ACRONYM_NUMBER_ACRONYM_RE.sub(acronym_number_acronym, text)
+    text = _TERA_ACRONYM_NUMBER_RE.sub(acronym_number, text)
+    text = _TERA_X_NUMBER_RE.sub(
+        lambda match: f"икс {spoken_number(int(match.group(1)))}", text
+    )
+    # A Russian suffix glued to an unknown Latin base is one token to the model.
+    # Keep the English spelling, which Tera usually handles, but give each script
+    # its own word. Slashes and dots have the same failure shape as hyphens.
+    text = _TERA_CROSS_SCRIPT_RE.sub(" ", text)
+    return _WHITESPACE_RE.sub(" ", text).strip()
+
+
 def speakable(text: str) -> str:
     """One passage, cleaned and with its numbers written out."""
     text = _RULE_RE.sub(" ", text)
     text = _HEADING_RE.sub(" ", text)
     text = _URL_RE.sub(" ", text)
     text = _REFERENCE_RE.sub("", text)
+    text = _BARE_REFERENCE_RE.sub("", text)
     text = _MARKDOWN_ESCAPE_RE.sub("", text)
+    text = _EMPTY_PARENS_RE.sub("", text)
     # "admission-webhook&\#x27;\u0438" reached the model spelled out, entity and
     # backslash and all. The summariser escapes for HTML and then for markdown,
     # and neither pass is undone on the way to speech: the markdown rule above
