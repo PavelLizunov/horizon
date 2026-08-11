@@ -34,6 +34,15 @@ from .ai.summarizer import DailySummarizer
 from .ai.enricher import ContentEnricher, EnrichmentBatchResult
 from .ai.tokens import get_usage_snapshot
 from .processing import ProfileRegistry
+from .verification.ledger import ShadowLedger, select_shadow_items
+from .verification.claims import ClaimExtractionOutcome, ClaimExtractor
+from .verification.evidence import (
+    EvidenceVerifier,
+    ItemVerificationBudget,
+    build_verification_report,
+    verification_error_result,
+)
+from .verification.audit import ArtifactAuditOutcome, ArtifactAuditor
 
 
 _TRACKING_QUERY_PARAMETERS = {
@@ -264,12 +273,41 @@ class HorizonOrchestrator:
             if self.last_fetch_report and self.last_fetch_report.all_failed:
                 raise RuntimeError(self.last_fetch_report.failure_message())
 
+            verification_ledger = None
+            url_dedup_members = None
+            topic_dedup_members = None
+            verification_config = getattr(self.config, "verification", None)
+            if verification_config is not None and verification_config.enabled:
+                known_limits = {
+                    item.id: self.config.sources.video.transcript_max_chars
+                    for item in all_items
+                    if item.source_type.value == "video"
+                }
+                try:
+                    verification_ledger = ShadowLedger.start(
+                        all_items,
+                        known_content_limits=known_limits,
+                    )
+                    url_dedup_members = {}
+                    topic_dedup_members = {}
+                except Exception as verification_error:
+                    self.console.print(
+                        f"[yellow]{self.icons['warning']} Verification input capture "
+                        f"failed; publication is unchanged: {verification_error}[/yellow]\n"
+                    )
+
             if not all_items:
                 self.console.print("[yellow]No new content found. Exiting.[/yellow]")
                 return
 
             # 3. Merge cross-source duplicates (same URL from different sources)
-            merged_items = self.merge_cross_source_duplicates(all_items)
+            if url_dedup_members is None:
+                merged_items = self.merge_cross_source_duplicates(all_items)
+            else:
+                merged_items = self.merge_cross_source_duplicates(
+                    all_items,
+                    member_map=url_dedup_members,
+                )
             if len(merged_items) < len(all_items):
                 self.console.print(
                     f"{self.icons['merge']} Merged "
@@ -284,10 +322,31 @@ class HorizonOrchestrator:
             )
 
             # 5. Filter, deduplicate, and balance the digest
-            filtering_result = await self.select_digest_items(
-                analyzed_items,
-            )
+            if topic_dedup_members is None:
+                filtering_result = await self.select_digest_items(analyzed_items)
+            else:
+                filtering_result = await self.select_digest_items(
+                    analyzed_items,
+                    topic_member_map=topic_dedup_members,
+                )
             important_items = filtering_result.items
+
+            if verification_ledger is not None:
+                try:
+                    verification_ledger.capture_selected(
+                        select_shadow_items(
+                            important_items,
+                            verification_config.max_items_per_run,
+                        ),
+                        url_dedup_members=url_dedup_members or {},
+                        topic_dedup_members=topic_dedup_members or {},
+                    )
+                except Exception as verification_error:
+                    self.console.print(
+                        f"[yellow]{self.icons['warning']} Verification selection capture "
+                        f"failed; publication is unchanged: {verification_error}[/yellow]\n"
+                    )
+                    verification_ledger = None
 
             # Show per-sub-source selection breakdown
             selected_counts: Dict[str, int] = defaultdict(int)
@@ -300,6 +359,199 @@ class HorizonOrchestrator:
 
             # 6. Search related stories + enrich with background knowledge (2nd AI pass)
             await self.enrich_items(important_items)
+
+            if verification_ledger is not None:
+                try:
+                    snapshots = verification_ledger.selected_snapshots
+                    claim_client = None
+                    claim_elapsed: Dict[str, float] = {}
+                    if not snapshots:
+                        claim_outcomes = []
+                    else:
+                        try:
+                            claim_client = create_ai_client(self.config.ai)
+                        except Exception:
+                            claim_outcomes = [
+                                ClaimExtractionOutcome(
+                                    selected_input_snapshot_id=snapshot.snapshot_id,
+                                    item_id=snapshot.item_id,
+                                    status="error",
+                                    error_code="model_error",
+                                    model=self.config.ai.model,
+                                    model_calls=0,
+                                )
+                                for snapshot in snapshots
+                            ]
+                        else:
+                            extractor = ClaimExtractor(
+                                claim_client,
+                                max_claims=verification_config.max_core_claims_per_item,
+                            )
+                            claim_outcomes = []
+                            for snapshot in snapshots:
+                                started = asyncio.get_running_loop().time()
+                                try:
+                                    async with asyncio.timeout(
+                                        verification_config.timeout_seconds_per_item
+                                    ):
+                                        outcome = await extractor.extract(snapshot)
+                                except TimeoutError:
+                                    outcome = ClaimExtractionOutcome(
+                                        selected_input_snapshot_id=snapshot.snapshot_id,
+                                        item_id=snapshot.item_id,
+                                        status="error",
+                                        error_code="timeout",
+                                        model=self.config.ai.model,
+                                        duration_seconds=(
+                                            asyncio.get_running_loop().time() - started
+                                        ),
+                                    )
+                                claim_outcomes.append(outcome)
+                                claim_elapsed[snapshot.snapshot_id] = (
+                                    asyncio.get_running_loop().time() - started
+                                )
+                    verification_ledger.capture_claims(claim_outcomes)
+
+                    all_claim_results = []
+                    reports = []
+                    items_by_id = {item.id: item for item in important_items}
+                    for snapshot, claim_outcome in zip(snapshots, claim_outcomes):
+                        claim_results = []
+                        budget = ItemVerificationBudget(
+                            max_model_calls=(
+                                verification_config.max_model_calls_per_item
+                            ),
+                            used_model_calls=claim_outcome.model_calls,
+                        )
+                        evidence_started = asyncio.get_running_loop().time()
+                        if claim_outcome.status == "ok" and claim_outcome.claims:
+                            if claim_client is None:
+                                claim_results = [
+                                    verification_error_result(claim)
+                                    for claim in claim_outcome.claims
+                                ]
+                            else:
+                                verifier = EvidenceVerifier(
+                                    claim_client,
+                                    max_queries=(
+                                        verification_config.max_queries_per_claim
+                                    ),
+                                    max_documents=(
+                                        verification_config.max_documents_per_claim
+                                    ),
+                                    budget=budget,
+                                )
+                                remaining = max(
+                                    verification_config.timeout_seconds_per_item
+                                    - claim_elapsed.get(snapshot.snapshot_id, 0),
+                                    0,
+                                )
+                                completed = 0
+                                try:
+                                    async with asyncio.timeout(remaining):
+                                        for claim in claim_outcome.claims:
+                                            claim_results.append(
+                                                await verifier.verify(claim, snapshot)
+                                            )
+                                            completed += 1
+                                except TimeoutError:
+                                    pending_claims = claim_outcome.claims[completed:]
+                                    timeout_duration = max(
+                                        asyncio.get_running_loop().time()
+                                        - evidence_started
+                                        - sum(
+                                            result.duration_seconds
+                                            for result in claim_results
+                                        ),
+                                        0,
+                                    )
+                                    claim_results.extend(
+                                        verification_error_result(
+                                            claim,
+                                            stop_reason="budget",
+                                            duration_seconds=(
+                                                timeout_duration if index == 0 else 0
+                                            ),
+                                        )
+                                        for index, claim in enumerate(pending_claims)
+                                    )
+
+                        all_claim_results.extend(claim_results)
+                        item = items_by_id.get(snapshot.item_id)
+                        artifact_models = (
+                            item.processing.artifacts
+                            if item is not None and item.processing is not None
+                            else {}
+                        )
+                        artifacts = (
+                            {
+                                language: artifact.model_dump(mode="json")
+                                for language, artifact in artifact_models.items()
+                            }
+                            if artifact_models
+                            else {}
+                        )
+                        elapsed = claim_elapsed.get(snapshot.snapshot_id, 0) + (
+                            asyncio.get_running_loop().time() - evidence_started
+                        )
+                        if not artifact_models:
+                            audit_outcome = ArtifactAuditOutcome(
+                                status="ok",
+                                model=self.config.ai.model,
+                            )
+                        elif claim_client is None:
+                            audit_outcome = ArtifactAuditOutcome(
+                                status="error",
+                                error_code="model_error",
+                                model=self.config.ai.model,
+                            )
+                        else:
+                            auditor = ArtifactAuditor(claim_client, budget)
+                            audit_calls_before = budget.used_model_calls
+                            remaining = max(
+                                verification_config.timeout_seconds_per_item
+                                - elapsed,
+                                0,
+                            )
+                            try:
+                                audit_started = asyncio.get_running_loop().time()
+                                async with asyncio.timeout(remaining):
+                                    audit_outcome = await auditor.audit(
+                                        artifact_models,
+                                        claim_results,
+                                    )
+                            except TimeoutError:
+                                audit_outcome = ArtifactAuditOutcome(
+                                    status="error",
+                                    error_code="timeout",
+                                    model=self.config.ai.model,
+                                    model_calls=(
+                                        budget.used_model_calls - audit_calls_before
+                                    ),
+                                    duration_seconds=(
+                                        asyncio.get_running_loop().time()
+                                        - audit_started
+                                    ),
+                                )
+                        reports.append(
+                            build_verification_report(
+                                run_id=verification_ledger.run_id,
+                                selected_snapshot=snapshot,
+                                claim_outcome=claim_outcome,
+                                claim_results=claim_results,
+                                artifacts=artifacts,
+                                artifact_audit=audit_outcome,
+                            )
+                        )
+                    verification_ledger.capture_verification(
+                        all_claim_results,
+                        reports,
+                    )
+                except Exception as verification_error:
+                    self.console.print(
+                        f"[yellow]{self.icons['warning']} Verification shadow stage "
+                        f"failed; publication is unchanged: {verification_error}[/yellow]\n"
+                    )
 
             # 7. Generate and save daily summaries for each configured language
             today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
@@ -573,7 +825,12 @@ class HorizonOrchestrator:
             return meta["domain"]
         return item.author or "unknown"
 
-    def merge_cross_source_duplicates(self, items: List[ContentItem]) -> List[ContentItem]:
+    def merge_cross_source_duplicates(
+        self,
+        items: List[ContentItem],
+        *,
+        member_map: Optional[Dict[str, List[str]]] = None,
+    ) -> List[ContentItem]:
         """Merge items that point to the same URL from different sources.
 
         This is a stable stage helper for integrations such as MCP.
@@ -586,6 +843,10 @@ class HorizonOrchestrator:
         Returns:
             List[ContentItem]: Deduplicated items
         """
+        if member_map is not None:
+            for item in items:
+                member_map.pop(item.id, None)
+
         # Group by normalized URL
         url_groups: Dict[tuple[object, ...], List[ContentItem]] = {}
         for item in items:
@@ -603,6 +864,8 @@ class HorizonOrchestrator:
             group_copies = [item.model_copy(deep=True) for item in group]
             if len(group) == 1:
                 merged.append(group_copies[0])
+                if member_map is not None:
+                    member_map[group_copies[0].id] = [group[0].id]
                 continue
 
             # Pick the item with the richest content as primary
@@ -625,6 +888,8 @@ class HorizonOrchestrator:
 
             primary.metadata["merged_sources"] = all_sources
             merged.append(primary)
+            if member_map is not None:
+                member_map[primary.id] = list(dict.fromkeys(item.id for item in group))
 
         return merged
 
@@ -633,6 +898,7 @@ class HorizonOrchestrator:
         items: List[ContentItem],
         *,
         log: bool = True,
+        member_map: Optional[Dict[str, List[str]]] = None,
     ) -> List[ContentItem]:
         """Merge items covering the same topic using AI semantic deduplication.
 
@@ -645,8 +911,20 @@ class HorizonOrchestrator:
 
         Falls back to returning items unchanged if the AI call fails.
         """
+        lineage = {item.id: [item.id] for item in items}
+
+        def with_lineage(result: List[ContentItem]) -> List[ContentItem]:
+            if member_map is not None:
+                for item in items:
+                    member_map.pop(item.id, None)
+                for survivor in result:
+                    member_map[survivor.id] = list(
+                        dict.fromkeys(lineage.get(survivor.id, [survivor.id]))
+                    )
+            return result
+
         if len(items) <= 1:
-            return items
+            return with_lineage(items)
 
         from .ai.prompting.deduplication import TOPIC_DEDUP_SYSTEM, TOPIC_DEDUP_USER
         from .ai.utils import parse_json_response
@@ -670,16 +948,16 @@ class HorizonOrchestrator:
             if result is None:
                 if log:
                     self.console.print("[yellow]  dedup: could not parse AI response, skipping[/yellow]")
-                return items
+                return with_lineage(items)
 
             duplicate_groups = result.get("duplicates", [])
         except Exception as e:
             if log:
                 self.console.print(f"[yellow]  dedup: AI call failed ({e}), skipping[/yellow]")
-            return items
+            return with_lineage(items)
 
         if not duplicate_groups:
-            return items
+            return with_lineage(items)
 
         # Build a set of indices to drop (all non-primary duplicates)
         drop_indices: set[int] = set()
@@ -709,6 +987,7 @@ class HorizonOrchestrator:
                     if not primary.content or dup.content not in primary.content:
                         label = dup.source_type.value
                         primary.content = (primary.content or "") + f"\n\n--- From {label} ---\n{dup.content}"
+                lineage[primary.id].extend(lineage.get(dup.id, [dup.id]))
                 if log:
                     self.console.print(
                         f"   [dim]dedup: keep [{primary_idx}] {primary.title}[/dim]\n"
@@ -716,7 +995,9 @@ class HorizonOrchestrator:
                     )
                 drop_indices.add(dup_idx)
 
-        return [item for i, item in enumerate(items) if i not in drop_indices]
+        return with_lineage(
+            [item for i, item in enumerate(items) if i not in drop_indices]
+        )
 
     async def filter_items(
         self,
@@ -726,6 +1007,7 @@ class HorizonOrchestrator:
         topic_dedup: bool = True,
         apply_balance: bool = True,
         log: bool = True,
+        topic_member_map: Optional[Dict[str, List[str]]] = None,
     ) -> FilteringPipelineResult:
         """Apply score thresholding, optional topic dedup, and digest balancing."""
         threshold_items = []
@@ -748,6 +1030,9 @@ class HorizonOrchestrator:
             )
 
         deduped_items = threshold_items
+        if topic_member_map is not None:
+            for item in threshold_items:
+                topic_member_map[item.id] = [item.id]
         if topic_dedup and deduped_items:
             profile_groups: Dict[str, List[ContentItem]] = defaultdict(list)
             for item in deduped_items:
@@ -761,9 +1046,17 @@ class HorizonOrchestrator:
             for profile_id, profile_items in profile_groups.items():
                 settings = self.config.processing.profile_settings.get(profile_id)
                 if settings is None or settings.topic_dedup:
-                    deduped_items.extend(
-                        await self.merge_topic_duplicates(profile_items, log=log)
-                    )
+                    if topic_member_map is None:
+                        merged_profile_items = await self.merge_topic_duplicates(
+                            profile_items, log=log
+                        )
+                    else:
+                        merged_profile_items = await self.merge_topic_duplicates(
+                            profile_items,
+                            log=log,
+                            member_map=topic_member_map,
+                        )
+                    deduped_items.extend(merged_profile_items)
                 else:
                     deduped_items.extend(profile_items)
             deduped_items.sort(
@@ -804,6 +1097,7 @@ class HorizonOrchestrator:
         threshold: Optional[float] = None,
         topic_dedup: bool = True,
         log: bool = True,
+        topic_member_map: Optional[Dict[str, List[str]]] = None,
     ) -> FilteringPipelineResult:
         """Select final digest items using the same stages for every entry point."""
         initial = await self.filter_items(
@@ -812,6 +1106,7 @@ class HorizonOrchestrator:
             topic_dedup=topic_dedup,
             apply_balance=False,
             log=log,
+            topic_member_map=topic_member_map,
         )
         candidates = initial.items
         await self._expand_twitter_discussion(candidates)

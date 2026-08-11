@@ -261,6 +261,15 @@
   "collection": {
     "time_window_hours": 24
   },
+  "verification": {
+    "enabled": false,
+    "max_items_per_run": 5,
+    "max_core_claims_per_item": 3,
+    "max_queries_per_claim": 3,
+    "max_documents_per_claim": 6,
+    "max_model_calls_per_item": 10,
+    "timeout_seconds_per_item": 300
+  },
   "digest": {
     "max_items": null,
     "profile_order": [

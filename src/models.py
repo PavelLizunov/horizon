@@ -680,6 +680,20 @@ class CollectionConfig(BaseModel):
     time_window_hours: int = 24
 
 
+class VerificationConfig(BaseModel):
+    """Hard ceilings for the disabled-by-default evidence shadow pipeline."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    enabled: bool = False
+    max_items_per_run: int = Field(default=5, ge=1)
+    max_core_claims_per_item: int = Field(default=3, ge=1, le=3)
+    max_queries_per_claim: int = Field(default=3, ge=1)
+    max_documents_per_claim: int = Field(default=6, ge=1)
+    max_model_calls_per_item: int = Field(default=10, ge=1)
+    timeout_seconds_per_item: float = Field(default=300, gt=0)
+
+
 class DigestConfig(BaseModel):
     """Controls grouping and limits in the final digest."""
 
@@ -725,6 +739,7 @@ class Config(BaseModel):
     digest: DigestConfig = Field(default_factory=DigestConfig)
     processing: ProcessingConfig = Field(default_factory=ProcessingConfig)
     display: DisplayConfig = Field(default_factory=DisplayConfig)
+    verification: VerificationConfig = Field(default_factory=VerificationConfig)
     extractors: Dict[str, ExtractorConfig] = Field(default_factory=dict)
     email: Optional[EmailConfig] = None
     webhook: Optional[WebhookConfig] = None

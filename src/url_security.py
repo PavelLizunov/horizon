@@ -14,6 +14,10 @@ class UnsafeURLError(ValueError):
     """Raised when a URL may target a non-public network resource."""
 
 
+class URLResolutionError(UnsafeURLError):
+    """Raised when a syntactically safe hostname cannot be resolved."""
+
+
 def validate_http_url(url: str) -> str:
     """Validate the non-network portions of an HTTP(S) URL."""
     try:
@@ -49,13 +53,13 @@ async def _resolve_hostname(hostname: str, port: int) -> set[str]:
                 type=socket.SOCK_STREAM,
             )
         except socket.gaierror as exc:
-            raise UnsafeURLError(f"Could not resolve hostname: {hostname}") from exc
+            raise URLResolutionError(f"Could not resolve hostname: {hostname}") from exc
         return {str(result[4][0]) for result in results}
     return {str(literal)}
 
 
-async def validate_public_http_url(url: str) -> str:
-    """Resolve a URL hostname and require every result to be globally routable."""
+async def resolve_public_http_url(url: str) -> tuple[str, ...]:
+    """Resolve a URL and return only globally routable destination addresses."""
     validate_http_url(url)
     parsed = urlsplit(url)
     hostname = parsed.hostname or ""
@@ -80,6 +84,12 @@ async def validate_public_http_url(url: str) -> str:
             or ip.is_unspecified
         ):
             raise UnsafeURLError(f"Destination resolves to a non-public address: {address}")
+    return tuple(sorted(addresses))
+
+
+async def validate_public_http_url(url: str) -> str:
+    """Resolve a URL hostname and require every result to be globally routable."""
+    await resolve_public_http_url(url)
     return url
 
 

@@ -221,6 +221,81 @@ Accept: a few-second **404 window** — today's page reaches the LXC only after
 
 ---
 
+## Active work — Evidence Ledger shadow MVP
+
+Owner priority changed on 2026-08-11: complete the measured Evidence Ledger
+shadow MVP before resuming B2–B4 or D1. The implementation contract and deferred
+scope live in `docs/verification/implementation-spec.md`.
+
+### [x] E0. Freeze the real integration contracts
+
+Added the repository preflight, evidence methodology and reduced shadow-MVP
+specification. The design uses the existing orchestrator, renderer, atomic-file
+helpers and URL-safety path; SQLite, DAG planning, public labels, revalidation,
+MCP and multimodal work are explicitly deferred.
+
+### [x] E1. Make discovery failure explicit and fetch evidence safely
+
+Added a typed search outcome while preserving the enrichment tool's legacy list
+shape. Evidence downloads share the public-URL resolver, pin the validated IP
+through redirects, inherit no credentials or cookies, and enforce wall-clock,
+streaming byte, response-status and MIME limits. Failed automatic search falls
+back through bounded explicit backends without hiding a total outage. Missing
+MIME headers accept only strictly sniffed UTF-8 text. All tests are offline.
+
+### [x] E2. Add the disabled-by-default shadow ledger
+
+Added canonical fetched/selected snapshot IDs, immutable payload objects,
+content-hashed JSONL revisions and an atomic run manifest. URL and topic dedup
+both retain member maps, selected lineage resolves to every fetched snapshot,
+and capture occurs after Twitter re-analysis/balancing but before enrichment.
+Disabled mode writes nothing; shadow capture never changes publication output.
+
+### [x] E3. Extract at most three anchored core claims
+
+Technology-news shadow items now yield at most three headline/load-bearing
+claims. The model copies an exact source span; code resolves a unique Unicode
+locator against the immutable selected snapshot and derives the claim ID.
+Schema-invalid responses retry; inexact/ambiguous proposals are discarded and
+counted without throwing away exact siblings. Checkable, ambiguous and
+not-checkable states remain explicit, and extraction failure never changes
+publication.
+
+### [x] E4. Retrieve and adjudicate evidence in shadow
+
+Added deterministic primary/independent/counterquery templates, original-URL
+fetching, strict per-claim query/document ceilings, cache accounting and the
+guarded E1 fetch path. Search snippets remain discovery-only. Normalized
+evidence snapshots and exact excerpt cards are persisted with conservative
+copy/direct-record origin keys. A versioned truth table derives all six statuses
+and records gates, coverage, failures, stop reasons and preliminary reports.
+Inexact evidence excerpts are discarded and counted; any partial assessment is
+forced to insufficient evidence. Nothing is reader-visible.
+
+### [x] E5. Audit final artifacts and evaluate
+
+Added a one-call, exact-span audit over every localized artifact title and block.
+Unknown claim IDs and inexact locators fail closed; claims with verification
+errors/not-checkable status do not cover generated prose. Unmatched spans and
+matched evidence IDs are recorded without mutating artifacts or citations. The
+10-case offline adversarial corpus passes 10/10 with zero false support. Five
+paid DeepSeek shadow runs are recorded in
+`docs/verification/evaluation-results.md`. After bounded retries, exact-sibling
+salvage, search fallback and headerless-text handling, the final sample completed
+5/5 claim extractions and 5/5 audits with no verification/search errors. The
+required 100-story/300-claim human study remains a public release gate.
+
+### [x] E6. Decide whether to annotate one profile
+
+Decision recorded: do not annotate. Technical shadow reliability now passes on
+the final five-item sample (4 supported, 2 insufficient, 1 not-checkable, zero
+errors), so the internal ledger may collect more data. The blinded
+100-story/300-claim review, human citation audit and owner-selected
+coverage/cost/latency thresholds remain absent. No public mode, badge or
+renderer change was added, and the release gates were not weakened.
+
+---
+
 ## Phase B — DeepSeek A/B
 
 Goal: decide with evidence whether to move Horizon's LLM work from

@@ -1,11 +1,17 @@
 from __future__ import annotations
 
 import asyncio
+import socket
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from src.url_security import UnsafeURLError, safe_request, validate_public_http_url
+from src.url_security import (
+    URLResolutionError,
+    UnsafeURLError,
+    safe_request,
+    validate_public_http_url,
+)
 
 
 def _run(coro):
@@ -63,6 +69,12 @@ def test_accepts_public_ipv4_and_ipv6_dns_answers():
         new=AsyncMock(return_value={"93.184.216.34", "2606:2800:220:1:248:1893:25c8:1946"}),
     ):
         assert _run(validate_public_http_url("https://example.com/hook"))
+
+
+def test_dns_failure_has_distinct_error_type():
+    with patch("src.url_security.socket.getaddrinfo", side_effect=socket.gaierror):
+        with pytest.raises(URLResolutionError, match="Could not resolve"):
+            _run(validate_public_http_url("https://missing.example/hook"))
 
 
 def test_redirect_is_validated_before_second_request():

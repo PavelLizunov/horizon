@@ -51,6 +51,7 @@ data/subscribers.json
 data/mcp.secrets.json
 data/mcp-secrets.json
 data/mcp-runs/
+data/verification/
 data/x_cookies_*.json
 data/pronunciation-candidates/
 data/pronunciation-reviews/
