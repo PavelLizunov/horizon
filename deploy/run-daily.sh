@@ -45,6 +45,14 @@ ship_site() {
   fi
 }
 
+# Operator-safe republish after a renderer or static-page change. This reuses
+# the production delivery path without fetching news, spending LLM tokens,
+# touching seen state, or running narration.
+if [[ "${HORIZON_SHIP_ONLY:-0}" == "1" ]]; then
+  ship_site
+  exit $?
+fi
+
 log "pipeline: start"
 .venv/bin/horizon --hours "${HORIZON_HOURS:-24}"
 pipeline_status=$?
