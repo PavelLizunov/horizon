@@ -12,6 +12,18 @@ recoverable by reading the code.
 
 ## Unreleased
 
+### VPN coverage is an evidence-first radar
+
+Two profiles separate VPN/proxy engineering from censorship and access
+incidents. The bounded MVP follows eight upstream release feeds, two official
+OONI feeds, four Russian field channels, and separate global/Russian news
+queries. Rankings, discounts, affiliate reviews, vague failures, and generic
+political coverage are explicitly rejected. Reader-facing artifacts preserve a
+`CONFIRMED` / `PROBABLE` / `UNVERIFIED` / `CONTRADICTED` label and an alternative
+explanation instead of promoting a field rumour into a nationwide block.
+GDELT and Google News now accept multiple query configurations while retaining
+the legacy single-object input shape.
+
 ### Pronunciation review uses a separate cheap model
 
 Issue preparation can now send the complete narration text and its remaining

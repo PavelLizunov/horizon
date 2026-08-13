@@ -6,6 +6,7 @@ import re
 from typing import Annotated, Literal, Optional, List, Dict, Any, NamedTuple, Union
 from pydantic import (
     BaseModel,
+    BeforeValidator,
     ConfigDict,
     HttpUrl,
     Field,
@@ -47,8 +48,8 @@ SOURCE_REGISTRY = {
     SourceType.TWITTER.value: SourceDefinition("twitter", item_fields=("users",)),
     SourceType.OPENBB.value: SourceDefinition("openbb", item_fields=("watchlists",)),
     SourceType.OSSINSIGHT.value: SourceDefinition("ossinsight"),
-    SourceType.GDELT.value: SourceDefinition("gdelt"),
-    SourceType.GOOGLE_NEWS.value: SourceDefinition("google_news"),
+    SourceType.GDELT.value: SourceDefinition("gdelt", config_is_list=True),
+    SourceType.GOOGLE_NEWS.value: SourceDefinition("google_news", config_is_list=True),
     SourceType.VIDEO.value: SourceDefinition("video", item_fields=("channels",)),
 }
 
@@ -524,6 +525,19 @@ class GoogleNewsConfig(BaseModel):
     profile: ProfileRoute = None
 
 
+def _source_config_list(value: Any) -> list[Any]:
+    """Accept the legacy single-object shape while storing a uniform list."""
+    if value is None:
+        return []
+    return value if isinstance(value, list) else [value]
+
+
+GDELTConfigList = Annotated[List[GDELTConfig], BeforeValidator(_source_config_list)]
+GoogleNewsConfigList = Annotated[
+    List[GoogleNewsConfig], BeforeValidator(_source_config_list)
+]
+
+
 class SourcesConfig(BaseModel):
     """All sources configuration."""
 
@@ -535,8 +549,8 @@ class SourcesConfig(BaseModel):
     twitter: Optional[TwitterConfig] = None
     openbb: Optional[OpenBBConfig] = None
     ossinsight: OSSInsightConfig = Field(default_factory=OSSInsightConfig)
-    gdelt: Optional[GDELTConfig] = None
-    google_news: Optional[GoogleNewsConfig] = None
+    gdelt: GDELTConfigList = Field(default_factory=list)
+    google_news: GoogleNewsConfigList = Field(default_factory=list)
     video: VideoConfig = Field(default_factory=VideoConfig)
 
 

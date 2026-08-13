@@ -21,6 +21,7 @@ Design notes:
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from datetime import datetime, timezone
 from typing import Any, List, Optional
@@ -93,6 +94,11 @@ class GDELTScraper(BaseScraper):
             response = await self.client.get(
                 self.BASE_URL, params=params, follow_redirects=True
             )
+            if response.status_code == 429:
+                await asyncio.sleep(5.1)
+                response = await self.client.get(
+                    self.BASE_URL, params=params, follow_redirects=True
+                )
             response.raise_for_status()
 
             try:

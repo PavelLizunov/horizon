@@ -109,6 +109,9 @@ def test_build_config_hackernews_follows_selection_and_count():
         "tech-news",
         "tech-blog",
         "finance-news",
+        "video",
+        "vpn-engineering",
+        "censorship-watch",
     ]
 
 

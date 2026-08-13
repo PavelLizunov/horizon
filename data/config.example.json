@@ -30,6 +30,14 @@
       "video": {
         "threshold": 5.0,
         "topic_dedup": false
+      },
+      "vpn-engineering": {
+        "threshold": 6.5,
+        "topic_dedup": true
+      },
+      "censorship-watch": {
+        "threshold": 7.0,
+        "topic_dedup": true
       }
     }
   },
@@ -61,6 +69,79 @@
         "repo": "uv",
         "enabled": true,
         "profile": "tech-news"
+      },
+      {
+        "type": "repo_releases",
+        "owner": "SagerNet",
+        "repo": "sing-box",
+        "enabled": true,
+        "category": "vpn-engine",
+        "profile": "vpn-engineering"
+      },
+      {
+        "type": "repo_releases",
+        "owner": "XTLS",
+        "repo": "Xray-core",
+        "enabled": true,
+        "category": "vpn-engine",
+        "profile": "vpn-engineering"
+      },
+      {
+        "type": "repo_releases",
+        "owner": "apernet",
+        "repo": "hysteria",
+        "enabled": true,
+        "category": "vpn-protocol",
+        "profile": "vpn-engineering"
+      },
+      {
+        "type": "repo_releases",
+        "owner": "klzgrad",
+        "repo": "naiveproxy",
+        "enabled": true,
+        "category": "circumvention-tool",
+        "profile": "vpn-engineering"
+      },
+      {
+        "type": "repo_releases",
+        "owner": "shadowsocks",
+        "repo": "shadowsocks-rust",
+        "enabled": true,
+        "category": "vpn-engine",
+        "profile": "vpn-engineering"
+      },
+      {
+        "type": "repo_releases",
+        "owner": "amnezia-vpn",
+        "repo": "amnezia-client",
+        "enabled": true,
+        "category": "vpn-engine",
+        "profile": [
+          "vpn-engineering",
+          "censorship-watch"
+        ]
+      },
+      {
+        "type": "repo_releases",
+        "owner": "bol-van",
+        "repo": "zapret",
+        "enabled": true,
+        "category": "circumvention-tool",
+        "profile": [
+          "vpn-engineering",
+          "censorship-watch"
+        ]
+      },
+      {
+        "type": "repo_releases",
+        "owner": "hufrea",
+        "repo": "byedpi",
+        "enabled": true,
+        "category": "circumvention-tool",
+        "profile": [
+          "vpn-engineering",
+          "censorship-watch"
+        ]
       }
     ],
     "hackernews": {
@@ -99,6 +180,22 @@
         "enabled": true,
         "category": "cuda",
         "profile": "tech-blog",
+        "content_extractor": "trafilatura"
+      },
+      {
+        "name": "OONI Blog",
+        "url": "https://ooni.org/blog/index.xml",
+        "enabled": true,
+        "category": "measurement",
+        "profile": "censorship-watch",
+        "content_extractor": "trafilatura"
+      },
+      {
+        "name": "OONI Reports",
+        "url": "https://ooni.org/reports/index.xml",
+        "enabled": true,
+        "category": "measurement",
+        "profile": "censorship-watch",
         "content_extractor": "trafilatura"
       },
       {
@@ -194,30 +291,86 @@
             "tech-news",
             "finance-news"
           ]
+        },
+        {
+          "channel": "zatelecom",
+          "enabled": true,
+          "fetch_limit": 20,
+          "category": "ru-censorship",
+          "profile": "censorship-watch"
+        },
+        {
+          "channel": "usher2",
+          "enabled": true,
+          "fetch_limit": 20,
+          "category": "ru-censorship",
+          "profile": "censorship-watch"
+        },
+        {
+          "channel": "amnezia_vpn_news_ru",
+          "enabled": true,
+          "fetch_limit": 20,
+          "category": "vpn-engine",
+          "profile": [
+            "vpn-engineering",
+            "censorship-watch"
+          ]
+        },
+        {
+          "channel": "na_svyazi_helpdesk",
+          "enabled": true,
+          "fetch_limit": 20,
+          "category": "ru-shutdown",
+          "profile": "censorship-watch"
         }
       ]
     },
-    "gdelt": {
-      "enabled": false,
-      "query": "artificial intelligence",
-      "mode": "ArtList",
-      "max_records": 75,
-      "timespan": null,
-      "language": null,
-      "country": null,
-      "category": "news",
-      "profile": "tech-news"
-    },
-    "google_news": {
-      "enabled": false,
-      "query": "artificial intelligence",
-      "language": "en",
-      "country": "US",
-      "ceid": null,
-      "max_results": 100,
-      "category": "news",
-      "profile": "tech-news"
-    },
+    "gdelt": [
+      {
+        "enabled": false,
+        "query": "artificial intelligence",
+        "mode": "ArtList",
+        "max_records": 75,
+        "timespan": null,
+        "language": null,
+        "country": null,
+        "category": "news",
+        "profile": "tech-news"
+      },
+      {
+        "enabled": true,
+        "query": "(\"VPN blocking\" OR \"protocol blocking\" OR \"active probing\" OR \"deep packet inspection\" OR \"internet shutdown\" OR \"QUIC censorship\")",
+        "mode": "ArtList",
+        "max_records": 50,
+        "timespan": "24h",
+        "language": "english",
+        "country": null,
+        "category": "global-censorship",
+        "profile": "censorship-watch"
+      }
+    ],
+    "google_news": [
+      {
+        "enabled": false,
+        "query": "artificial intelligence",
+        "language": "en",
+        "country": "US",
+        "ceid": null,
+        "max_results": 100,
+        "category": "news",
+        "profile": "tech-news"
+      },
+      {
+        "enabled": true,
+        "query": "(VPN OR прокси OR sing-box OR Xray OR AmneziaWG OR zapret) (блокировка OR ТСПУ OR DPI OR замедление OR \"белые списки\" OR шатдаун)",
+        "language": "ru",
+        "country": "RU",
+        "ceid": "RU:ru",
+        "max_results": 50,
+        "category": "ru-censorship",
+        "profile": "censorship-watch"
+      }
+    ],
     "video": {
       "enabled": false,
       "channels": [
@@ -280,9 +433,49 @@
       "tech-news",
       "tech-blog",
       "finance-news",
-      "video"
+      "video",
+      "vpn-engineering",
+      "censorship-watch"
     ],
-    "category_groups": {},
+    "category_groups": {
+      "vpn-russia": {
+        "name": "Россия: блокировки и ограничения",
+        "limit": 5,
+        "categories": [
+          "ru-censorship",
+          "ru-shutdown",
+          "ru-field-report"
+        ]
+      },
+      "vpn-engines": {
+        "name": "VPN-движки и протоколы",
+        "limit": 3,
+        "categories": [
+          "vpn-engine",
+          "vpn-protocol",
+          "vpn-security",
+          "vpn-distribution"
+        ]
+      },
+      "vpn-research": {
+        "name": "Измерения и исследования",
+        "limit": 3,
+        "categories": [
+          "measurement",
+          "circumvention-research",
+          "global-censorship",
+          "global-shutdown"
+        ]
+      },
+      "vpn-community": {
+        "name": "Инструменты энтузиастов",
+        "limit": 1,
+        "categories": [
+          "circumvention-tool",
+          "community-project"
+        ]
+      }
+    },
     "default_group": "other",
     "default_group_limit": null
   },

@@ -310,7 +310,14 @@ def build_config(
         sources=sources,
         collection=collection,
         digest=DigestConfig(
-            profile_order=["tech-news", "tech-blog", "finance-news"]
+            profile_order=[
+                "tech-news",
+                "tech-blog",
+                "finance-news",
+                "video",
+                "vpn-engineering",
+                "censorship-watch",
+            ]
         ),
         processing=ProcessingConfig(
             profile_settings={
@@ -319,6 +326,9 @@ def build_config(
                     threshold=4.0, topic_dedup=False
                 ),
                 "finance-news": ProfileSettingsConfig(threshold=7.0),
+                "video": ProfileSettingsConfig(threshold=5.0),
+                "vpn-engineering": ProfileSettingsConfig(threshold=6.5),
+                "censorship-watch": ProfileSettingsConfig(threshold=7.0),
             }
         ),
     )
@@ -511,8 +521,8 @@ def _count_sources(config: Config) -> int:
         count += len([s for s in config.sources.openbb.watchlists if s.enabled])
     if config.sources.ossinsight.enabled:
         count += 1
-    if config.sources.gdelt and config.sources.gdelt.enabled:
-        count += 1
-    if config.sources.google_news and config.sources.google_news.enabled:
-        count += 1
+    count += len([source for source in config.sources.gdelt if source.enabled])
+    count += len(
+        [source for source in config.sources.google_news if source.enabled]
+    )
     return count

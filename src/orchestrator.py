@@ -810,14 +810,26 @@ class HorizonOrchestrator:
                 tasks.append(self._fetch_with_progress("OSS Insight", oss_scraper, since))
 
             # GDELT 2.0 DOC API (key-less global news)
-            if self.config.sources.gdelt and self.config.sources.gdelt.enabled:
-                gdelt_scraper = GDELTScraper(self.config.sources.gdelt, client)
-                tasks.append(self._fetch_with_progress("GDELT", gdelt_scraper, since))
+            for index, gdelt_config in enumerate(self.config.sources.gdelt, start=1):
+                if gdelt_config.enabled:
+                    gdelt_scraper = GDELTScraper(gdelt_config, client)
+                    tasks.append(
+                        self._fetch_with_progress(
+                            f"GDELT {index}", gdelt_scraper, since
+                        )
+                    )
 
             # Google News RSS (key-less news search)
-            if self.config.sources.google_news and self.config.sources.google_news.enabled:
-                gn_scraper = GoogleNewsScraper(self.config.sources.google_news, client)
-                tasks.append(self._fetch_with_progress("Google News", gn_scraper, since))
+            for index, google_news_config in enumerate(
+                self.config.sources.google_news, start=1
+            ):
+                if google_news_config.enabled:
+                    gn_scraper = GoogleNewsScraper(google_news_config, client)
+                    tasks.append(
+                        self._fetch_with_progress(
+                            f"Google News {index}", gn_scraper, since
+                        )
+                    )
 
             # YouTube channels (RSS discovery + yt-dlp subtitle transcripts).
             # In sidecar mode the work happened in a separate `horizon-video`

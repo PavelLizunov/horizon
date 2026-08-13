@@ -15,7 +15,14 @@ def test_loads_builtin_profiles():
         Path(__file__).resolve().parents[1] / "profiles", "tech-news"
     )
 
-    for profile_id in ("tech-news", "tech-blog", "finance-news"):
+    for profile_id in (
+        "tech-news",
+        "tech-blog",
+        "finance-news",
+        "video",
+        "vpn-engineering",
+        "censorship-watch",
+    ):
         profile = registry.get(profile_id)
         assert profile.match_prompt
         assert profile.analysis_prompt
@@ -33,6 +40,14 @@ def test_loads_builtin_profiles():
     )
     assert tech_impact.optional is True
     assert finance_impact.optional is True
+    assert (
+        registry.get("censorship-watch").definition.enrichment.blocks[1].id
+        == "evidence_status"
+    )
+    censorship = registry.get("censorship-watch")
+    assert "cannot score above 5.9" in censorship.analysis_prompt
+    for label in ("CONFIRMED", "PROBABLE", "UNVERIFIED", "CONTRADICTED"):
+        assert label in censorship.enrichment_prompt
 
 
 @pytest.mark.parametrize(

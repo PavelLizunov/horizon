@@ -142,6 +142,8 @@ def test_mcp_filter_and_reporting_support_every_registered_source() -> None:
         }
     )
 
+    assert len(config.sources.gdelt) == 1
+    assert len(config.sources.google_news) == 1
     assert set(get_enabled_sources(config)) == set(SOURCE_REGISTRY)
     for source_name in SOURCE_REGISTRY:
         filtered, chosen, unknown = apply_source_filter(config, [source_name])

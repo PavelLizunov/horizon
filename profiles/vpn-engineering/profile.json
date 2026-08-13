@@ -1,0 +1,42 @@
+{
+  "id": "vpn-engineering",
+  "name": "VPN Engineering",
+  "display_names": {
+    "ru": "VPN: технологии"
+  },
+  "match": "match.md",
+  "analysis": "analysis.md",
+  "content": {
+    "analysis_max_chars": 5000,
+    "enrichment_max_chars": 10000,
+    "sampling": "head-middle-tail"
+  },
+  "enrichment": {
+    "prompt": "enrichment.md",
+    "blocks": [
+      {
+        "id": "summary",
+        "type": "section",
+        "tools": [],
+        "primary": true
+      },
+      {
+        "id": "evidence_status",
+        "type": "section",
+        "tools": ["web_search"]
+      },
+      {
+        "id": "impact",
+        "type": "section",
+        "tools": ["web_search"],
+        "optional": true
+      },
+      {
+        "id": "what_to_watch_next",
+        "type": "section",
+        "tools": [],
+        "optional": true
+      }
+    ]
+  }
+}

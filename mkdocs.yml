@@ -89,6 +89,7 @@ exclude_docs: |
   extractors.md
   twitter-cookies.md
   narration.md
+  vpn-radar.md
   verification/
 
 # Digest pages are generated per run and gitignored; they must not be listed

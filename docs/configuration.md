@@ -407,6 +407,37 @@ RSS feed, Reddit subreddit or user, or OpenBB watchlist.
 }
 ```
 
+### GDELT and Google News queries
+
+Both sources accept lists so independent topics can coexist. The legacy
+single-object shape is still accepted and normalized to a one-item list.
+
+```json
+{
+  "sources": {
+    "gdelt": [
+      {
+        "enabled": true,
+        "query": "(\"VPN blocking\" OR \"internet shutdown\")",
+        "timespan": "24h",
+        "category": "global-censorship",
+        "profile": "censorship-watch"
+      }
+    ],
+    "google_news": [
+      {
+        "enabled": true,
+        "query": "VPN (блокировка OR DPI)",
+        "language": "ru",
+        "country": "RU",
+        "category": "ru-censorship",
+        "profile": "censorship-watch"
+      }
+    ]
+  }
+}
+```
+
 ### Reddit
 
 Reddit scraping is free and does not require API keys. Subreddit posts and comments prefer `old.reddit.com`; JSON and RSS endpoints are used as fallbacks when needed.
@@ -600,7 +631,7 @@ digest limits:
 {
   "digest": {
     "max_items": 20,
-    "profile_order": ["tech-news", "tech-blog", "finance-news"],
+    "profile_order": ["tech-news", "tech-blog", "finance-news", "video", "vpn-engineering", "censorship-watch"],
     "category_groups": {
       "ai": {
         "name": "AI / Machine Learning",
@@ -641,7 +672,7 @@ All source types support a `category` field: `sources.rss[].category`,
 `sources.reddit.subreddits[].category`, `sources.reddit.users[].category`,
 `sources.telegram.channels[].category`, `sources.twitter.category`,
 `sources.openbb.watchlists[].category`, `sources.ossinsight.category`,
-`sources.gdelt.category`, and `sources.google_news.category`.
+`sources.gdelt[].category`, and `sources.google_news[].category`.
 Sources without a category set enter the default group.
 
 If the same category appears in multiple groups, Horizon logs a warning and uses

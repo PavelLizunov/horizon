@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import asyncio
 from datetime import datetime, timezone
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import httpx
 
@@ -118,6 +118,23 @@ def test_http_error_returns_empty() -> None:
     scraper = GDELTScraper(config, client)
 
     assert asyncio.run(scraper.fetch(SINCE)) == []
+
+
+def test_rate_limit_retries_once_after_provider_window() -> None:
+    limited = MagicMock(status_code=429)
+    success = MagicMock(status_code=200)
+    success.raise_for_status.return_value = None
+    success.json.return_value = _articles_payload()
+    client = AsyncMock()
+    client.get.side_effect = [limited, success]
+    scraper = GDELTScraper(GDELTConfig(enabled=True, query="ai"), client)
+
+    with patch("src.scrapers.gdelt.asyncio.sleep", new_callable=AsyncMock) as sleep:
+        items = asyncio.run(scraper.fetch(SINCE))
+
+    assert len(items) == 2
+    assert client.get.await_count == 2
+    sleep.assert_awaited_once_with(5.1)
 
 
 def test_missing_articles_key_returns_empty() -> None:

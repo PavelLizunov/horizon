@@ -45,8 +45,8 @@ def make_sources(**overrides):  # type: ignore[no-untyped-def]
         "twitter": None,
         "openbb": None,
         "ossinsight": SimpleNamespace(enabled=False),
-        "gdelt": None,
-        "google_news": None,
+        "gdelt": [],
+        "google_news": [],
         "video": SimpleNamespace(enabled=False, channels=[]),
     }
     values.update(overrides)
@@ -81,6 +81,27 @@ def test_all_success_empty_has_normal_success_report(monkeypatch) -> None:
     assert orchestrator.last_fetch_report.status == "success"
     assert orchestrator.last_fetch_report.all_failed is False
     assert orchestrator.last_fetch_report.to_dict()["empty"] == 1
+
+
+def test_multiple_gdelt_queries_are_fetched_independently(monkeypatch) -> None:
+    orchestrator = make_orchestrator()
+    orchestrator.config = SimpleNamespace(  # type: ignore[assignment]
+        sources=make_sources(
+            gdelt=[SimpleNamespace(enabled=True), SimpleNamespace(enabled=True)]
+        ),
+        extractors={},
+    )
+    monkeypatch.setattr(
+        "src.orchestrator.GDELTScraper",
+        lambda config, client: StubScraper(),
+    )
+
+    items = asyncio.run(orchestrator.fetch_all_sources(SINCE))
+
+    assert items == []
+    assert [
+        outcome.source_name for outcome in orchestrator.last_fetch_report.outcomes
+    ] == ["GDELT 1", "GDELT 2"]
 
 
 def test_partial_failure_keeps_items_and_source_names(monkeypatch) -> None:

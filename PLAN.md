@@ -221,7 +221,50 @@ Accept: a few-second **404 window** — today's page reaches the LXC only after
 
 ---
 
-## Active work — Evidence Ledger shadow MVP
+## Active work — VPN and censorship radar MVP
+
+Owner priority changed on 2026-08-13: the deployed pipeline no longer uses the
+Alibaba Token Plan. It is configured for paid `deepseek-v4-flash` through the
+OpenCode Go endpoint with no provider fallback; `deepseek-v4-flash-free` is not
+configured anywhere in the runtime.
+
+### [x] V0. Add the two evidence-calibrated profiles
+
+Added `vpn-engineering` and `censorship-watch` with hard exclusions, thresholds
+of 6.5/7.0, a 5.9 ceiling for a single field report, evidence labels, alternative
+explanations and explicit next-measurement guidance.
+
+### [x] V1. Preserve existing queries while adding the radar
+
+GDELT and Google News now accept arrays while normalizing their legacy single
+objects. This is required because production already has a finance Google News
+query; replacing it to add the Russian VPN query would silently delete coverage.
+
+### [x] V2. Add the bounded source set and balanced quotas
+
+The MVP enables eight checked upstream release feeds, two checked official OONI
+feeds, four checked public Telegram channels, one global GDELT query and one
+Russian Google News query. VPN category groups admit at most 12 items without
+limiting unmatched technology, finance or video items.
+
+### [ ] V3. Complete the first live OpenCode Go run
+
+The configuration and API key are valid, but OpenCode currently returns
+`RegionError` for DeepSeek V4 Flash until the workspace owner opts in to the
+model's China-hosted endpoint. Enable it in the Go console, then run one bounded
+live fetch/analyse/publish cycle and inspect noise, evidence labels, cache usage
+and quota cost before widening the source set.
+
+### [ ] V4. Add early technical signals and incident state
+
+After the MVP measurement, add GitHub Issues/PR/Discussions and a persistent
+incident ledger. Only that ledger may implement transitions such as
+`UNVERIFIED → PROBABLE → CONFIRMED → RESOLVED`; daily article dedup is not a
+substitute.
+
+---
+
+## Completed work — Evidence Ledger shadow MVP
 
 Owner priority changed on 2026-08-11: complete the measured Evidence Ledger
 shadow MVP before resuming B2–B4 or D1. The implementation contract and deferred
