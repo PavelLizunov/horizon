@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections import Counter
 from dataclasses import dataclass, field, replace
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 import hashlib
 import json
 import re
@@ -201,11 +201,21 @@ class ClaimVerificationResult:
 def build_public_verification(
     claim_results: Iterable[ClaimVerificationResult],
     *,
-    state: str = "checked",
+    state: str = "complete",
     token_usage: dict[str, Any] | None = None,
+    selected_snapshot: SelectedInputSnapshot | None = None,
+    checked_at: datetime | None = None,
 ) -> dict[str, Any]:
     """Return the small, source-linked subset that is safe to publish."""
+    checked = checked_at or datetime.now(timezone.utc)
+    if checked.tzinfo is None:
+        raise ValueError("checked_at must be timezone-aware")
+    published = _published_at(selected_snapshot)
+    age_hours = (
+        max((checked - published).total_seconds() / 3600, 0) if published else None
+    )
     claims = []
+    next_checks = []
     for result in claim_results:
         snapshots = {
             snapshot.snapshot_id: snapshot for snapshot in result.evidence_snapshots
@@ -220,11 +230,27 @@ def build_public_verification(
             if snapshot is None or source_key in seen_sources:
                 continue
             seen_sources.add(source_key)
-            sources.append({"url": snapshot.final_url, "stance": card.stance})
+            sources.append(
+                {
+                    "url": snapshot.final_url,
+                    "stance": card.stance,
+                    "source_class": card.source_class,
+                }
+            )
+        public_status = public_claim_status(
+            result.claim.kind,
+            result.adjudication.status,
+            age_hours,
+        )
+        next_check = _next_check_at(result, published, checked)
+        if next_check is not None:
+            next_checks.append(next_check)
         claims.append(
             {
                 "text": result.claim.normalized_claim,
+                "kind": result.claim.kind,
                 "status": result.adjudication.status,
+                "public_status": public_status,
                 "sources": sources,
             }
         )
@@ -233,9 +259,81 @@ def build_public_verification(
         "state": state,
         "claims": claims,
     }
+    if state != "not_checked":
+        public["checked_at"] = _timestamp(checked)
+    if published is not None:
+        public["published_at"] = _timestamp(published)
+        public["source_age_hours"] = round(age_hours or 0, 1)
+    if selected_snapshot is not None:
+        language = selected_snapshot.payload.get("verification_language")
+        if isinstance(language, str) and language:
+            public["language"] = language
+    if next_checks:
+        public["next_check_at"] = _timestamp(min(next_checks))
     if token_usage is not None:
         public["token_usage"] = token_usage
     return public
+
+
+def _published_at(snapshot: SelectedInputSnapshot | None) -> datetime | None:
+    if snapshot is None:
+        return None
+    value = snapshot.payload.get("published_at")
+    if not isinstance(value, str):
+        return None
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    return parsed.astimezone(timezone.utc) if parsed.tzinfo else None
+
+
+def public_claim_status(
+    kind: str,
+    status: str,
+    age_hours: float | None,
+) -> str:
+    if status == "verification_error":
+        return "check_error"
+    if status in {"contradicted_by_evidence", "mixed_evidence"}:
+        return "disputed"
+    if status == "not_checkable":
+        return "anecdotal" if kind == "opinion" else "not_applicable"
+    if status == "insufficient_evidence":
+        if kind in {"event", "other"} and age_hours is not None and age_hours < 72:
+            return "provisional"
+        if kind == "quantity":
+            return "primary_report_only"
+        return "insufficient"
+    return {
+        "announcement": "official_announcement",
+        "release": "official_release",
+        "quote": "attributed_quote",
+        "quantity": "source_documented_quantity",
+        "event": "corroborated_event",
+        "opinion": "anecdotal",
+    }.get(kind, "source_supported")
+
+
+def _next_check_at(
+    result: ClaimVerificationResult,
+    published: datetime | None,
+    checked: datetime,
+) -> datetime | None:
+    if (
+        published is None
+        or result.claim.kind not in {"event", "other"}
+        or result.adjudication.status
+        in {"supported_by_evidence", "contradicted_by_evidence"}
+    ):
+        return None
+    first = published + timedelta(hours=24)
+    second = published + timedelta(hours=72)
+    if checked < first:
+        return first
+    if checked < second:
+        return second
+    return None
 
 
 def build_token_usage_report(
@@ -429,6 +527,8 @@ def _origin_key(
         return f"copy:{snapshot.normalized_object_hash}"
     if proposal.source_class in {"original", "competent_record"}:
         return f"url:{canonical_url(snapshot.final_url)}"
+    if proposal.source_class == "independent_reporting":
+        return f"report:{canonical_url(snapshot.final_url)}"
     return None
 
 
@@ -765,7 +865,15 @@ class EvidenceVerifier:
             await add_url(original_url)
 
         stop_reason: StopReason = "no_novelty"
-        for query in build_query_templates(claim)[: self.max_queries]:
+        # Announcements, releases, quotes and reported quantities are primarily
+        # provenance checks: the original document plus one discovery query is
+        # enough. Incidents need broader corroboration and counter-evidence.
+        query_limit = (
+            self.max_queries
+            if claim.kind in {"event", "other"}
+            else min(self.max_queries, 1)
+        )
+        for query in build_query_templates(claim)[:query_limit]:
             if attempted >= self.max_documents:
                 stop_reason = "budget"
                 break

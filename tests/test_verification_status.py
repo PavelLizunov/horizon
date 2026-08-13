@@ -98,9 +98,13 @@ def test_site_page_uses_public_claims_statuses_and_source_links(tmp_path) -> Non
         encoding="utf-8",
     )
     run.joinpath("claims.jsonl").write_text(
-        json.dumps(
-            {"claim_id": "claim-1", "normalized_claim": "Version 2 released"}
-        ),
+            json.dumps(
+                {
+                    "claim_id": "claim-1",
+                    "normalized_claim": "Version 2 released",
+                    "kind": "release",
+                }
+            ),
         encoding="utf-8",
     )
     run.joinpath("evidence.jsonl").write_text(
@@ -147,15 +151,35 @@ def test_site_page_uses_public_claims_statuses_and_source_links(tmp_path) -> Non
         json.dumps({"stage": "evidence", "reports": {}}),
         encoding="utf-8",
     )
+    tmp_path.joinpath("incidents.json").write_text(
+        json.dumps(
+            {
+                "schema_version": "incident-ledger/v1",
+                "incidents": {
+                    "incident-1": {
+                        "claim": "Protocol X failed on network Y",
+                        "state": "PROVISIONAL",
+                        "first_seen_at": "2026-08-13T09:00:00Z",
+                        "last_checked_at": "2026-08-13T09:30:00Z",
+                        "next_check_at": "2026-08-14T09:00:00Z",
+                        "source_urls": ["https://field.example/report"],
+                    }
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
 
     page = build_site_page(tmp_path)
 
-    assert "# Проверка новостей" in page
+    assert "# Покрытие новостей источниками" in page
     assert "Release &lt;X&gt;" in page
-    assert "Поддерживается указанными источниками" in page
+    assert "Найдена запись о релизе" in page
     assert 'href="https://source.example/proof"' in page
     assert "1 200 токенов проверки" in page
     assert "Кэш: 0 · обычный вход: 1 000 · выход: 200" in page
-    assert "Расход по базовому тарифу DeepSeek API: ≈ $0.000280" in page
+    assert "Оценка по базовому тарифу DeepSeek API: ≈ $0.000280" in page
+    assert "Наблюдаемые VPN- и сетевые инциденты" in page
+    assert "**предварительно** — Protocol X failed on network Y" in page
     assert "private ledger copy" not in page
     assert "private excerpt" not in page

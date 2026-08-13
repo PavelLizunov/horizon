@@ -537,7 +537,8 @@ def test_build_article_pages_shows_public_verification_on_article_only():
     item = _make_item(1)
     item.metadata["evidence_ledger"] = {
         "schema_version": "public-verification/v1",
-        "state": "checked",
+        "state": "complete",
+        "checked_at": "2026-08-13T09:30:00Z",
         "token_usage": {
             "model": "deepseek-v4-flash",
             "input_tokens": 10_000,
@@ -555,11 +556,14 @@ def test_build_article_pages_shows_public_verification_on_article_only():
         "claims": [
             {
                 "text": "Product <X> shipped",
+                "kind": "release",
                 "status": "supported_by_evidence",
+                "public_status": "official_release",
                 "sources": [
                     {
                         "url": "https://vendor.example/release?q=1&lang=en",
                         "stance": "supports",
+                        "source_class": "original",
                     },
                     {"url": "javascript:alert(1)", "stance": "supports"},
                 ],
@@ -571,22 +575,22 @@ def test_build_article_pages_shows_public_verification_on_article_only():
         [item], "2026-08-13", language="en"
     )
 
-    assert "## Claim checks" in article.markdown
-    assert "Check: completed" in article.markdown
-    assert "OpenCode Go quota used: ≈ $0.001000" in article.markdown
+    assert "## Source coverage" in article.markdown
+    assert "Sources: key-claim check completed" in article.markdown
+    assert "DeepSeek API base-rate usage: ≈ $0.001000" in article.markdown
     assert "12 000 verification tokens" in article.markdown
     assert "Cache 7 000 · regular input 3 000 · output 2 000" in article.markdown
-    assert "Supported by the cited sources" in article.markdown
+    assert "Release record located" in article.markdown
     assert "Product &lt;X&gt; shipped" in article.markdown
     assert 'href="https://vendor.example/release?q=1&amp;lang=en"' in article.markdown
     assert "javascript:" not in article.markdown
-    assert "Claim checks" not in index.markdown
+    assert "Source coverage" not in index.markdown
 
     ru_article = DailySummarizer().build_article_pages(
         [item], "2026-08-13", language="ru"
     )[0]
     assert (
-        "Израсходовано из квоты OpenCode Go: ≈ $0.001000"
+        "Оценка по базовому тарифу DeepSeek API: ≈ $0.001000"
         in ru_article.markdown
     )
     assert "Кэш: 7 000 · обычный вход: 3 000 · выход: 2 000" in ru_article.markdown
@@ -604,8 +608,34 @@ def test_article_page_says_when_verification_was_not_run():
         [item], "2026-08-13", language="en"
     )
 
-    assert "Check: not run for this article" in article.markdown
-    assert "## Claim checks" not in article.markdown
+    assert "Sources: not run for this article" in article.markdown
+    assert "## Source coverage" not in article.markdown
+
+
+def test_verification_is_only_shown_on_the_language_that_was_checked():
+    item = _make_item(1)
+    item.metadata["evidence_ledger"] = {
+        "language": "ru",
+        "state": "complete",
+        "claims": [
+            {
+                "text": "Утверждение",
+                "status": "supported_by_evidence",
+                "public_status": "source_supported",
+                "sources": [],
+            }
+        ],
+    }
+
+    en_article = DailySummarizer().build_article_pages(
+        [item], "2026-08-13", language="en"
+    )[0]
+    ru_article = DailySummarizer().build_article_pages(
+        [item], "2026-08-13", language="ru"
+    )[0]
+
+    assert "Source coverage" not in en_article.markdown
+    assert "Покрытие источниками" in ru_article.markdown
 
 
 def test_verification_copy_accepts_locale_style_language_code():
@@ -618,6 +648,7 @@ def test_verification_copy_accepts_locale_style_language_code():
             {
                 "text": "Утверждение",
                 "status": "insufficient_evidence",
+                "public_status": "insufficient",
                 "sources": [],
             }
         ]
@@ -627,8 +658,8 @@ def test_verification_copy_accepts_locale_style_language_code():
         [item], "2026-08-13", language="ru-RU"
     )
 
-    assert "## Проверка утверждений" in article.markdown
-    assert "Недостаточно доказательств" in article.markdown
+    assert "## Покрытие источниками" in article.markdown
+    assert "Недостаточное покрытие источниками" in article.markdown
 
 
 def test_build_article_pages_slug_is_the_anchor_without_its_prefix():

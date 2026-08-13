@@ -140,6 +140,18 @@ def build_selected_input_snapshot(
     captured_at: datetime | None = None,
 ) -> SelectedInputSnapshot:
     payload = item.model_dump(mode="json")
+    # Verify what the reader will actually see. The fetched snapshots retain the
+    # original source payload and lineage; the selected snapshot is the final
+    # localized artifact after enrichment. This removes the need for a second
+    # model call that tried to map pre-enrichment claims back onto generated prose.
+    artifacts = item.processing.artifacts if item.processing else {}
+    if artifacts:
+        artifact = next(iter(artifacts.values()))
+        payload["title"] = artifact.title
+        payload["content"] = "\n\n".join(
+            f"{block.title}\n{block.content}" for block in artifact.blocks
+        )
+        payload["verification_language"] = artifact.language
     payload_bytes = canonical_json_bytes(payload)
     return SelectedInputSnapshot(
         schema_version=SELECTED_SCHEMA,
@@ -153,16 +165,30 @@ def build_selected_input_snapshot(
     )
 
 
-def select_shadow_items(items: Iterable[ContentItem], max_items: int) -> list[ContentItem]:
-    """Take tech-news items in the pipeline's existing final selection order."""
-    selected = []
-    for item in items:
-        profile = item.processing.classification.profile if item.processing else None
-        if profile == "tech-news":
-            selected.append(item)
-            if len(selected) == max_items:
-                break
-    return selected
+def select_shadow_items(
+    items: Iterable[ContentItem], max_items: int
+) -> list[ContentItem]:
+    """Take reader-visible factual profiles, prioritising incident reporting."""
+    priorities = {
+        "censorship-watch": 0,
+        "vpn-engineering": 1,
+        "finance-news": 2,
+        "tech-news": 3,
+        "video": 4,
+    }
+    eligible = [
+        (index, item)
+        for index, item in enumerate(items)
+        if item.processing
+        and item.processing.classification.profile in priorities
+    ]
+    eligible.sort(
+        key=lambda pair: (
+            priorities[pair[1].processing.classification.profile],  # type: ignore[union-attr]
+            pair[0],
+        )
+    )
+    return [item for _, item in eligible[:max_items]]
 
 
 @dataclass

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 from collections import Counter
+from datetime import datetime, timedelta, timezone
 import json
 from pathlib import Path
 from typing import Any
@@ -15,6 +16,7 @@ from src.ai.summarizer import (
     verification_site_markup,
     verification_summary_markup,
 )
+from src.verification.evidence import public_claim_status
 
 
 def _runs(root: Path) -> list[tuple[Path, dict[str, Any]]]:
@@ -104,6 +106,65 @@ def summarize(root: Path) -> dict[str, Any]:
     return result
 
 
+def _incident_lines(root: Path) -> list[str]:
+    data_root = (
+        root.parent.parent
+        if root.name == "runs" and root.parent.name == "verification"
+        else root
+    )
+    path = data_root / "incidents.json"
+    if not path.exists():
+        return []
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return []
+    incidents = payload.get("incidents")
+    if not isinstance(incidents, dict) or not incidents:
+        return []
+    state_labels = {
+        "PROVISIONAL": "предварительно",
+        "CORROBORATED": "событие подтверждено источниками",
+        "DISPUTED": "источники расходятся",
+        "RESOLVED": "инцидент завершён",
+    }
+    rows = sorted(
+        (row for row in incidents.values() if isinstance(row, dict)),
+        key=lambda row: str(row.get("last_seen_at") or ""),
+        reverse=True,
+    )[:20]
+    lines = [
+        "",
+        "## Наблюдаемые VPN- и сетевые инциденты",
+        "",
+        "Состояния меняются только при появлении новых источников; "
+        "«предварительно» не означает подтверждение события.",
+    ]
+    for row in rows:
+        claim = _escape_markdown(str(row.get("claim") or "Без описания"))
+        state = state_labels.get(str(row.get("state") or ""), "неизвестно")
+        lines += ["", f"- **{state}** — {claim}"]
+        meta = []
+        if row.get("first_seen_at"):
+            meta.append(f"впервые: {str(row['first_seen_at'])[:16]}")
+        if row.get("last_checked_at"):
+            meta.append(f"проверено: {str(row['last_checked_at'])[:16]}")
+        if row.get("next_check_at"):
+            meta.append(f"следующая точка: {str(row['next_check_at'])[:16]}")
+        if meta:
+            lines.append(f"  {' · '.join(meta)}")
+        urls = row.get("source_urls")
+        if isinstance(urls, list):
+            links = []
+            for index, value in enumerate(urls[-3:], start=1):
+                safe = _safe_url(value)
+                if safe:
+                    links.append(f"[источник {index}]({safe})")
+            if links:
+                lines.append(f"  {' · '.join(links)}")
+    return lines
+
+
 def build_site_page(root: Path) -> str:
     """Render the latest complete ledger as a reader-facing Russian page."""
     complete = next(
@@ -115,7 +176,7 @@ def build_site_page(root: Path) -> str:
         None,
     )
     if complete is None:
-        return "# Проверка новостей\n\nЗавершённых проверок пока нет.\n"
+        return "# Покрытие новостей источниками\n\nЗавершённых проверок пока нет.\n"
 
     run_dir, manifest = complete
     input_rows = [
@@ -157,13 +218,15 @@ def build_site_page(root: Path) -> str:
 
     updated = str(manifest.get("updated_at") or "")[:10]
     lines = [
-        "# Проверка новостей",
+        "# Покрытие новостей источниками",
         "",
-        "Экспериментальная проверка ключевых утверждений по открытым источникам. "
-        "Это оценка найденных доказательств, а не безусловная метка истины.",
+        "Проверка выбранных ключевых утверждений по открытым источникам. "
+        "Это карта покрытия источниками, а не метка истинности всей статьи.",
     ]
     if updated:
         lines += ["", f"Последнее обновление: {updated}."]
+    lines.extend(_incident_lines(root))
+    lines += ["", "## Последняя выборка"]
 
     for report_path in sorted((run_dir / "reports").glob("*.json")):
         report = json.loads(report_path.read_text(encoding="utf-8"))
@@ -172,7 +235,19 @@ def build_site_page(root: Path) -> str:
             item.get("title") or report.get("item_id") or "Материал"
         )
         url = _safe_url(item.get("url", ""))
-        lines += ["", f"## [{title}]({url})" if url else f"## {title}", ""]
+        lines += ["", f"### [{title}]({url})" if url else f"### {title}", ""]
+        checked_at = str(report.get("created_at") or manifest.get("updated_at") or "")
+        published_at = item.get("published_at")
+        age_hours = None
+        published = None
+        checked = None
+        try:
+            if isinstance(published_at, str) and checked_at:
+                published = datetime.fromisoformat(published_at.replace("Z", "+00:00"))
+                checked = datetime.fromisoformat(checked_at.replace("Z", "+00:00"))
+                age_hours = max((checked - published).total_seconds() / 3600, 0)
+        except ValueError:
+            published = checked = None
         public_claims = []
         for claim_id, status in report.get("status_by_claim", {}).items():
             claim = claims.get(claim_id)
@@ -197,24 +272,88 @@ def build_site_page(root: Path) -> str:
                 if source in seen_sources:
                     continue
                 seen_sources.add(source)
-                sources.append({"url": source[0], "stance": source[1]})
+                sources.append(
+                    {
+                        "url": source[0],
+                        "stance": source[1],
+                        "source_class": card.get("source_class"),
+                    }
+                )
+            kind = str(claim.get("kind") or "other")
             public_claims.append(
                 {
                     "text": claim["normalized_claim"],
+                    "kind": kind,
                     "status": status,
+                    "public_status": public_claim_status(kind, status, age_hours),
                     "sources": sources,
                 }
             )
+        statuses = set(report.get("status_by_claim", {}).values())
+        audit = report.get("artifact_audit") or {}
+        unchecked = sum(
+            len(values)
+            for values in (report.get("unchecked_factual_spans") or {}).values()
+            if isinstance(values, list)
+        )
+        public_statuses = {claim["public_status"] for claim in public_claims}
+        if (
+            report.get("verification_error")
+            or "verification_error" in statuses
+            or audit.get("status") == "error"
+        ):
+            state = "check_error"
+        elif not public_claims:
+            state = "not_applicable"
+        elif unchecked:
+            state = "partial"
+        elif public_statuses and public_statuses <= {
+            "anecdotal",
+            "not_applicable",
+        }:
+            state = "not_applicable"
+        elif "provisional" in public_statuses and public_statuses <= {
+            "provisional",
+            "official_announcement",
+            "official_release",
+            "attributed_quote",
+            "corroborated_event",
+            "source_documented_quantity",
+            "source_supported",
+        }:
+            state = "provisional"
+        elif statuses & {"insufficient_evidence", "not_checkable"}:
+            state = "partial"
+        else:
+            state = "complete"
         payload = {
-            "state": "checked",
+            "state": state,
             "claims": public_claims,
             "token_usage": report.get("token_usage"),
+            "checked_at": checked_at,
         }
+        if age_hours is not None:
+            payload["source_age_hours"] = round(age_hours, 1)
+        if published is not None and checked is not None and any(
+            claim.get("kind") in {"event", "other"}
+            and claim.get("status")
+            not in {"supported_by_evidence", "contradicted_by_evidence"}
+            for claim in public_claims
+        ):
+            for delta in (timedelta(hours=24), timedelta(hours=72)):
+                candidate = published + delta
+                if checked < candidate:
+                    payload["next_check_at"] = (
+                        candidate.astimezone(timezone.utc)
+                        .isoformat()
+                        .replace("+00:00", "Z")
+                    )
+                    break
         summary_markup = verification_summary_markup(payload, "ru")
         markup = verification_site_markup(
             payload,
             "ru",
-            heading_level=3,
+            heading_level=4,
             include_note=False,
         )
         if summary_markup:

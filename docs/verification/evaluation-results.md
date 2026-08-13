@@ -5,6 +5,11 @@ title: Evidence Ledger offline evaluation
 
 # Evidence Ledger offline evaluation
 
+> Historical measurement record. On 2026-08-14 the daily runtime stopped using
+> the final-artifact audit and started extracting claims from the final article
+> directly. The old audit fixtures remain offline regression material; the old
+> provider route described below is not configured in production.
+
 **Recorded:** 2026-08-11.
 **Scope:** deterministic policy and artifact-audit regression only.
 **Command:** `uv run --offline python scripts/dev_evaluate_verification.py`
@@ -32,8 +37,8 @@ latency, token and coverage observations are recorded below.
 ## First paid shadow run
 
 **Recorded:** 2026-08-11.
-**Model:** `deepseek-v4-flash-0731` through the configured Alibaba-compatible
-gateway for analysis, enrichment, claim extraction, evidence assessment and
+**Model:** `deepseek-v4-flash` through the retired compatible gateway used at
+the time for analysis, enrichment, claim extraction, evidence assessment and
 artifact audit.
 **Safety:** email, webhook delivery and search indexing were disabled; runtime
 summaries and seen state were isolated. The evidence ledger was retained.
@@ -70,7 +75,7 @@ structured-output remediation below.
 ## Remediation and repeated paid runs
 
 All repeated runs kept public delivery and indexing disabled and used
-`deepseek-v4-flash-0731` for every model stage. Thinking was disabled and the
+`deepseek-v4-flash` for every model stage. Thinking was disabled and the
 response ceiling was raised to 8,192 tokens. Structured claim extraction,
 evidence assessment and artifact audit retry at most three times while still
 sharing the per-item call budget.

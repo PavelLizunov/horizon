@@ -40,7 +40,7 @@ and one underlying evidence origin.
 
 ## v1 status vocabulary
 
-The shadow MVP deliberately avoids `TRUE`, `FALSE`, `VERIFIED`, probability
+Evidence Ledger deliberately avoids `TRUE`, `FALSE`, `VERIFIED`, probability
 scores and `LIKELY_*` labels.
 
 | Status | Meaning |
@@ -52,8 +52,9 @@ scores and `LIKELY_*` labels.
 | `not_checkable` | The wording is opinion, prediction, preference or irreducibly ambiguous. |
 | `verification_error` | A required stage could not produce a usable result, so no evidential conclusion is emitted. |
 
-Public wording, when annotation is eventually enabled, must say “supported by
-the collected evidence”, not “proven true”.
+Public wording is claim-type-aware: an official release record, an attributed
+quote, a corroborated event, a primary/vendor quantity, provisional coverage,
+or insufficient coverage. It never collapses those meanings into “proven true”.
 
 Failure of one optional query or candidate fetch is recorded as degraded
 coverage. It becomes `verification_error` only when a required stage cannot
@@ -62,7 +63,8 @@ the applicable policy gate does not require the failed coverage.
 
 ## Minimal source policy
 
-The MVP starts with technology-news claims only:
+The bounded daily sample covers factual claims from censorship, VPN engineering,
+finance, technology, and video profiles:
 
 - announcement or software release: original announcement, repository release,
   changelog, registry or artifact;
@@ -76,14 +78,13 @@ verification are deferred until the text pipeline is measured.
 
 ## Independence in v1
 
-There is no general provenance graph. The implementation may collapse exact
-copies, canonical variants, explicit syndication and articles that name the same
-underlying document. Anything else remains `independence_unknown` and does not
-increase the independent-origin count.
+There is no general provenance graph. Exact copies collapse to one origin.
+Distinct URLs classified as independent reporting receive distinct conservative
+reporting origins; anything classified as unknown does not increase the count.
 
 ## Human evaluation
 
-Before any public badge:
+Before describing the system as validated fact checking:
 
 - evaluate at least 100 diverse stories and 300 headline/load-bearing claims;
 - hide the automatic status from the reviewer until the human label is saved;
@@ -110,16 +111,17 @@ and the last completed evidence run:
 .venv/bin/python scripts/dev_verification_status.py
 ```
 
-Add `--json` for machine-readable output. The report remains internal while the
-human-review release gates are unmet unless the owner explicitly enables
-`verification.publish_to_site`. With that opt-in, the site shows cautious
-evidence statuses, source links, and per-article verification usage; it never
-uses absolute `true` or `false` labels.
+Add `--json` for machine-readable output. The owner has enabled the public
+transparency canary. With `verification.publish_to_site`, the site shows
+type-aware source coverage, freshness, source links, and per-article usage. The
+missing human review is recorded in the publication decision and absolute
+`true`/`false` labels remain forbidden.
 
 ## Privacy and retention
 
-The shadow MVP excludes private/restricted sources. It stores normalized text
+Evidence Ledger excludes private/restricted sources. It stores normalized text
 needed for audit, not complete media or paywalled copies, and never publishes
-snapshots, prompts, private URLs, cookies, headers or search queries. Retention,
-reverification and deletion workflows are post-MVP work and must be specified
-before private sources are admitted.
+snapshots, prompts, private URLs, cookies, headers or search queries. Text-event
+records from the VPN/censorship profiles retain a small incident history and
+24/72-hour review points. Private sources, general retention, and deletion
+workflows remain out of scope.

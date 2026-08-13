@@ -818,7 +818,7 @@ a.hz-tag:hover {
   padding-top: 0;
 }
 
-/* -- Проверка утверждений ------------------------------------------------- */
+/* -- Покрытие источниками ------------------------------------------------- */
 
 .hz-verification-summary {
   display: grid;
@@ -876,9 +876,11 @@ a.hz-tag:hover {
   color: var(--hz-text-2);
 }
 
-.hz-verification__claim[data-status="insufficient_evidence"] .hz-verification__status,
-.hz-verification__claim[data-status="not_checkable"] .hz-verification__status,
-.hz-verification__claim[data-status="verification_error"] .hz-verification__status {
+.hz-verification__claim[data-status="insufficient"] .hz-verification__status,
+.hz-verification__claim[data-status="provisional"] .hz-verification__status,
+.hz-verification__claim[data-status="primary_report_only"] .hz-verification__status,
+.hz-verification__claim[data-status="not_applicable"] .hz-verification__status,
+.hz-verification__claim[data-status="check_error"] .hz-verification__status {
   color: var(--hz-muted);
 }
 

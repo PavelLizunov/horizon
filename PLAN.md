@@ -231,8 +231,9 @@ configured anywhere in the runtime.
 ### [x] V0. Add the two evidence-calibrated profiles
 
 Added `vpn-engineering` and `censorship-watch` with hard exclusions, thresholds
-of 6.5/7.0, a 5.9 ceiling for a single field report, evidence labels, alternative
-explanations and explicit next-measurement guidance.
+of 6.5/7.0, a 5.9 ceiling for a single field report, alternative explanations
+and explicit next-measurement guidance. Evidence labels belong to the separate
+Evidence Ledger, not to article-generation prose.
 
 ### [x] V1. Preserve existing queries while adding the radar
 
@@ -261,12 +262,36 @@ review stays disabled after `deepseek-v4-pro` exhausted both 4,096- and
 8,192-token response limits without completing its compact JSON; the measured
 static lexicon and independent Whisper audio check remain active.
 
-### [ ] V4. Add early technical signals and incident state
+### [ ] V4. Make verification honest, fresh and incident-aware
 
-After the MVP measurement, add GitHub Issues/PR/Discussions and a persistent
-incident ledger. Only that ledger may implement transitions such as
-`UNVERIFIED → PROBABLE → CONFIRMED → RESOLVED`; daily article dedup is not a
-substitute.
+The first OpenCode Go run proved that the shadow mechanics work but the public
+meaning does not: four of five artifact audits failed, one successful audit
+found 23 uncovered factual spans, and the site still described partial results
+as completed. The accepted redesign keeps the safe fetch/hash/exact-locator
+primitives and removes the false implication of a universal truth check.
+
+- [x] V4a. Extract claims from the final reader-visible artifact. Remove the
+  second same-model artifact audit; it was costly and could not make the first
+  model independent. Any timeout/error is `check_error`; an empty claim set is
+  `not_applicable`, never `completed`.
+- [x] V4b. Fix event provenance so two genuinely independent reporting origins
+  can satisfy the event gate. Exact copies remain one origin.
+- [x] V4c. Publish type-aware wording: official announcement/release,
+  independently corroborated event, primary/vendor quantity, anecdotal or
+  not-checkable. Never flatten these to one `verified` badge.
+- [x] V4d. Record `checked_at`, source age and `next_check_at`. Fresh events and
+  rumours remain provisional and are marked for another look at 24 and 72 hours;
+  a later daily observation advances incident state. Official announcements can
+  be attributed to their primary source at once.
+- [x] V4e. Add the smallest persistent incident state for `censorship-watch`
+  and `vpn-engineering`: stable incident key, first/last seen, last checked,
+  next check and `PROVISIONAL / CORROBORATED / DISPUTED / RESOLVED`. Daily article
+  dedup is not incident state.
+- [x] V4f. Remove the duplicate reader-facing fact-check vocabulary. The article
+  may retain analysis prose, but only Evidence Ledger owns source-coverage
+  labels on the site.
+- [ ] V4g. Ship with offline tests, a strict site build and one bounded paid
+  OpenCode Go canary. Record real latency, statuses, token usage and publication.
 
 ---
 
@@ -345,99 +370,13 @@ renderer change was added, and the release gates were not weakened.
 
 ---
 
-## Phase B — DeepSeek A/B
+## Cancelled work — Alibaba model comparison
 
-Goal: decide with evidence whether to move Horizon's LLM work from
-`qwen3.8-max-preview` to DeepSeek. Not a migration — a measurement.
-
-### [x] B0. Establish what is actually available — measured 2026-08-06
-
-**DeepSeek is on the existing Alibaba Token Plan endpoint.** Queried
-`GET /compatible-mode/v1/models` against
-`token-plan.ap-southeast-1.maas.aliyuncs.com` with the existing
-`DASHSCOPE_API_KEY`: 11 models, including **`deepseek-v4-flash-0731`** and
-**`deepseek-v4-pro`**.
-
-This collapses the whole "migration" into a one-line config change —
-`ai.model`. Same provider (`ali`), same `base_url`, same key, same quota. No new
-billing relationship, no new provider class, no `provider_chain` work.
-
-Both probes returned normally (13 512 prompt / 2 output, then 24 / 2 001), so
-the model works through the existing client with no code changes.
-
-Also observed: **`qwen3.8-max-preview` is not in the model list** — only
-`qwen3.8-max`. The live config names the retired preview and is silently
-rerouted, which matches the known 2026-08-03 retirement.
-
-Fixed here: `AI_PROVIDER_DEFAULTS` (`src/models.py`) defaulted the *direct*
-DeepSeek API to `deepseek-chat`, retired 2026-07-24 and no longer routed
-anywhere. Now `deepseek-v4-flash`.
-
-**Blocked: the credit coefficient is unmeasured.** The comparison that matters
-is credits per token on the Token Plan, not dollars — Alibaba does not publish
-per-model coefficients. The existing measurement tool (`~/.qquota`, which
-produced the qwen figures of 612 credits/1M input and ~1 700 output) currently
-fails: an SSL handshake timeout, then `KeyError: 'per5HourPercentage'` from
-Alibaba's console usage API, whose response shape appears to have changed.
-Until that is repaired or the numbers are read from the console by hand, the
-**cost half of the A/B cannot be completed**. The quality half is not blocked.
-
-DeepSeek's own public pricing (V4-Flash, $0.14/1M in, $0.28/1M out ≈ $0.053 per
-reference run) is *not* the relevant number while the traffic goes through the
-Token Plan quota. Keep it only as an upper bound if the direct API is ever used.
-
-### [x] B1. Capture a replayable item set — `scripts/dev_capture_items.py`
-
-Both models must score the *same* items, or the comparison is worthless — a
-different day is different news. Fetch once, serialize `ContentItem`s to JSON,
-replay.
-
-Reuse the sidecar's proven round-trip: `write_inbox` /
-`ContentItem.model_validate` in `src/scrapers/video.py` already demonstrate that
-`model_dump(mode="json")` survives a disk round-trip. A dev script in
-`scripts/` following the `dev_check_*.py` convention.
-
-### [ ] B2. Run both models over the captured set
-
-Analysis + enrichment under each provider, outputs written side by side.
-`provider_chain` is a *failover* chain, not per-stage routing, so this means two
-runs with different `ai.provider`, not one clever config.
-
-**This costs real money on both sides.** Budget it, cap the item count (10–15 is
-plenty), and get the owner's go before running.
-
-### [ ] B3. Grade on the criteria that actually matter
-
-Not vibes. The manual audit already established what separates good from bad
-here:
-
-1. **Faithfulness** — every specific claim traceable to the source text. Method
-   used before: extract concrete assertions from the digest, grep the source
-   description/transcript for each. qwen scored 5/5 on the reference item.
-2. **Calibrated scepticism** — does the fact-check block flag an unsupported
-   claim, or parrot it? qwen correctly flagged "«думай пошагово» ухудшает
-   половину топовых моделей" as unverifiable.
-3. **De-clickbaiting** — is a sensational title rewritten into a descriptive one?
-4. **Language discipline** — CJK leakage into Russian output. qwen leaks ~8×
-   per run and the retry now reports persistent leaks
-   (`Language leak persists after retry`). DeepSeek is also a Chinese model, so
-   measure this, do not assume it is better.
-5. **Cost per run** — from `record_usage`.
-
-The grader must not be the model being graded. Score blind where practical.
-
-### [ ] B4. Decide and record
-
-Whichever way it goes, write the numbers into `CHANGELOG.md` and
-`docs/configuration.md` so the next agent does not redo the experiment. A
-negative result is a result.
-
-**Standing caveat on the cost argument:** the digest is ~2.6 % of the weekly
-Alibaba quota (292 credits/run, ~146 inside the 17:00 MSK off-peak window,
-against 40 000/week). Moving it off qwen frees 2.6 % of a quota that interactive
-work already overruns several-fold. The case for switching should rest on
-quality-per-dollar or on freeing the quota entirely, not on the digest's own
-cost — that is small either way.
+Cancelled by owner decision on 2026-08-14. Horizon does not use the Alibaba
+Token Plan, Qwen workers, or an Alibaba fallback. Production and evaluation use
+paid `deepseek-v4-flash` through OpenCode Go. Historical probes are intentionally
+removed from the active plan so a future agent cannot mistake them for a route
+that should be resumed.
 
 ---
 

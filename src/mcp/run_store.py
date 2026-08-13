@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import json
 import re
-from dataclasses import dataclass
-from datetime import datetime, timezone
+from dataclasses import dataclass, field
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 from uuid import uuid4
@@ -35,6 +35,7 @@ class RunStore:
     """Store intermediate artifacts per pipeline run."""
 
     root: Path
+    _last_timestamp: datetime | None = field(default=None, init=False, repr=False)
 
     def __post_init__(self) -> None:
         self.root.mkdir(parents=True, exist_ok=True)
@@ -200,10 +201,13 @@ class RunStore:
         now = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
         return f"run-{now}-{uuid4().hex[:8]}"
 
-    @staticmethod
-    def _utc_now() -> str:
+    def _utc_now(self) -> str:
         # timespec="microseconds" is load-bearing: plain isoformat() omits the
         # fractional part when it is exactly zero, and list_runs compares these
         # as strings. "…:56+00:00" then sorts *before* "…:56.000001+00:00",
         # because '+' < '.', silently inverting run order.
-        return datetime.now(timezone.utc).isoformat(timespec="microseconds")
+        now = datetime.now(timezone.utc)
+        if self._last_timestamp is not None and now <= self._last_timestamp:
+            now = self._last_timestamp + timedelta(microseconds=1)
+        self._last_timestamp = now
+        return now.isoformat(timespec="microseconds")

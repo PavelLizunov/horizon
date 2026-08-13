@@ -178,18 +178,36 @@ _INTERNAL_SOURCE_TOKENS = {"rss", "archive", "api", "web", "html", "unknown"}
 
 _VERIFICATION_COPY = {
     "en": {
-        "title": "Claim checks",
-        "note": "Experimental check against public sources. This is evidence coverage, not an absolute truth label.",
+        "title": "Source coverage",
+        "note": "Coverage of selected key claims, not a truth badge for the whole article.",
         "source": "Source",
-        "summary": "Check",
+        "summary": "Sources",
         "claim_count": "Claims",
         "states": {
-            "checked": "completed",
+            "complete": "key-claim check completed",
+            "partial": "partial coverage",
+            "provisional": "provisional; newer sources may appear",
+            "check_error": "check interrupted",
+            "not_applicable": "no applicable key claim",
             "not_checked": "not run for this article",
-            "no_claims": "no checkable core claims",
-            "check_failed": "not completed",
+            "checked": "key-claim check completed",
+            "no_claims": "no applicable key claim",
+            "check_failed": "check interrupted",
         },
         "statuses": {
+            "official_announcement": "Announcement source located",
+            "official_release": "Release record located",
+            "attributed_quote": "Attributed to the original source",
+            "corroborated_event": "Event corroborated by sources",
+            "source_documented_quantity": "Quantity documented by a direct source",
+            "source_supported": "Supported by a direct source",
+            "primary_report_only": "Primary/vendor report only",
+            "provisional": "Provisional: too fresh for stable corroboration",
+            "disputed": "Sources dispute this claim",
+            "anecdotal": "Anecdotal or opinion; attribution only",
+            "not_applicable": "Not suitable for factual verification",
+            "insufficient": "Insufficient source coverage",
+            "check_error": "Check interrupted",
             "supported_by_evidence": "Supported by the cited sources",
             "contradicted_by_evidence": "Contradicted by the cited sources",
             "mixed_evidence": "Sources disagree",
@@ -202,20 +220,45 @@ _VERIFICATION_COPY = {
             "contradicts": "contradicts",
             "context": "context",
         },
+        "source_classes": {
+            "original": "primary source",
+            "competent_record": "competent record",
+            "independent_reporting": "independent reporting",
+            "interested_party": "interested party",
+            "unknown": "unclassified source",
+        },
     },
     "ru": {
-        "title": "Проверка утверждений",
-        "note": "Экспериментальная проверка по открытым источникам. Это оценка доказательств, а не безусловная метка истины.",
+        "title": "Покрытие источниками",
+        "note": "Проверяются выбранные ключевые утверждения, а не истинность всей статьи целиком.",
         "source": "Источник",
-        "summary": "Проверка",
+        "summary": "Источники",
         "claim_count": "Утверждений",
         "states": {
-            "checked": "выполнена",
+            "complete": "ключевые утверждения проверены",
+            "partial": "покрытие частичное",
+            "provisional": "предварительно — источники ещё появляются",
+            "check_error": "проверка прервана",
+            "not_applicable": "нет применимого ключевого утверждения",
             "not_checked": "для этой статьи не выполнялась",
-            "no_claims": "нет проверяемых ключевых утверждений",
-            "check_failed": "не завершена",
+            "checked": "ключевые утверждения проверены",
+            "no_claims": "нет применимого ключевого утверждения",
+            "check_failed": "проверка прервана",
         },
         "statuses": {
+            "official_announcement": "Найден источник анонса",
+            "official_release": "Найдена запись о релизе",
+            "attributed_quote": "Высказывание найдено в первоисточнике",
+            "corroborated_event": "Событие подтверждено источниками",
+            "source_documented_quantity": "Значение зафиксировано прямым источником",
+            "source_supported": "Поддерживается прямым источником",
+            "primary_report_only": "Только данные автора или производителя",
+            "provisional": "Предварительно: новость слишком свежая",
+            "disputed": "Источники расходятся или опровергают утверждение",
+            "anecdotal": "Частный опыт или мнение; проверено только авторство",
+            "not_applicable": "Не подходит для фактологической проверки",
+            "insufficient": "Недостаточное покрытие источниками",
+            "check_error": "Проверка прервана",
             "supported_by_evidence": "Поддерживается указанными источниками",
             "contradicted_by_evidence": "Противоречит указанным источникам",
             "mixed_evidence": "Источники расходятся",
@@ -227,6 +270,13 @@ _VERIFICATION_COPY = {
             "supports": "подтверждает",
             "contradicts": "опровергает",
             "context": "контекст",
+        },
+        "source_classes": {
+            "original": "первоисточник",
+            "competent_record": "компетентная запись",
+            "independent_reporting": "независимая публикация",
+            "interested_party": "заинтересованная сторона",
+            "unknown": "тип источника не определён",
         },
     },
 }
@@ -245,13 +295,19 @@ def verification_site_markup(
 ) -> str:
     if not isinstance(payload, dict) or not isinstance(payload.get("claims"), list):
         return ""
+    language_root = language.lower().replace("_", "-").partition("-")[0]
+    payload_language = payload.get("language")
+    if isinstance(payload_language, str) and (
+        payload_language.lower().replace("_", "-").partition("-")[0]
+        != language_root
+    ):
+        return ""
     claims = [claim for claim in payload["claims"] if isinstance(claim, dict)]
     if not claims:
         return ""
     if heading_level not in range(1, 7):
         raise ValueError("heading_level must be between 1 and 6")
 
-    language_root = language.lower().replace("_", "-").partition("-")[0]
     copy = _VERIFICATION_COPY.get(language_root, _VERIFICATION_COPY["en"])
     statuses = copy["statuses"]
     stances = copy["stances"]
@@ -265,10 +321,12 @@ def verification_site_markup(
     lines.append('<ol class="hz-verification__claims">')
     for claim in claims:
         status = str(claim.get("status", "verification_error"))
-        status_label = statuses.get(status, statuses["verification_error"])
+        public_status = str(claim.get("public_status") or status)
+        status_label = statuses.get(public_status, statuses["verification_error"])
         text = html.escape(str(claim.get("text", "")))
         lines += [
-            f'<li class="hz-verification__claim" data-status="{html.escape(status, quote=True)}">',
+            f'<li class="hz-verification__claim" data-status="{html.escape(public_status, quote=True)}" '
+            f'data-raw-status="{html.escape(status, quote=True)}">',
             f'<span class="hz-verification__status">{status_label}</span>',
             f'<p>{text}</p>',
         ]
@@ -289,7 +347,11 @@ def verification_site_markup(
                     domain = ""
                 label = domain or f'{copy["source"]} {index}'
                 stance = stances.get(str(source.get("stance", "")))
-                suffix = f" · {stance}" if stance else ""
+                source_class = copy["source_classes"].get(
+                    str(source.get("source_class", ""))
+                )
+                details = [value for value in (stance, source_class) if value]
+                suffix = f" · {' · '.join(details)}" if details else ""
                 source_lines.append(
                     f'<li><a href="{safe_url}">{html.escape(label)}</a>{suffix}</li>'
                 )
@@ -304,11 +366,17 @@ def verification_summary_markup(payload: object, language: str) -> str:
     if not isinstance(payload, dict):
         return ""
     language_root = language.lower().replace("_", "-").partition("-")[0]
+    payload_language = payload.get("language")
+    if isinstance(payload_language, str) and (
+        payload_language.lower().replace("_", "-").partition("-")[0]
+        != language_root
+    ):
+        return ""
     copy = _VERIFICATION_COPY.get(language_root, _VERIFICATION_COPY["en"])
     claims = payload.get("claims")
     if not isinstance(claims, list):
         claims = []
-    state = str(payload.get("state") or ("checked" if claims else "not_checked"))
+    state = str(payload.get("state") or ("complete" if claims else "not_checked"))
     state_label = copy["states"].get(state, copy["states"]["check_failed"])
     lines = [
         f'<aside class="hz-verification-summary" data-state="{html.escape(state, quote=True)}">',
@@ -318,7 +386,10 @@ def verification_summary_markup(payload: object, language: str) -> str:
         counts: dict[str, int] = {}
         for claim in claims:
             if isinstance(claim, dict):
-                status = str(claim.get("status", "verification_error"))
+                status = str(
+                    claim.get("public_status")
+                    or claim.get("status", "verification_error")
+                )
                 counts[status] = counts.get(status, 0) + 1
         status_parts = [
             f'{copy["statuses"].get(status, copy["statuses"]["verification_error"])}: {count}'
@@ -328,6 +399,22 @@ def verification_summary_markup(payload: object, language: str) -> str:
             f'<span>{copy["claim_count"]}: {len(claims)} · '
             f'{" · ".join(status_parts)}</span>'
         )
+    checked_at = payload.get("checked_at")
+    source_age = payload.get("source_age_hours")
+    next_check = payload.get("next_check_at")
+    meta = []
+    if isinstance(checked_at, str) and checked_at:
+        label = "Проверено" if language_root == "ru" else "Checked"
+        meta.append(f"{label}: {html.escape(checked_at)}")
+    if isinstance(source_age, (int, float)):
+        label = "Source age" if language_root != "ru" else "Возраст новости"
+        unit = "h" if language_root != "ru" else "ч"
+        meta.append(f"{label}: {source_age:g} {unit}")
+    if isinstance(next_check, str) and next_check:
+        label = "Recheck after" if language_root != "ru" else "Повторить после"
+        meta.append(f"{label}: {html.escape(next_check)}")
+    if meta:
+        lines.append(f'<span>{" · ".join(meta)}</span>')
     usage = payload.get("token_usage")
     if isinstance(usage, dict):
         try:
@@ -360,18 +447,11 @@ def verification_summary_markup(payload: object, language: str) -> str:
                 cost_text = f"≈ ${cost:.6f} API rate estimate"
                 if language_root == "ru":
                     cost_text = f"≈ ${cost:.6f} по тарифу API"
-                quota_name = usage.get("quota_name")
-                if quota_name == "OpenCode Go":
-                    cost_text = f"OpenCode Go quota used: ≈ ${cost:.6f}"
-                    if language_root == "ru":
-                        cost_text = (
-                            f"Израсходовано из квоты OpenCode Go: ≈ ${cost:.6f}"
-                        )
-                elif "deepseek" in model_name.lower():
+                if "deepseek" in model_name.lower():
                     cost_text = f"DeepSeek API base-rate usage: ≈ ${cost:.6f}"
                     if language_root == "ru":
                         cost_text = (
-                            f"Расход по базовому тарифу DeepSeek API: ≈ ${cost:.6f}"
+                            f"Оценка по базовому тарифу DeepSeek API: ≈ ${cost:.6f}"
                         )
                 usage_lines.insert(0, cost_text)
             lines.append(f'<small>{"<br>".join(usage_lines)}</small>')

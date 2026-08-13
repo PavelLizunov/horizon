@@ -31,12 +31,6 @@
         "type": "section",
         "tools": ["web_search"],
         "optional": true
-      },
-      {
-        "id": "fact_check",
-        "type": "section",
-        "tools": ["web_search"],
-        "optional": true
       }
     ]
   }

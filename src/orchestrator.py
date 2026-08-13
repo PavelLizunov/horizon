@@ -35,6 +35,7 @@ from .ai.enricher import ContentEnricher, EnrichmentBatchResult
 from .ai.tokens import get_usage_snapshot
 from .processing import ProfileRegistry
 from .verification.ledger import ShadowLedger, select_shadow_items
+from .verification.incidents import update_incident_ledger
 from .verification.claims import ClaimExtractionOutcome, ClaimExtractor
 from .verification.evidence import (
     EvidenceVerifier,
@@ -44,7 +45,6 @@ from .verification.evidence import (
     build_verification_report,
     verification_error_result,
 )
-from .verification.audit import ArtifactAuditOutcome, ArtifactAuditor
 
 
 _TRACKING_QUERY_PARAMETERS = {
@@ -333,23 +333,6 @@ class HorizonOrchestrator:
                 )
             important_items = filtering_result.items
 
-            if verification_ledger is not None:
-                try:
-                    verification_ledger.capture_selected(
-                        select_shadow_items(
-                            important_items,
-                            verification_config.max_items_per_run,
-                        ),
-                        url_dedup_members=url_dedup_members or {},
-                        topic_dedup_members=topic_dedup_members or {},
-                    )
-                except Exception as verification_error:
-                    self.console.print(
-                        f"[yellow]{self.icons['warning']} Verification selection capture "
-                        f"failed; publication is unchanged: {verification_error}[/yellow]\n"
-                    )
-                    verification_ledger = None
-
             # Show per-sub-source selection breakdown
             selected_counts: Dict[str, int] = defaultdict(int)
             for item in important_items:
@@ -364,6 +347,14 @@ class HorizonOrchestrator:
 
             if verification_ledger is not None:
                 try:
+                    verification_ledger.capture_selected(
+                        select_shadow_items(
+                            important_items,
+                            verification_config.max_items_per_run,
+                        ),
+                        url_dedup_members=url_dedup_members or {},
+                        topic_dedup_members=topic_dedup_members or {},
+                    )
                     snapshots = verification_ledger.selected_snapshots
                     claim_client = None
                     claim_elapsed: Dict[str, float] = {}
@@ -428,6 +419,7 @@ class HorizonOrchestrator:
                     all_claim_results = []
                     reports = []
                     public_verification_by_item = {}
+                    incident_records = []
                     items_by_id = {item.id: item for item in important_items}
                     for snapshot, claim_outcome in zip(snapshots, claim_outcomes):
                         usage_before = get_usage_snapshot()
@@ -506,48 +498,6 @@ class HorizonOrchestrator:
                             if artifact_models
                             else {}
                         )
-                        elapsed = claim_elapsed.get(snapshot.snapshot_id, 0) + (
-                            asyncio.get_running_loop().time() - evidence_started
-                        )
-                        if not artifact_models:
-                            audit_outcome = ArtifactAuditOutcome(
-                                status="ok",
-                                model=self.config.ai.model,
-                            )
-                        elif claim_client is None:
-                            audit_outcome = ArtifactAuditOutcome(
-                                status="error",
-                                error_code="model_error",
-                                model=self.config.ai.model,
-                            )
-                        else:
-                            auditor = ArtifactAuditor(claim_client, budget)
-                            audit_calls_before = budget.used_model_calls
-                            remaining = max(
-                                verification_config.timeout_seconds_per_item
-                                - elapsed,
-                                0,
-                            )
-                            try:
-                                audit_started = asyncio.get_running_loop().time()
-                                async with asyncio.timeout(remaining):
-                                    audit_outcome = await auditor.audit(
-                                        artifact_models,
-                                        claim_results,
-                                    )
-                            except TimeoutError:
-                                audit_outcome = ArtifactAuditOutcome(
-                                    status="error",
-                                    error_code="timeout",
-                                    model=self.config.ai.model,
-                                    model_calls=(
-                                        budget.used_model_calls - audit_calls_before
-                                    ),
-                                    duration_seconds=(
-                                        asyncio.get_running_loop().time()
-                                        - audit_started
-                                    ),
-                                )
                         usage_after = get_usage_snapshot()
                         claim_input, claim_output, claim_cached_input = (
                             claim_token_usage.get(snapshot.snapshot_id, (0, 0, 0))
@@ -589,36 +539,56 @@ class HorizonOrchestrator:
                                 claim_outcome=claim_outcome,
                                 claim_results=claim_results,
                                 artifacts=artifacts,
-                                artifact_audit=audit_outcome,
                                 token_usage=token_usage,
                             )
                         )
-                        state = (
-                            "check_failed"
-                            if claim_outcome.status == "error"
-                            or (
-                                claim_results
-                                and all(
-                                    result.adjudication.status
-                                    == "verification_error"
-                                    for result in claim_results
-                                )
-                            )
-                            else "no_claims"
-                            if not claim_outcome.claims
-                            else "checked"
+                        public = build_public_verification(
+                            claim_results,
+                            token_usage=token_usage,
+                            selected_snapshot=snapshot,
                         )
-                        public_verification_by_item[snapshot.item_id] = (
-                            build_public_verification(
-                                claim_results,
-                                state=state,
-                                token_usage=token_usage,
-                            )
-                        )
+                        public_statuses = {
+                            claim.get("public_status")
+                            for claim in public.get("claims", [])
+                        }
+                        if claim_outcome.status == "error" or any(
+                            result.adjudication.status == "verification_error"
+                            for result in claim_results
+                        ):
+                            public["state"] = "check_error"
+                        elif not claim_outcome.claims:
+                            public["state"] = "not_applicable"
+                        elif public_statuses and public_statuses <= {
+                            "anecdotal",
+                            "not_applicable",
+                        }:
+                            public["state"] = "not_applicable"
+                        elif "provisional" in public_statuses:
+                            public["state"] = "provisional"
+                        elif any(
+                            result.adjudication.status
+                            in {"insufficient_evidence", "not_checkable"}
+                            for result in claim_results
+                        ):
+                            public["state"] = "partial"
+                        else:
+                            public["state"] = "complete"
+                        public_verification_by_item[snapshot.item_id] = public
+                        if item is not None:
+                            incident_records.append((item, public))
                     verification_ledger.capture_verification(
                         all_claim_results,
                         reports,
                     )
+                    try:
+                        update_incident_ledger(
+                            Path("data/incidents.json"), incident_records
+                        )
+                    except Exception as incident_error:
+                        self.console.print(
+                            f"[yellow]{self.icons['warning']} Incident history "
+                            f"was not updated: {incident_error}[/yellow]\n"
+                        )
                     if verification_config.publish_to_site:
                         for item in important_items:
                             item.metadata["evidence_ledger"] = (

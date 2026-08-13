@@ -12,15 +12,29 @@ recoverable by reading the code.
 
 ## Unreleased
 
+### Evidence Ledger reports source coverage honestly
+
+Claims are now extracted from the final reader-visible article instead of from
+the pre-enrichment item. The costly second audit by the same model is no longer
+part of the daily runtime. Public pages distinguish official announcements,
+release records, attributed quotes, independently corroborated events,
+primary/vendor quantities, provisional fresh events, insufficient coverage,
+and check failures; no universal “verified” badge is emitted. VPN/censorship
+events retain a small persistent state history and 24/72-hour review points.
+The article shows exact provider token counts and a configured DeepSeek base-API
+price estimate, including cached input, without presenting it as an OpenCode
+invoice.
+
 ### VPN coverage is an evidence-first radar
 
 Two profiles separate VPN/proxy engineering from censorship and access
 incidents. The bounded MVP follows eight upstream release feeds, two official
 OONI feeds, four Russian field channels, and separate global/Russian news
 queries. Rankings, discounts, affiliate reviews, vague failures, and generic
-political coverage are explicitly rejected. Reader-facing artifacts preserve a
-`CONFIRMED` / `PROBABLE` / `UNVERIFIED` / `CONTRADICTED` label and an alternative
-explanation instead of promoting a field rumour into a nationwide block.
+political coverage are explicitly rejected. Articles preserve alternative
+explanations and next-measurement guidance, while Evidence Ledger alone owns
+reader-facing source-coverage states so a field rumour cannot be promoted into
+a nationwide block by article-generation prose.
 GDELT and Google News now accept multiple query configurations while retaining
 the legacy single-object input shape.
 

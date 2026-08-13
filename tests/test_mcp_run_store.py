@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import re
+from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
@@ -170,6 +171,18 @@ def test_list_runs_returns_desc_order(tmp_path: Path) -> None:
 
     assert runs[0]["run_id"] == "run-2"
     assert runs[1]["run_id"] == "run-1"
+
+
+def test_run_timestamps_remain_monotonic_when_wall_clock_has_not_advanced(
+    tmp_path: Path,
+) -> None:
+    store = RunStore(tmp_path)
+    store._last_timestamp = datetime(2099, 1, 1, tzinfo=timezone.utc)
+
+    first = store._utc_now()
+    second = store._utc_now()
+
+    assert second > first
 
 
 @pytest.mark.parametrize(

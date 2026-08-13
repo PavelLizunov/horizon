@@ -680,6 +680,28 @@ the first group in configuration order. Omitting both `category_groups` and
 `max_items` disables balanced digest limits; configured profile thresholds still
 apply.
 
+## Evidence Ledger
+
+The optional `verification` section checks a bounded sample of final articles
+against public sources. `enabled` records the private ledger;
+`publish_to_site` also shows cautious source coverage on article pages. It never
+adds a universal “verified” badge.
+
+The `max_*` and `timeout_seconds_per_item` values are hard ceilings. Releases,
+announcements, quotes, and quantities use at most one discovery query in
+addition to the original document; events may use the configured query ceiling.
+The daily sample prioritizes censorship, VPN engineering, finance, technology,
+and video profiles in that order.
+
+The three `*_price_per_million_usd` fields are optional. When configured, the
+site combines them with provider-reported cached input, ordinary input, and
+output tokens. The displayed dollar value is a base-API price estimate, not an
+OpenCode subscription invoice or exact quota deduction.
+
+Fresh unresolved events receive 24- and 72-hour review points. VPN and
+censorship event state is retained locally in gitignored `data/incidents.json`
+and appears on the generated checks page.
+
 ## Environment Variable Substitution
 
 Any string value in the active config file supports `${VAR_NAME}` syntax. Variables are expanded at runtime from the environment (including values loaded from `.env`). This lets you keep secrets, tenant-specific endpoints, and private URLs out of the checked-in JSON file.

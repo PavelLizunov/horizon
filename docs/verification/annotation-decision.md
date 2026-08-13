@@ -1,59 +1,57 @@
 ---
 layout: default
-title: Evidence Ledger annotation decision
+title: Evidence Ledger publication decision
 ---
 
-# Evidence Ledger annotation decision
+# Evidence Ledger publication decision
 
-## Owner opt-in — 2026-08-13
+## Current decision — 2026-08-14
 
-The owner has now explicitly requested that evidence results be visible on the
-site. A new `verification.publish_to_site` switch implements that request while
-remaining `false` by default. When enabled, checked article pages show each core
-claim, its evidence status, and links to the public sources used. The section is
-labelled experimental and describes evidence coverage; it does not use absolute
-`true`/`false` or `verified` badges.
+The owner approved reader-visible source coverage on article pages and on the
+site's `/checks/` page. This is not a `true`, `false`, `verified`, or universal
+fact-check badge. It reports only the selected key claims, the sources retrieved
+for them, and the limits of that run.
 
-The 100-story/300-claim accuracy gate below is still missing. This opt-in is an
-owner-visible canary, not a claim that the original general-release gates passed.
+Public states are deliberately narrow:
 
-## Original decision — 2026-08-11
+- `complete`: the selected key claims reached their applicable source-policy
+  outcomes;
+- `partial`: at least one selected claim has insufficient coverage;
+- `provisional`: a fresh event has not yet had time to acquire stable,
+  independent corroboration;
+- `check_error`: a required check timed out or failed;
+- `not_applicable`: no suitable factual key claim was extracted;
+- `not_checked`: the article was outside the bounded daily sample.
 
-**Decision date:** 2026-08-11.
-**Decision:** do not add a public annotation canary. Keep the feature disabled
-by default and shadow-only; the measured deployment may enable the internal
-ledger deliberately.
-**Owner approval for a public canary:** not requested or granted.
+Claim wording depends on claim type. An official announcement proves that an
+announcement exists; it does not prove every assertion inside it. A release can
+be tied to a release record. A field event needs a competent record or two
+distinct reporting origins. A vendor quantity is labelled as a primary/vendor
+report unless its policy gate is satisfied. Opinion and personal experience are
+attributed, not converted into facts.
 
-## Recorded gates
+## Why the first public design was retired
 
-| Measure | Recorded result | Release gate | Verdict |
-|---|---|---|---|
-| Offline adversarial policy precision | 10/10 cases; 0 false support | 0 false support in the adversarial corpus | Pass for this fixture only |
-| Blinded real-news accuracy | Not measured | At least 100 stories and 300 claims | Missing |
-| Conclusive coverage / abstention | Final paid sample: 4 supported, 2 insufficient, 1 not-checkable, 0 errors from 7 claims | Owner-selected threshold after a representative shadow sample | Technical sample passes; threshold missing |
-| Added end-to-end latency | Five repeated full runs measured 400.6-961 seconds; the final five reports were 13.2-123.6 seconds each | Owner-selected acceptable bound | Measured, threshold missing |
-| Added token and monetary cost | Final run 318,932 tokens; at least 1,644,257 metered tokens across implementation probes and runs | Owner-selected acceptable bound and provider-credit measurement | Measured tokens; monetary threshold missing |
-| Citation/locator correctness | Exact round-trip tests pass; final run discarded 2 inexact claim proposals and 3 inexact evidence excerpts | Human citation review on the real-news sample | Automated gate passes; human gate missing |
-| Public-output parity | Disabled mode writes nothing; shadow audit does not mutate artifacts or citations | No reader-visible change before approval | Pass |
+The 2026-08-13 live run showed that the second final-artifact audit was both
+expensive and untrustworthy as an independence mechanism: the same model wrote,
+extracted, assessed, and audited the text. Four of five audits failed, while the
+one successful audit found 23 uncovered factual spans. The page still described
+those results as completed.
 
-The original adversarial corpus remained free and offline. Five paid shadow
-runs and targeted reproductions are recorded separately in
-`evaluation-results.md`. They establish a technical operating range, not an
-accuracy estimate for real news.
+The runtime now extracts claims from the final reader-visible artifact and does
+one evidence assessment path. The old audit code and fixture remain for
+historical offline evaluation, but the daily pipeline no longer spends tokens
+on it or presents it as a safety guarantee.
 
-## Consequence
+## Remaining accuracy gate
 
-No public badge, label, `ClaimReview`, renderer branch or annotation mode is
-implemented. The technical blockers from the first paid run were fixed: the
-final run completed claim extraction and artifact audit for 5/5 items, with no
-verification or search errors. The internal ledger may therefore run in shadow
-to collect the required real sample.
+The blinded review of at least 100 stories and 300 claims has not been
+completed. The public feature is therefore an owner-approved transparency
+canary, not a validated fact-checking product. Exact locators, conservative
+adjudication, explicit errors, and public source links reduce the risk; they do
+not establish real-world accuracy by themselves.
 
-A future public canary is still a new decision. It requires the blinded
-100-story/300-claim review, raw confusion counts, a human citation review and
-owner-selected coverage, latency and cost thresholds. Technical reliability
-does not substitute for those quality gates.
-
-This negative decision completes the shadow-MVP experiment without claiming
-that the system is ready for readers.
+Provider token counts are shown exactly when the gateway reports them. Dollar
+figures are estimates using the configured base DeepSeek API prices, including
+the configured cached-input rate. They are not an OpenCode invoice or a claim
+about the exact amount deducted from a subscription quota.

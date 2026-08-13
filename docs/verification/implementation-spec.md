@@ -1,43 +1,30 @@
 ---
 layout: default
-title: Evidence Ledger shadow MVP
+title: Evidence Ledger implementation
 ---
 
-# Evidence Ledger shadow MVP
+# Evidence Ledger implementation
 
-**Status:** implementation contract for the first measured version.
-**Date:** 2026-08-11.
-**Baseline:** see [preflight](preflight.md).
+**Current contract:** 2026-08-14.
 **Method:** see [methodology](methodology.md).
+**Publication decision:** see [annotation decision](annotation-decision.md).
 
 ## Outcome
 
-For a small number of selected technology-news items, Horizon creates an
-internal, replayable report containing:
+For a bounded daily sample, Horizon records a replayable evidence report and can
+publish a cautious source-coverage section. The report contains:
 
-- the exact normalized pipeline input;
-- at most three headline/load-bearing claims;
-- fetched evidence excerpts with exact locators;
-- an explicit distinction between healthy absence of evidence and system error;
-- a conservative evidence status derived by versioned rules;
-- an audit of factual assertions in the final enriched artifact.
+- the fetched input lineage;
+- the exact final reader-visible title and prose used for claim extraction;
+- at most three headline or load-bearing claims;
+- bounded public-document snapshots and exact evidence excerpts;
+- a deterministic claim-type policy outcome;
+- provider-reported token counts and an optional configured-price estimate.
 
-No reader-visible output changes in shadow mode.
+It does not decide universal truth, grade the whole article, execute model-made
+code, or turn a search snippet into evidence.
 
-## Non-goals
-
-The MVP does not include SQLite, migrations, leases, a planning DAG,
-an independent search-service abstraction, a general origin graph,
-TTL/reverification, corrections,
-MCP endpoints, Schema.org output, C2PA, reverse-image search, deepfake detection,
-private sources, narration invalidation or enforcement of generated prose.
-
-Add these only after shadow measurements demonstrate the need.
-
-## Configuration contract
-
-The optional top-level model lives in `src/models.py`, like every other config
-model in this repository. Defaults preserve the existing pipeline.
+## Configuration
 
 ```json
 {
@@ -57,319 +44,155 @@ model in this repository. Defaults preserve the existing pipeline.
 }
 ```
 
-Verification remains shadow-only unless `publish_to_site` is explicitly enabled.
-That opt-in adds an experimental evidence section to article pages; it does not
-change filtering, scoring, summaries, Telegram delivery, or source citations in
-the generated artifact. `enforce` is not a v1 mode. No per-profile override is
-needed while only the `tech-news` canary is in scope.
-Code selects items whose resolved
-`item.processing.classification.profile == "tech-news"`, then checks the first
-`max_items_per_run` in the existing final selection order. The verifier does not
-create a second ranking policy.
+`enabled` records the private ledger. `publish_to_site` additionally attaches
+the small public payload to article pages. Neither option changes article
+selection. Prices must match the active model's public API tariff; the result is
+an estimate, not provider billing.
 
-When site publication is enabled, every new article states whether its core
-claims were checked. Checked articles show a compact result above the lede and
-the claim/source detail below the analysis. The report records exact provider-
-reported input and output tokens used by claim extraction, evidence assessment,
-and final-artifact audit for that article. Search and document fetching use no
-LLM tokens.
+The sample prioritizes factual reader profiles in this order:
+`censorship-watch`, `vpn-engineering`, `finance-news`, `tech-news`, `video`.
+Within a profile, final digest order is preserved.
 
-The two optional price fields turn those counts into a pay-as-you-go estimate.
-They must be configured together and kept aligned with the active provider and
-region. The value is not an invoice: prepaid token plans, cache discounts,
-promotions, taxes, and provider-side adjustments require the provider's billing
-export for an exact charged amount.
-
-## Snapshot contract
-
-### FetchedInputSnapshot
-
-Created immediately after `fetch_all_sources()` from
-`ContentItem.model_dump(mode="json")`. It proves what the pipeline received,
-not what the remote server originally returned. Every fetched item gets one so
-dedup lineage remains recoverable.
-
-Required fields:
-
-```text
-schema_version
-snapshot_id = sha256(schema version + canonical payload JSON bytes)
-captured_at
-item_id
-source_type
-payload
-content_present
-known_content_limit, when the scraper exposes one
-```
-
-`content_present=true` does not promise that the remote source was complete.
-Without an exposed limit, source coverage remains unknown. Source-native raw
-capture is deferred.
-
-### SelectedInputSnapshot
-
-Created for the final selected item after URL/topic dedup, Twitter discussion
-expansion, score re-filtering and balancing, but before enrichment. It uses the
-same payload/hash contract and adds the fetched snapshot IDs from which it was
-derived. Claim locators point to this snapshot, so content and labels appended
-by existing dedup code remain exactly anchorable.
-
-### EvidenceSnapshot
-
-Created only after a discovery URL passes the guarded fetch and text extraction
-path. Required fields:
-
-```text
-schema_version
-snapshot_id = sha256(canonical URL + normalized object hash + normalization version)
-normalized_object_hash = sha256(normalized UTF-8 text)
-requested_url
-final_url
-retrieved_at
-published_at, when known
-mime_type
-access_status
-normalizer
-normalized_text
-```
-
-Search snippets never become `EvidenceSnapshot` records.
-
-## Minimal records
-
-### ClaimCard
-
-```text
-claim_id
-selected_input_snapshot_id
-source_field = title | content
-source_start/source_end
-source_text
-normalized_claim
-kind = announcement | release | quote | quantity | event | opinion | other
-importance = headline | load_bearing
-checkability = checkable | ambiguous | not_checkable
-```
-
-Every retained claim must round-trip to the exact `source_text` slice. Offsets
-refer to Unicode code points in the named `SelectedInputSnapshot.payload` field,
-before any prompt formatting. A schema-valid proposal with an inexact,
-ambiguous or duplicate locator is discarded and counted in the run manifest;
-other exact proposals in the same response remain usable. If none remain, the
-extractor retries and ultimately fails closed.
-
-### SearchOutcome
-
-```text
-status = ok | error
-query
-hits = discovery_id, rank, title, URL and snippet
-error_code = unavailable | rate_limited | timeout | invalid_response, only for error
-```
-
-`status=ok` with no hits means a healthy empty search. `status=error` never
-becomes `insufficient_evidence` by itself. The current adapter tries the
-library's automatic backend first and uses bounded DuckDuckGo, Yahoo and Yandex
-fallbacks only after an error. A healthy empty fallback is distinct from all
-backends failing.
-
-### EvidenceCard
-
-```text
-evidence_id
-claim_id
-evidence_snapshot_id
-excerpt_start/excerpt_end
-excerpt
-source_class
-interested_party
-stance = supports | contradicts | context | irrelevant | unknown
-entity_match
-temporal_match
-quantity_match
-origin_key, optional
-assessment_model
-assessment_prompt_version
-```
-
-The implementation, not the model, copies URLs and excerpts from the snapshot
-registry and verifies every locator. A response must still name every supplied
-candidate exactly once. An inexact or ambiguous material excerpt is discarded
-and counted while exact sibling assessments remain stored. Any discarded
-assessment forces that claim to `insufficient_evidence`; partial model output
-can never create a conclusive positive or negative verdict. If no material
-assessment survives, the verifier retries and ultimately fails closed.
-
-### VerificationReport
-
-```text
-schema_version
-report_id
-run_id
-item_id
-fetched_input_snapshot_ids
-selected_input_snapshot_id
-artifact_hashes by language
-status per core claim
-evidence IDs per claim
-unchecked factual spans from each localized final artifact
-search coverage and stop reason
-policy/prompt/model versions
-created_at
-```
-
-The stop reason is one of `sufficient`, `budget`, `no_novelty`,
-`backend_error`, `source_unavailable` or `not_checkable`.
-
-File names use `report_id`, never `item_id`; source IDs may contain characters
-that are invalid in Windows paths.
-
-## Pipeline wiring
+## Pipeline placement
 
 ```text
 fetch
-  -> capture FetchedInputSnapshots
-  -> existing URL dedup, retaining a sidecar member map
-  -> existing analysis
-  -> existing select_digest_items()
-       -> profile filtering and optional topic dedup, retaining a member map
-       -> Twitter discussion expansion and score re-filter
-       -> balanced final selection
-  -> capture SelectedInputSnapshots
-  -> existing enrichment (unchanged)
-  -> shadow verification and final-artifact audit
-  -> existing DailySummarizer/render/delivery (unchanged)
+  -> immutable fetched snapshots
+  -> URL dedup + analysis + profile selection + topic dedup + balancing
+  -> enrichment creates the final localized article
+  -> selected snapshot replaces title/content with that final artifact
+  -> claim extraction
+  -> safe public retrieval + evidence assessment + rule adjudication
+  -> private report + small public payload
+  -> article/site rendering
 ```
 
-An item-level verification failure records `verification_error` and continues
-the digest. Corrupt schema or storage writes fail the verification stage but do
-not alter publication while the only run mode is shadow.
+The previous second model call that audited the generated artifact is not in the
+runtime. Claims now come directly from the artifact the reader sees. This is
+cheaper and removes a misleading same-model self-review, while preserving the
+original fetched snapshot and dedup lineage for replay.
 
-## Retrieval
+## Immutable records
 
-1. Build deterministic query templates from claim kind and named entities.
-2. Search for the original/primary source.
-3. Search for independent reporting or a competent record.
-4. Run one counterquery when the budget permits.
-5. Fetch candidate URLs through the repository URL-safety path.
-6. Apply redirect, byte, timeout and MIME limits while reading. A missing
-   `Content-Type` is accepted only when the bounded body is valid UTF-8 with no
-   binary-control signature; it is then normalized as plain text (or HTML when
-   the document starts with an HTML declaration).
-7. Extract bounded text and exact candidate excerpts.
-8. Batch stance assessment per claim.
-9. Stop on sufficient evidence, exhausted budget, no novel URLs or backend
-   error.
+### Fetched input
 
-No LLM-generated code, SQL or tool name is executable. The model may suggest a
-query string; code owns budgets, URL validation, fetches and state transitions.
+Every fetched `ContentItem` is serialized before dedup. Its ID and object hash
+use canonical UTF-8 JSON. A selected item retains all fetched member IDs from URL
+and topic dedup.
 
-## Adjudication
+### Selected input
 
-The rule table is versioned data in code. v1 order is:
+The selected snapshot is captured after enrichment. Its `title` and `content`
+are the localized artifact title and ordered block titles/content. Claim
+locators therefore point to the published prose, not to an earlier source-only
+draft.
+
+### Claim
+
+Each retained claim carries an exact `source_field`, Unicode start/end offsets,
+copied `source_text`, normalized claim, kind, importance, and checkability. Code
+rejects missing, ambiguous, duplicate, or inexact spans. The maximum is three.
+
+Kinds are `announcement`, `release`, `quote`, `quantity`, `event`, `opinion`,
+and `other`.
+
+### Evidence
+
+URLs pass the shared public-address guard on every redirect. Fetching has status,
+MIME, byte, and wall-clock limits and inherits no credentials or cookies. Search
+snippets are discovery-only. Normalized documents are content-addressed; a
+material evidence card must copy one unambiguous exact excerpt.
+
+Source classes are `original`, `competent_record`, `independent_reporting`,
+`interested_party`, and `unknown`. Exact copies share one origin. Distinct
+independent-report URLs get distinct conservative reporting origins; unknown
+independence never counts.
+
+## Retrieval budget
+
+Announcements, releases, quotes, and quantities fetch the original source plus
+at most one discovery query. Events and `other` claims may use the configured
+query ceiling because they need corroboration and counter-evidence. All kinds
+share the configured document and per-item model-call ceilings.
+
+Healthy empty search, provider failure, access denial, unsupported MIME, and
+timeout remain distinct recorded outcomes. Exhausting a required stage produces
+an explicit error, not a negative claim result.
+
+## Deterministic adjudication
+
+The rule order is:
 
 ```text
 not checkable                         -> not_checkable
-required stage could not complete     -> verification_error
-any material assessment was discarded -> insufficient_evidence
+required stage failed                -> verification_error
 eligible support and contradiction   -> mixed_evidence
-claim policy contradiction gate met  -> contradicted_by_evidence
-claim policy support gate met        -> supported_by_evidence
+direct policy contradiction          -> contradicted_by_evidence
+claim-type support gate passed       -> supported_by_evidence
 otherwise                            -> insufficient_evidence
 ```
 
-The report exposes satisfied and missing gates. Optional query/fetch failures
-degrade coverage; the applicable claim policy decides whether the remaining
-coverage can satisfy a gate. Deterministic derivation means reproducibility from
-recorded assessments, not infallibility.
+An event needs a competent record or two distinct eligible origins. A quantity
+needs a matching direct source with matching scope. Announcements, releases,
+and quotes may use their direct original record for attribution. Interested
+parties do not prove unrelated event or performance claims.
 
-## Final-artifact audit
+## Public vocabulary and freshness
 
-The audit runs over `ContentArtifact.title` and every `ContentBlock.content`.
-One model call extracts candidate factual spans. Code then checks whether each
-span maps to a checked claim and records unmatched spans. Shadow mode reports
-violations but never rewrites or blocks the artifact.
+The public payload contains claim text, kind, raw status, type-aware public
+status, source URL/stance/class, `checked_at`, source age, optional
+`next_check_at`, and token usage. It never publishes stored document text,
+excerpts, prompts, search queries, cookies, or headers.
 
-Span-level generator annotations and corrective retries belong to a later
-enforcement phase. Existing `ContentBlock.source_refs` should be reused for
-evidence IDs before adding a parallel citation abstraction.
+Fresh unresolved `event` and `other` claims are `provisional`. Their next review
+points are 24 and 72 hours after publication. Older insufficient events become
+`insufficient` rather than staying permanently "fresh". Official announcements
+and release records can be attributed immediately, without claiming that every
+broader assertion is true.
 
-## Persistence
+Article state is derived from results: errors win, then no-applicable-claim,
+then provisional, then partial, then complete. Articles outside the bounded
+sample are explicitly `not_checked`.
 
-Use repository-native files first:
+## Incident history
+
+`data/incidents.json` stores event claims from `censorship-watch` and
+`vpn-engineering`. It records a stable claim fingerprint, first/last seen,
+last checked, next check, source item IDs/URLs, and state history:
+
+```text
+PROVISIONAL -> CORROBORATED | DISPUTED -> RESOLVED
+```
+
+`RESOLVED` requires explicit item metadata; the system does not infer recovery
+from silence. A later daily observation of the same event advances its state.
+The generated `/checks/` page shows the latest incident state and timestamps.
+
+## Persistence and failure behavior
 
 ```text
 data/verification/
-  objects/sha256/<first-two>/<hash>
+  objects/sha256/<prefix>/<hash>
   runs/<run-id>/manifest.json
   runs/<run-id>/inputs/<hash>.jsonl
   runs/<run-id>/claims.jsonl
   runs/<run-id>/evidence.jsonl
   runs/<run-id>/reports/<report-id>.json
+data/incidents.json
 ```
 
-Writes use `_atomic_write_text()` or the same temporary-file/`os.replace`
-pattern for bytes. JSON is canonical UTF-8 with sorted keys and compact
-separators before hashing. Content-addressed objects are never overwritten.
+Writes use same-directory temporary files and atomic replacement. The data is
+gitignored. Verification and incident-history failures are visible but do not
+stop the digest from publishing; a failed check is rendered as interrupted, not
+as completed.
 
-SQLite is reconsidered only when measured revalidation or cross-run lookup
-makes scanning manifests inadequate.
+## Tests and release boundary
 
-The entire `data/verification/` tree is gitignored before the first runtime
-write.
+All CI tests are offline. Coverage includes canonical IDs, atomic recovery,
+dedup lineage, exact locators, guarded fetching, search error semantics, exact
+copy collapse, independent event origins, claim-type adjudication, freshness,
+incident transitions, disabled-mode parity, public wording, and token pricing.
 
-## Security
-
-- Source and evidence text are untrusted data, never instructions.
-- Model output is schema-validated and cannot provide stored URLs or locators.
-- Only public `http`/`https` destinations are fetched.
-- Credentials, cookies and inherited auth headers are forbidden.
-- Redirects are validated individually; body size is enforced while streaming.
-- The MVP rejects private/restricted inputs rather than inventing an incomplete
-  privacy policy.
-- Public output remains unchanged, so no snapshots or verification internals
-  are published in v1.
-
-## Observability and budgets
-
-Record run/item/claim IDs, stage duration, model-call count, search-call count,
-documents fetched, cache reuse, discarded claim/assessment counts, stop reason
-and error code. Do not report per-stage tokens until AI clients provide
-stage-aware accounting.
-
-The configuration limits are hard ceilings. Reaching one produces an explicit
-incomplete result. It never guesses a conclusion. Live shadow runs still require
-owner approval because they consume paid model calls.
-
-## Test and release gates
-
-All CI tests are offline. Minimum coverage includes:
-
-- deterministic IDs and canonical serialization;
-- atomic write recovery;
-- both dedup membership maps;
-- exact claim/evidence locators;
-- healthy-empty search versus backend error;
-- snippet rejection;
-- URL/redirect/size safety;
-- syndication collapsing for exact/explicit copies;
-- deterministic adjudication truth table;
-- unmatched final-artifact claim detection;
-- disabled and shadow output parity.
-
-Public annotation remains blocked until the evaluation in `methodology.md` is
-complete and the owner records acceptable accuracy, coverage, cost and latency.
-
-## Delivery sequence
-
-1. **PR-0 — contracts:** these documents and verified repository map.
-2. **PR-1 — discovery boundary:** typed `SearchOutcome` and bounded guarded
-   document fetch.
-3. **PR-2 — shadow ledger:** configuration, canonical IDs, JSONL/object storage,
-   fetched/selected snapshots and both dedup maps.
-4. **PR-3 — core claims:** at most three anchored claims per selected item.
-5. **PR-4 — evidence report:** retrieval, stance assessment, conservative origin
-   keys and rule-table adjudication.
-6. **PR-5 — artifact audit and evaluation harness:** still no public effect.
-7. **PR-6 — optional annotation canary:** one profile, only after the recorded
-   release decision.
+The owner has approved a cautious public canary. The missing blinded
+100-story/300-claim review still prevents describing this as a validated
+fact-checking system.

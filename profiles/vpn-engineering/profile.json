@@ -21,11 +21,6 @@
         "primary": true
       },
       {
-        "id": "evidence_status",
-        "type": "section",
-        "tools": ["web_search"]
-      },
-      {
         "id": "impact",
         "type": "section",
         "tools": ["web_search"],

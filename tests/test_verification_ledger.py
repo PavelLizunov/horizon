@@ -15,6 +15,8 @@ from src.models import (
     ClassificationResult,
     Config,
     ContentAnalysis,
+    ContentArtifact,
+    ContentBlock,
     ContentItem,
     ProcessingConfig,
     ProcessingResult,
@@ -229,7 +231,7 @@ def test_enabled_shadow_run_captures_exact_pre_enrichment_input_and_lineage(
                         "claims": [
                             {
                                 "source_field": "title",
-                                "source_text": "Title rich",
+                                "source_text": "Final rich",
                                 "normalized_claim": "The rich item was announced",
                                 "kind": "announcement",
                                 "importance": "headline",
@@ -246,6 +248,17 @@ def test_enabled_shadow_run_captures_exact_pre_enrichment_input_and_lineage(
     async def enrich_items(items):  # type: ignore[no-untyped-def]
         enriched_content.append(items[0].content)
         items[0].content = f"{items[0].content}\nENRICHED"
+        items[0].processing.artifacts["ru"] = ContentArtifact(
+            language="ru",
+            title="Final rich",
+            blocks=[
+                ContentBlock(
+                    id="summary",
+                    title="Summary",
+                    content="FINAL ARTICLE CLAIM",
+                )
+            ],
+        )
 
     monkeypatch.setattr(orchestrator, "fetch_all_sources", fetch_all_sources)
     monkeypatch.setattr(orchestrator, "analyze_items", analyze_items)
@@ -284,8 +297,10 @@ def test_enabled_shadow_run_captures_exact_pre_enrichment_input_and_lineage(
         fetched["rich"]["snapshot_id"],
         fetched["other"]["snapshot_id"],
     ]
-    assert "TWITTER DISCUSSION" in selected["payload"]["content"]
-    assert "ENRICHED" not in selected["payload"]["content"]
+    assert selected["payload"]["title"] == "Final rich"
+    assert selected["payload"]["verification_language"] == "ru"
+    assert "FINAL ARTICLE CLAIM" in selected["payload"]["content"]
+    assert "TWITTER DISCUSSION" not in selected["payload"]["content"]
     assert "TWITTER DISCUSSION" in enriched_content[0]
     claims = [
         json.loads(line)
@@ -305,7 +320,7 @@ def test_enabled_shadow_run_captures_exact_pre_enrichment_input_and_lineage(
         )
     )
     assert report["duration_seconds"] >= 0
-    assert report["artifact_audit"]["status"] == "ok"
+    assert "artifact_audit" not in report
 
 
 def test_verification_is_disabled_by_default_and_writes_nothing(

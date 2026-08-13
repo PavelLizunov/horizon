@@ -21,11 +21,6 @@
         "primary": true
       },
       {
-        "id": "evidence_status",
-        "type": "section",
-        "tools": ["web_search"]
-      },
-      {
         "id": "alternative_explanation",
         "type": "section",
         "tools": ["web_search"],

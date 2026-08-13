@@ -26,6 +26,7 @@ from src.verification.evidence import (
     build_query_templates,
     build_token_usage_report,
     build_verification_report,
+    public_claim_status,
 )
 from src.verification.fetch import DocumentFetchOutcome
 from src.verification.ledger import ShadowLedger, build_selected_input_snapshot
@@ -164,19 +165,23 @@ def test_public_verification_contains_claim_status_and_links_only() -> None:
         cache_reuse=0,
     )
 
-    public = build_public_verification([result])
+    public = build_public_verification([result], checked_at=NOW)
 
     assert public == {
         "schema_version": "public-verification/v1",
-        "state": "checked",
+        "state": "complete",
+        "checked_at": "2026-08-11T00:00:00Z",
         "claims": [
             {
                 "text": "Product X version 2 was released on August 11",
+                "kind": "release",
                 "status": "supported_by_evidence",
+                "public_status": "official_release",
                 "sources": [
                     {
                         "url": "https://vendor.example/release",
                         "stance": "supports",
+                        "source_class": "original",
                     }
                 ],
             }
@@ -184,6 +189,31 @@ def test_public_verification_contains_claim_status_and_links_only() -> None:
     }
     assert "normalized_text" not in str(public)
     assert "excerpt" not in str(public)
+
+
+def test_fresh_event_is_provisional_and_gets_a_recheck_time() -> None:
+    result = ClaimVerificationResult(
+        claim=_claim(kind="event"),
+        adjudication=AdjudicationResult(status="insufficient_evidence"),
+        evidence_snapshots=(),
+        evidence_cards=(),
+        stop_reason="no_novelty",
+        search_calls=1,
+        documents_attempted=0,
+        documents_fetched=0,
+        cache_reuse=0,
+    )
+
+    public = build_public_verification(
+        [result],
+        selected_snapshot=_selected(),
+        checked_at=NOW + timedelta(hours=2),
+    )
+
+    assert public["claims"][0]["public_status"] == "provisional"
+    assert public["source_age_hours"] == 2.0
+    assert public["next_check_at"] == "2026-08-12T00:00:00Z"
+    assert public_claim_status("event", "insufficient_evidence", 73) == "insufficient"
 
 
 def test_token_usage_report_prices_cached_input_separately() -> None:
@@ -280,6 +310,44 @@ def test_assessment_excerpt_round_trips_and_exact_copies_share_origin() -> None:
     for card, snapshot in zip(cards, (first, second)):
         assert snapshot.normalized_text[card.excerpt_start : card.excerpt_end] == card.excerpt
         assert card.assessment_prompt_version == ASSESSMENT_PROMPT_VERSION
+
+
+def test_two_distinct_independent_reports_can_corroborate_an_event() -> None:
+    first = build_evidence_snapshot(
+        _fetch_outcome(
+            "https://outlet-a.example/report",
+            b"Outlet A observed Protocol X failing on network Y.",
+        ),
+        retrieved_at=NOW,
+    )
+    second = build_evidence_snapshot(
+        _fetch_outcome(
+            "https://outlet-b.example/report",
+            b"Outlet B independently measured Protocol X failing on network Y.",
+        ),
+        retrieved_at=NOW,
+    )
+    assert first is not None and second is not None
+    proposals = [
+        EvidenceAssessmentProposal(
+            candidate_id=snapshot.snapshot_id,
+            excerpt="Protocol X failing on network Y",
+            source_class="independent_reporting",
+            interested_party=False,
+            stance="supports",
+            entity_match="match",
+            temporal_match="match",
+            quantity_match="unknown",
+        )
+        for snapshot in (first, second)
+    ]
+
+    cards = anchor_evidence_assessments(
+        _claim(kind="event"), [first, second], proposals, model="test"
+    )
+
+    assert len({card.origin_key for card in cards}) == 2
+    assert adjudicate_claim(_claim(kind="event"), cards).status == "supported_by_evidence"
 
 
 def test_assessment_rejects_ambiguous_or_missing_exact_excerpt() -> None:
@@ -484,12 +552,34 @@ def test_verifier_fetches_documents_not_snippets_and_supports_direct_release() -
     assert result.adjudication.status == "supported_by_evidence"
     assert result.stop_reason == "sufficient"
     assert result.documents_fetched == 1
+    assert result.search_calls == 1
     assert len(result.evidence_cards) == 1
     assert "snippet" not in result.evidence_cards[0].excerpt.lower()
     assert result.search_outcomes[0]["hits"][0]["snippet"].startswith(
         "This snippet contradicts"
     )
     assert client.calls == 1
+
+
+def test_event_claim_uses_broader_search_budget() -> None:
+    async def fetch(url: str) -> DocumentFetchOutcome:
+        return _fetch_outcome(
+            url,
+            b"Product X version 2 was officially released on August 11.",
+        )
+
+    verifier = EvidenceVerifier(
+        _AssessmentClient(),
+        max_queries=3,
+        max_documents=6,
+        budget=ItemVerificationBudget(max_model_calls=5),
+        search=_empty_search,
+        fetch=fetch,
+    )
+
+    result = asyncio.run(verifier.verify(_claim(kind="event"), _selected()))
+
+    assert result.search_calls == 3
 
 
 def test_verifier_retries_invalid_assessment_and_counts_budget() -> None:
