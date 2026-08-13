@@ -107,6 +107,7 @@ def test_site_page_uses_public_claims_statuses_and_source_links(tmp_path) -> Non
             json.dumps(
                 {
                     "claim_id": "claim-1",
+                    "source_text": "Версия 2 выпущена",
                     "normalized_claim": "Version 2 released",
                     "kind": "release",
                 }
@@ -180,6 +181,8 @@ def test_site_page_uses_public_claims_statuses_and_source_links(tmp_path) -> Non
 
     assert "# Покрытие новостей источниками" in page
     assert "Release &lt;X&gt;" in page
+    assert "Версия 2 выпущена" in page
+    assert "Version 2 released" not in page
     assert "Найдена запись о релизе" in page
     assert 'href="https://source.example/proof"' in page
     assert "1 200 токенов проверки" in page
@@ -233,3 +236,26 @@ def test_generated_article_refresh_handles_an_issue_directory(tmp_path) -> None:
         encoding="utf-8"
     )
     assert (tmp_path / "index.md").read_text(encoding="utf-8") == "index"
+
+
+def test_generated_article_refresh_restores_exact_source_language(tmp_path) -> None:
+    article = tmp_path / "tech-news-1.md"
+    article.write_text(
+        '<li class="hz-verification__claim" data-status="source_supported" '
+        'data-raw-status="supported_by_evidence">\n'
+        '<span class="hz-verification__status">Источник подтверждает утверждение</span>\n'
+        '<p>Model X has a new architecture.</p>\n</li>',
+        encoding="utf-8",
+    )
+
+    changed = refresh_article_pages(
+        tmp_path,
+        claim_texts={
+            "Model X has a new architecture.": "У Model X новая архитектура."
+        },
+    )
+
+    assert changed == 1
+    page = article.read_text(encoding="utf-8")
+    assert "У Model X новая архитектура." in page
+    assert "Model X has a new architecture." not in page

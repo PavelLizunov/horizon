@@ -23,7 +23,9 @@ and check failures; no universal “verified” badge is emitted. VPN/censorship
 events retain a small persistent state history and 24/72-hour review points.
 The article shows exact provider token counts and a configured DeepSeek base-API
 price estimate, including cached input, without presenting it as an OpenCode
-invoice.
+invoice. Reader-facing claim text is the exact span from the article, and stays
+in the article's language rather than exposing the model's internal normalized
+proposition.
 
 ### VPN coverage is an evidence-first radar
 

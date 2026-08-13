@@ -247,7 +247,9 @@ def build_public_verification(
             next_checks.append(next_check)
         claims.append(
             {
-                "text": result.claim.normalized_claim,
+                # Show the exact reader-visible wording. The normalized proposition
+                # is useful internally, but a model may translate it.
+                "text": result.claim.source_text,
                 "kind": result.claim.kind,
                 "status": result.adjudication.status,
                 "public_status": public_status,

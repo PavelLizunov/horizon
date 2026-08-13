@@ -173,7 +173,7 @@ def test_public_verification_contains_claim_status_and_links_only() -> None:
         "checked_at": "2026-08-11T00:00:00Z",
         "claims": [
             {
-                "text": "Product X version 2 was released on August 11",
+                "text": "Product X released",
                 "kind": "release",
                 "status": "supported_by_evidence",
                 "public_status": "official_release",

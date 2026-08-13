@@ -179,29 +179,40 @@ def _incident_lines(root: Path) -> list[str]:
     return lines
 
 
-def sanitize_article_verification(markdown: str, language: str = "ru") -> str:
-    """Apply deterministic claim-kind guards to already generated pages."""
+def sanitize_article_verification(
+    markdown: str,
+    language: str = "ru",
+    claim_texts: dict[str, str] | None = None,
+) -> str:
+    """Refresh deterministic labels and restore exact public claim wording."""
     language_root = language.lower().replace("_", "-").partition("-")[0]
     copy = _VERIFICATION_COPY.get(language_root, _VERIFICATION_COPY["en"])
 
     def replace_claim(match: re.Match[str]) -> str:
         status = match.group("status")
-        if match.group("raw") != "supported_by_evidence":
-            return match.group(0)
         claim = html.unescape(match.group("claim"))
-        action_kind = conservative_claim_kind("announcement", claim, claim)
-        if action_kind in {"announcement", "release"}:
-            kind = action_kind
-        elif status in {"official_announcement", "official_release"}:
-            kind = conservative_claim_kind(
-                "announcement" if status == "official_announcement" else "release",
-                claim,
-                claim,
-            )
-        else:
-            return match.group(0)
-        new_status = public_claim_status(kind, match.group("raw"), None)
-        if new_status == status:
+        public_claim = (claim_texts or {}).get(claim, claim)
+        kind = None
+        if match.group("raw") == "supported_by_evidence":
+            action_kind = conservative_claim_kind("announcement", claim, claim)
+            if action_kind in {"announcement", "release"}:
+                kind = action_kind
+            elif status in {"official_announcement", "official_release"}:
+                kind = conservative_claim_kind(
+                    (
+                        "announcement"
+                        if status == "official_announcement"
+                        else "release"
+                    ),
+                    claim,
+                    claim,
+                )
+        new_status = (
+            public_claim_status(kind, match.group("raw"), None)
+            if kind is not None
+            else status
+        )
+        if new_status == status and public_claim == claim:
             return match.group(0)
         opening = match.group("open").replace(
             f'data-status="{status}"', f'data-status="{new_status}"'
@@ -210,7 +221,7 @@ def sanitize_article_verification(markdown: str, language: str = "ru") -> str:
         return (
             opening
             + f'<span class="hz-verification__status">{label}</span>\n'
-            + f'<p>{match.group("claim")}</p>'
+            + f'<p>{html.escape(public_claim)}</p>'
         )
 
     updated = _PUBLIC_CLAIM_RE.sub(replace_claim, markdown)
@@ -226,13 +237,47 @@ def sanitize_article_verification(markdown: str, language: str = "ru") -> str:
     return updated
 
 
-def refresh_article_pages(root: Path, language: str = "ru") -> int:
+def _latest_claim_texts(root: Path) -> dict[str, str]:
+    """Map unambiguous normalized claims to their exact article spans."""
+    complete = next(
+        (
+            run_dir
+            for run_dir, manifest in _runs(root)
+            if manifest.get("stage") == "evidence"
+            and (run_dir / "claims.jsonl").exists()
+        ),
+        None,
+    )
+    if complete is None:
+        return {}
+    candidates: dict[str, set[str]] = {}
+    for line in (complete / "claims.jsonl").read_text(encoding="utf-8").splitlines():
+        try:
+            claim = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        normalized = str(claim.get("normalized_claim") or "").strip()
+        source = str(claim.get("source_text") or "").strip()
+        if normalized and source and normalized != source:
+            candidates.setdefault(normalized, set()).add(source)
+    return {
+        normalized: next(iter(sources))
+        for normalized, sources in candidates.items()
+        if len(sources) == 1
+    }
+
+
+def refresh_article_pages(
+    root: Path,
+    language: str = "ru",
+    claim_texts: dict[str, str] | None = None,
+) -> int:
     changed = 0
     for path in sorted(root.rglob("*.md")):
         if path.name == "index.md":
             continue
         before = path.read_text(encoding="utf-8")
-        after = sanitize_article_verification(before, language)
+        after = sanitize_article_verification(before, language, claim_texts)
         if after != before:
             _atomic_write_text(path, after)
             changed += 1
@@ -360,7 +405,7 @@ def build_site_page(root: Path) -> str:
             )
             public_claims.append(
                 {
-                    "text": claim["normalized_claim"],
+                    "text": claim.get("source_text") or claim["normalized_claim"],
                     "kind": kind,
                     "status": status,
                     "public_status": public_claim_status(kind, status, age_hours),
@@ -508,7 +553,10 @@ def main() -> None:
         print(f"Wrote verification page: {args.write_site}")
         return
     if args.refresh_articles:
-        changed = refresh_article_pages(args.refresh_articles)
+        changed = refresh_article_pages(
+            args.refresh_articles,
+            claim_texts=_latest_claim_texts(args.root),
+        )
         print(f"Refreshed verification labels in {changed} article pages")
         return
     summary = summarize(args.root)
