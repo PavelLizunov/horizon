@@ -362,3 +362,6 @@ def test_verification_limits_are_validated() -> None:
 
     with pytest.raises(ValidationError):
         VerificationConfig(input_price_per_million_usd=0.2)
+
+    with pytest.raises(ValidationError):
+        VerificationConfig(cached_input_price_per_million_usd=0.0028)

@@ -367,7 +367,7 @@ class HorizonOrchestrator:
                     snapshots = verification_ledger.selected_snapshots
                     claim_client = None
                     claim_elapsed: Dict[str, float] = {}
-                    claim_token_usage: Dict[str, tuple[int, int]] = {}
+                    claim_token_usage: Dict[str, tuple[int, int, int]] = {}
                     if not snapshots:
                         claim_outcomes = []
                     else:
@@ -417,6 +417,8 @@ class HorizonOrchestrator:
                                     - usage_before.total_input_tokens,
                                     usage_after.total_output_tokens
                                     - usage_before.total_output_tokens,
+                                    usage_after.total_cached_input_tokens
+                                    - usage_before.total_cached_input_tokens,
                                 )
                                 claim_elapsed[snapshot.snapshot_id] = (
                                     asyncio.get_running_loop().time() - started
@@ -547,8 +549,8 @@ class HorizonOrchestrator:
                                     ),
                                 )
                         usage_after = get_usage_snapshot()
-                        claim_input, claim_output = claim_token_usage.get(
-                            snapshot.snapshot_id, (0, 0)
+                        claim_input, claim_output, claim_cached_input = (
+                            claim_token_usage.get(snapshot.snapshot_id, (0, 0, 0))
                         )
                         token_usage = build_token_usage_report(
                             claim_input
@@ -558,11 +560,26 @@ class HorizonOrchestrator:
                             + usage_after.total_output_tokens
                             - usage_before.total_output_tokens,
                             model=self.config.ai.model,
+                            cached_input_tokens=(
+                                claim_cached_input
+                                + usage_after.total_cached_input_tokens
+                                - usage_before.total_cached_input_tokens
+                            ),
                             input_price_per_million_usd=(
                                 verification_config.input_price_per_million_usd
                             ),
+                            cached_input_price_per_million_usd=(
+                                verification_config.cached_input_price_per_million_usd
+                            ),
                             output_price_per_million_usd=(
                                 verification_config.output_price_per_million_usd
+                            ),
+                            quota_name=(
+                                "OpenCode Go"
+                                if (self.config.ai.base_url or "").startswith(
+                                    "https://opencode.ai/zen/go/"
+                                )
+                                else None
                             ),
                         )
                         reports.append(

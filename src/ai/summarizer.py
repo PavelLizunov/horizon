@@ -333,49 +333,48 @@ def verification_summary_markup(payload: object, language: str) -> str:
         try:
             input_tokens = max(int(usage.get("input_tokens", 0)), 0)
             output_tokens = max(int(usage.get("output_tokens", 0)), 0)
+            cached_input_tokens = min(
+                max(int(usage.get("cached_input_tokens", 0)), 0), input_tokens
+            )
         except (TypeError, ValueError):
-            input_tokens = output_tokens = 0
+            input_tokens = output_tokens = cached_input_tokens = 0
         total_tokens = input_tokens + output_tokens
         if total_tokens:
             model_name = str(usage.get("model") or "LLM")
             model = html.escape(model_name)
             token_text = f"{total_tokens:,}".replace(",", " ")
-            input_text = f"{input_tokens:,}".replace(",", " ")
+            cached_text = f"{cached_input_tokens:,}".replace(",", " ")
+            uncached_text = f"{input_tokens - cached_input_tokens:,}".replace(",", " ")
             output_text = f"{output_tokens:,}".replace(",", " ")
-            detail = (
-                f"{model} · {token_text} verification tokens "
-                f"(input {input_text} / output {output_text})"
-            )
+            usage_lines = [
+                f"{model} · {token_text} verification tokens",
+                f"Cache {cached_text} · regular input {uncached_text} · output {output_text}",
+            ]
             if language_root == "ru":
-                detail = (
-                    f"{model} · {token_text} токенов проверки "
-                    f"(вход {input_text} / выход {output_text})"
-                )
+                usage_lines = [
+                    f"{model} · {token_text} токенов проверки",
+                    f"Кэш: {cached_text} · обычный вход: {uncached_text} · выход: {output_text}",
+                ]
             cost = usage.get("estimated_cost_usd")
             if isinstance(cost, (int, float)) and cost >= 0:
                 cost_text = f"≈ ${cost:.6f} API rate estimate"
                 if language_root == "ru":
                     cost_text = f"≈ ${cost:.6f} по тарифу API"
-                pricing = usage.get("pricing")
-                if "deepseek" in model_name.lower() and isinstance(pricing, dict):
-                    input_rate = pricing.get("input_per_million_usd")
-                    output_rate = pricing.get("output_per_million_usd")
-                    if isinstance(input_rate, (int, float)) and isinstance(
-                        output_rate, (int, float)
-                    ):
+                quota_name = usage.get("quota_name")
+                if quota_name == "OpenCode Go":
+                    cost_text = f"OpenCode Go quota used: ≈ ${cost:.6f}"
+                    if language_root == "ru":
                         cost_text = (
-                            f"DeepSeek API base-rate usage: ≈ ${cost:.6f} "
-                            f"(${input_rate:g}/M input, ${output_rate:g}/M output; "
-                            "cache discount excluded)"
+                            f"Израсходовано из квоты OpenCode Go: ≈ ${cost:.6f}"
                         )
-                        if language_root == "ru":
-                            cost_text = (
-                                "Расход по базовому тарифу DeepSeek API: "
-                                f"≈ ${cost:.6f} (${input_rate:g}/млн вход, "
-                                f"${output_rate:g}/млн выход; без скидки кэша)"
-                            )
-                detail += f" · {cost_text}"
-            lines.append(f"<small>{detail}</small>")
+                elif "deepseek" in model_name.lower():
+                    cost_text = f"DeepSeek API base-rate usage: ≈ ${cost:.6f}"
+                    if language_root == "ru":
+                        cost_text = (
+                            f"Расход по базовому тарифу DeepSeek API: ≈ ${cost:.6f}"
+                        )
+                usage_lines.insert(0, cost_text)
+            lines.append(f'<small>{"<br>".join(usage_lines)}</small>')
     lines.append("</aside>")
     return "\n".join(lines)
 

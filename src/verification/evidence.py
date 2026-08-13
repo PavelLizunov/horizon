@@ -243,25 +243,41 @@ def build_token_usage_report(
     output_tokens: int,
     *,
     model: str,
+    cached_input_tokens: int = 0,
     input_price_per_million_usd: float | None = None,
+    cached_input_price_per_million_usd: float | None = None,
     output_price_per_million_usd: float | None = None,
+    quota_name: str | None = None,
 ) -> dict[str, Any]:
     """Build exact token counts and an optional configured-price estimate."""
-    if input_tokens < 0 or output_tokens < 0:
+    if input_tokens < 0 or output_tokens < 0 or cached_input_tokens < 0:
         raise ValueError("token counts must not be negative")
+    if cached_input_tokens > input_tokens:
+        raise ValueError("cached input tokens must not exceed input tokens")
+    uncached_input_tokens = input_tokens - cached_input_tokens
     usage: dict[str, Any] = {
         "model": model,
         "input_tokens": input_tokens,
+        "cached_input_tokens": cached_input_tokens,
+        "uncached_input_tokens": uncached_input_tokens,
         "output_tokens": output_tokens,
         "total_tokens": input_tokens + output_tokens,
     }
+    if quota_name:
+        usage["quota_name"] = quota_name
     if (
         input_price_per_million_usd is not None
         and output_price_per_million_usd is not None
     ):
+        cached_price = (
+            cached_input_price_per_million_usd
+            if cached_input_price_per_million_usd is not None
+            else input_price_per_million_usd
+        )
         usage["estimated_cost_usd"] = round(
             (
-                input_tokens * input_price_per_million_usd
+                uncached_input_tokens * input_price_per_million_usd
+                + cached_input_tokens * cached_price
                 + output_tokens * output_price_per_million_usd
             )
             / 1_000_000,
@@ -269,6 +285,7 @@ def build_token_usage_report(
         )
         usage["pricing"] = {
             "input_per_million_usd": input_price_per_million_usd,
+            "cached_input_per_million_usd": cached_price,
             "output_per_million_usd": output_price_per_million_usd,
         }
     return usage

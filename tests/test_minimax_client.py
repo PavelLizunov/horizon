@@ -13,6 +13,7 @@ import pytest
 from anthropic import AsyncAnthropic
 
 from src.ai.client import AnthropicClient, OpenAIClient, create_ai_client
+from src.ai.tokens import get_usage_snapshot, reset_usage
 from src.models import AIConfig, AIProvider, AI_PROVIDER_DEFAULTS
 
 
@@ -165,6 +166,33 @@ class TestOpenAIClientComplete:
         assert call_kwargs["model"] == "MiniMax-M3"
         # response_format should NOT be present (MiniMax doesn't support it)
         assert "response_format" not in call_kwargs
+
+    def test_cached_input_usage_is_preserved(self, monkeypatch):
+        monkeypatch.setenv("MINIMAX_API_KEY", "test-key")
+        client = OpenAIClient(_make_config())
+        mock_response = MagicMock()
+        mock_response.choices = [MagicMock()]
+        mock_response.choices[0].message.content = "{}"
+        mock_response.usage = SimpleNamespace(
+            prompt_tokens=251,
+            completion_tokens=8,
+            prompt_tokens_details=SimpleNamespace(cached_tokens=192),
+        )
+
+        reset_usage()
+        try:
+            with patch.object(
+                client.client.chat.completions, "create", new_callable=AsyncMock
+            ) as mock_create:
+                mock_create.return_value = mock_response
+                asyncio.run(client.complete(system="test", user="hello"))
+
+            usage = get_usage_snapshot()
+            assert usage.total_input_tokens == 251
+            assert usage.total_cached_input_tokens == 192
+            assert usage.total_output_tokens == 8
+        finally:
+            reset_usage()
 
     def test_temperature_zero_clamped_for_minimax(self, monkeypatch):
         monkeypatch.setenv("MINIMAX_API_KEY", "test-key")

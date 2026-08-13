@@ -57,6 +57,14 @@ def _warn_if_truncated(provider: str, reason: Any) -> None:
         )
 
 
+def _cached_input_tokens(usage: Any) -> int:
+    details = getattr(usage, "prompt_tokens_details", None)
+    cached = getattr(details, "cached_tokens", None)
+    if not isinstance(cached, int):
+        cached = getattr(usage, "prompt_cache_hit_tokens", 0)
+    return cached if isinstance(cached, int) and cached > 0 else 0
+
+
 def _resolve_api_key(config: AIConfig, *, fallback: Optional[str] = None) -> str:
     api_key = os.getenv(config.api_key_env)
     if api_key:
@@ -323,6 +331,7 @@ class OpenAIClient(AIClient):
                 self.provider,
                 input_tokens=getattr(usage, "prompt_tokens", 0),
                 output_tokens=getattr(usage, "completion_tokens", 0),
+                cached_input_tokens=_cached_input_tokens(usage),
             )
         _warn_if_truncated(
             self.provider, getattr(response.choices[0], "finish_reason", None)
@@ -465,6 +474,7 @@ class AzureOpenAIClient(AIClient):
                 "openai",
                 input_tokens=getattr(usage, "prompt_tokens", 0),
                 output_tokens=getattr(usage, "completion_tokens", 0),
+                cached_input_tokens=_cached_input_tokens(usage),
             )
         _warn_if_truncated(
             "azure", getattr(response.choices[0], "finish_reason", None)

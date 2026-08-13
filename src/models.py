@@ -695,6 +695,7 @@ class VerificationConfig(BaseModel):
     enabled: bool = False
     publish_to_site: bool = False
     input_price_per_million_usd: Optional[float] = Field(default=None, ge=0)
+    cached_input_price_per_million_usd: Optional[float] = Field(default=None, ge=0)
     output_price_per_million_usd: Optional[float] = Field(default=None, ge=0)
     max_items_per_run: int = Field(default=5, ge=1)
     max_core_claims_per_item: int = Field(default=3, ge=1, le=3)
@@ -709,6 +710,11 @@ class VerificationConfig(BaseModel):
             self.output_price_per_million_usd is None
         ):
             raise ValueError("verification input/output prices must be set together")
+        if (
+            self.cached_input_price_per_million_usd is not None
+            and self.input_price_per_million_usd is None
+        ):
+            raise ValueError("verification cached-input price requires API prices")
         return self
 
 

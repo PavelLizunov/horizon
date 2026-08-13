@@ -14,6 +14,7 @@ from typing import Dict
 class ProviderUsage:
     input_tokens: int = 0
     output_tokens: int = 0
+    cached_input_tokens: int = 0
 
     @property
     def total(self) -> int:
@@ -24,6 +25,7 @@ class ProviderUsage:
 class TokenUsageSnapshot:
     total_input_tokens: int
     total_output_tokens: int
+    total_cached_input_tokens: int
     per_provider: Dict[str, ProviderUsage] = field(default_factory=dict)
 
     @property
@@ -34,20 +36,30 @@ class TokenUsageSnapshot:
 _provider_usage: Dict[str, ProviderUsage] = {}
 
 
-def record_usage(provider: str, input_tokens: int = 0, output_tokens: int = 0) -> None:
+def record_usage(
+    provider: str,
+    input_tokens: int = 0,
+    output_tokens: int = 0,
+    cached_input_tokens: int = 0,
+) -> None:
     """Accumulate token usage for a given provider.
 
     Args:
         provider: Provider identifier, e.g. "openai", "anthropic".
         input_tokens: Prompt / input tokens used.
         output_tokens: Completion / output tokens used.
+        cached_input_tokens: Input tokens served from the provider cache.
     """
+    input_tokens = max(0, input_tokens)
+    output_tokens = max(0, output_tokens)
+    cached_input_tokens = min(max(0, cached_input_tokens), input_tokens)
     if input_tokens <= 0 and output_tokens <= 0:
         return
 
     usage = _provider_usage.setdefault(provider, ProviderUsage())
-    usage.input_tokens += max(0, input_tokens)
-    usage.output_tokens += max(0, output_tokens)
+    usage.input_tokens += input_tokens
+    usage.output_tokens += output_tokens
+    usage.cached_input_tokens += cached_input_tokens
 
 
 def get_usage_snapshot() -> TokenUsageSnapshot:
@@ -57,6 +69,9 @@ def get_usage_snapshot() -> TokenUsageSnapshot:
     return TokenUsageSnapshot(
         total_input_tokens=total_in,
         total_output_tokens=total_out,
+        total_cached_input_tokens=sum(
+            u.cached_input_tokens for u in _provider_usage.values()
+        ),
         per_provider=dict(_provider_usage),
     )
 

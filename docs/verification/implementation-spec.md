@@ -45,6 +45,7 @@ model in this repository. Defaults preserve the existing pipeline.
     "enabled": false,
     "publish_to_site": false,
     "input_price_per_million_usd": null,
+    "cached_input_price_per_million_usd": null,
     "output_price_per_million_usd": null,
     "max_items_per_run": 5,
     "max_core_claims_per_item": 3,

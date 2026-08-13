@@ -541,10 +541,14 @@ def test_build_article_pages_shows_public_verification_on_article_only():
         "token_usage": {
             "model": "deepseek-v4-flash",
             "input_tokens": 10_000,
+            "cached_input_tokens": 7_000,
+            "uncached_input_tokens": 3_000,
             "output_tokens": 2_000,
-            "estimated_cost_usd": 0.0028,
+            "estimated_cost_usd": 0.0009996,
+            "quota_name": "OpenCode Go",
             "pricing": {
                 "input_per_million_usd": 0.14,
+                "cached_input_per_million_usd": 0.0028,
                 "output_per_million_usd": 0.28,
             },
         },
@@ -569,12 +573,9 @@ def test_build_article_pages_shows_public_verification_on_article_only():
 
     assert "## Claim checks" in article.markdown
     assert "Check: completed" in article.markdown
-    assert "12 000 verification tokens (input 10 000 / output 2 000)" in article.markdown
-    assert (
-        "DeepSeek API base-rate usage: ≈ $0.002800 "
-        "($0.14/M input, $0.28/M output; cache discount excluded)"
-        in article.markdown
-    )
+    assert "OpenCode Go quota used: ≈ $0.001000" in article.markdown
+    assert "12 000 verification tokens" in article.markdown
+    assert "Cache 7 000 · regular input 3 000 · output 2 000" in article.markdown
     assert "Supported by the cited sources" in article.markdown
     assert "Product &lt;X&gt; shipped" in article.markdown
     assert 'href="https://vendor.example/release?q=1&amp;lang=en"' in article.markdown
@@ -585,10 +586,10 @@ def test_build_article_pages_shows_public_verification_on_article_only():
         [item], "2026-08-13", language="ru"
     )[0]
     assert (
-        "Расход по базовому тарифу DeepSeek API: ≈ $0.002800 "
-        "($0.14/млн вход, $0.28/млн выход; без скидки кэша)"
+        "Израсходовано из квоты OpenCode Go: ≈ $0.001000"
         in ru_article.markdown
     )
+    assert "Кэш: 7 000 · обычный вход: 3 000 · выход: 2 000" in ru_article.markdown
 
 
 def test_article_page_says_when_verification_was_not_run():

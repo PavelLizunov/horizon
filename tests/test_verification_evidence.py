@@ -186,24 +186,31 @@ def test_public_verification_contains_claim_status_and_links_only() -> None:
     assert "excerpt" not in str(public)
 
 
-def test_token_usage_report_prices_input_and_output_separately() -> None:
+def test_token_usage_report_prices_cached_input_separately() -> None:
     usage = build_token_usage_report(
         100_000,
         10_000,
         model="deepseek-v4-flash",
-        input_price_per_million_usd=0.20,
-        output_price_per_million_usd=0.40,
+        cached_input_tokens=80_000,
+        input_price_per_million_usd=0.14,
+        cached_input_price_per_million_usd=0.0028,
+        output_price_per_million_usd=0.28,
+        quota_name="OpenCode Go",
     )
 
     assert usage == {
         "model": "deepseek-v4-flash",
         "input_tokens": 100_000,
+        "cached_input_tokens": 80_000,
+        "uncached_input_tokens": 20_000,
         "output_tokens": 10_000,
         "total_tokens": 110_000,
-        "estimated_cost_usd": 0.024,
+        "quota_name": "OpenCode Go",
+        "estimated_cost_usd": 0.005824,
         "pricing": {
-            "input_per_million_usd": 0.20,
-            "output_per_million_usd": 0.40,
+            "input_per_million_usd": 0.14,
+            "cached_input_per_million_usd": 0.0028,
+            "output_per_million_usd": 0.28,
         },
     }
 

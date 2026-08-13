@@ -154,7 +154,8 @@ def test_site_page_uses_public_claims_statuses_and_source_links(tmp_path) -> Non
     assert "Release &lt;X&gt;" in page
     assert "Поддерживается указанными источниками" in page
     assert 'href="https://source.example/proof"' in page
-    assert "1 200 токенов проверки (вход 1 000 / выход 200)" in page
-    assert "≈ $0.000280 по тарифу API" in page
+    assert "1 200 токенов проверки" in page
+    assert "Кэш: 0 · обычный вход: 1 000 · выход: 200" in page
+    assert "Расход по базовому тарифу DeepSeek API: ≈ $0.000280" in page
     assert "private ledger copy" not in page
     assert "private excerpt" not in page
