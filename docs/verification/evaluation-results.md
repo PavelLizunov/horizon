@@ -114,3 +114,29 @@ and every imperfect locator failed closed. This does not pass the public release
 gate. The blinded review of at least 100 stories and 300 claims is still absent,
 and five unmatched final-artifact spans demonstrate why reader-visible badges
 remain premature.
+
+## Reader-visible redesign canary — 2026-08-14
+
+The owner approved a source-coverage canary after the public vocabulary was
+changed to type-aware, non-universal labels. Run
+`20260813T215925-b1929a6a6e674f0f984ac540fbdd1d1a` used paid
+`deepseek-v4-flash` through OpenCode Go and checked 15 claims from five final
+Russian article artifacts. Results: 5 `supported_by_evidence`, 9
+`insufficient_evidence`, 1 `not_checkable`, zero verification errors and zero
+search errors. The five reports took 833.5 seconds in aggregate; the slowest
+was 202.9 seconds.
+
+Provider usage was 216,016 tokens: 12,032 cached input, 124,984 ordinary input,
+and 79,000 output. At the configured DeepSeek base API rates this is an
+estimated $0.039651, not an OpenCode invoice. The preceding public run used
+297,825 verification tokens for five items, so removing the same-model final
+artifact audit reduced this measured run by about 27% while checking 15 rather
+than 12 claims.
+
+The strict site build passed. The live checks page returned 200 and a real
+browser rendered five summaries, 15 claims and 21 public source links at
+1280×720 with no horizontal overflow. A canary review caught the model
+classifying a benchmark as an announcement; a deterministic claim-kind guard
+now restricts announcement/release treatment to an actual announce, publish,
+launch or release action. Generated pages can be refreshed with that guard
+without another model call.

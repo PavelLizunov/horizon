@@ -210,10 +210,10 @@ def conservative_claim_kind(
     if kind not in {"announcement", "release"}:
         return kind if kind in _CLAIM_KINDS else "other"  # type: ignore[return-value]
     text = f"{source_text} {normalized_claim}"
-    if kind == "announcement" and _ANNOUNCEMENT_TERMS.search(text):
-        return "announcement"
-    if kind == "release" and _RELEASE_TERMS.search(text):
+    if _RELEASE_TERMS.search(text):
         return "release"
+    if _ANNOUNCEMENT_TERMS.search(text):
+        return "announcement"
     if _QUANTITY_TERMS.search(text):
         return "quantity"
     return "other"

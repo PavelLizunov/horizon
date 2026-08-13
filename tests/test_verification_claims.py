@@ -99,6 +99,8 @@ def test_claim_contract_rejects_non_title_headline_and_more_than_three() -> None
     [
         ("Vendor announced Product X", "announcement", "announcement"),
         ("Vendor released Product X", "release", "release"),
+        ("Vendor released Product X", "announcement", "release"),
+        ("Vendor announced Product X", "release", "announcement"),
         ("Product X scored 62.7 on a benchmark", "announcement", "quantity"),
         ("Product X uses a plugin architecture", "release", "other"),
     ],
