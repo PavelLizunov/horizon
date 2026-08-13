@@ -93,6 +93,28 @@ def test_claim_contract_rejects_non_title_headline_and_more_than_three() -> None
         anchor_claims(snapshot, [_proposal()] * 4)
 
 
+@pytest.mark.parametrize(
+    ("normalized_claim", "kind", "expected"),
+    [
+        ("Vendor announced Product X", "announcement", "announcement"),
+        ("Vendor released Product X", "release", "release"),
+        ("Product X scored 62.7 on a benchmark", "announcement", "quantity"),
+        ("Product X uses a plugin architecture", "release", "other"),
+    ],
+)
+def test_announcement_and_release_kinds_require_an_action(
+    normalized_claim, kind, expected
+) -> None:
+    snapshot = _snapshot(title=normalized_claim)
+    proposal = _proposal(
+        source_text=normalized_claim,
+        normalized_claim=normalized_claim,
+        kind=kind,
+    )
+
+    assert anchor_claims(snapshot, [proposal])[0].kind == expected
+
+
 class _Client:
     model = "test-model"
 

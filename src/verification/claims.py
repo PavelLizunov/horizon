@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, replace
 import hashlib
+import re
 import time
 from typing import Any, Literal
 
@@ -29,6 +30,23 @@ ClaimKind = Literal[
 ClaimImportance = Literal["headline", "load_bearing"]
 ClaimCheckability = Literal["checkable", "ambiguous", "not_checkable"]
 ClaimExtractionError = Literal["invalid_response", "model_error", "timeout"]
+
+_ANNOUNCEMENT_TERMS = re.compile(
+    r"\b(announce(?:d|ment|s)?|unveil(?:ed|s)?|introduc(?:e|ed|es|tion)|"
+    r"анонс(?:ировал[аи]?|ирует|ирован)?|объявил[аи]?|представил[аи]?)\b",
+    re.IGNORECASE,
+)
+_RELEASE_TERMS = re.compile(
+    r"\b(releas(?:e|ed|es)|launch(?:ed|es)?|ship(?:ped|s)?|publish(?:ed|es)?|"
+    r"выпустил[аи]?|выпущен[аоы]?|вышел|запустил[аи]?|опубликовал[аи]?)\b",
+    re.IGNORECASE,
+)
+_QUANTITY_TERMS = re.compile(
+    r"(?:\d|%|\b(?:score|benchmark|parameter|token|second|minute|hour|"
+    r"byte|kb|mb|gb|tb|million|billion|trillion|цена|стоимост|балл|"
+    r"параметр|токен|секунд|минут|час|байт|кб|мб|гб|тб|млн|млрд|трлн)\b)",
+    re.IGNORECASE,
+)
 
 
 class ClaimProposal(BaseModel):
@@ -149,6 +167,7 @@ def anchor_claims(
             raise ValueError("duplicate claim proposal")
         seen_locators.add(locator)
         seen_normalized.add(normalized_key)
+        kind = _conservative_kind(proposal)
         claim_id = hashlib.sha256(
             (
                 f"{CLAIM_SCHEMA}\0{snapshot.snapshot_id}\0"
@@ -165,12 +184,26 @@ def anchor_claims(
                 source_end=end,
                 source_text=source[first:end],
                 normalized_claim=proposal.normalized_claim,
-                kind=proposal.kind,
+                kind=kind,
                 importance=proposal.importance,
                 checkability=proposal.checkability,
             )
         )
     return tuple(cards)
+
+
+def _conservative_kind(proposal: ClaimProposal) -> ClaimKind:
+    """Prevent primary-source provenance from upgrading a different claim."""
+    if proposal.kind not in {"announcement", "release"}:
+        return proposal.kind
+    text = f"{proposal.source_text} {proposal.normalized_claim}"
+    if proposal.kind == "announcement" and _ANNOUNCEMENT_TERMS.search(text):
+        return "announcement"
+    if proposal.kind == "release" and _RELEASE_TERMS.search(text):
+        return "release"
+    if _QUANTITY_TERMS.search(text):
+        return "quantity"
+    return "other"
 
 
 def _anchor_valid_claims(
@@ -291,6 +324,10 @@ from either `title` or `content`; do not paraphrase that field. Use this schema:
 {{"claims":[{{"source_field":"title|content","source_text":"exact span",
 "normalized_claim":"concise proposition","kind":"announcement|release|quote|quantity|event|opinion|other",
 "importance":"headline|load_bearing","checkability":"checkable|ambiguous|not_checkable"}}]}}
+Use `announcement` or `release` only when the proposition is that an actor
+announced, introduced, released, launched or published something. A benchmark,
+parameter count, capability or implementation detail is `quantity` or `other`
+even when it appears in an announcement.
 Return only JSON. Empty `claims` is valid when no core claim is present."""
 
 
