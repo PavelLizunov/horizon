@@ -5,19 +5,32 @@ from __future__ import annotations
 import argparse
 from collections import Counter
 from datetime import datetime, timedelta, timezone
+import html
 import json
 from pathlib import Path
+import re
 from typing import Any
 
 from src._file_utils import _atomic_write_text
 from src.ai.summarizer import (
     _escape_markdown,
     _safe_url,
+    _VERIFICATION_COPY,
     verification_site_markup,
     verification_summary_markup,
 )
 from src.verification.evidence import public_claim_status
 from src.verification.claims import conservative_claim_kind
+
+
+_PUBLIC_CLAIM_RE = re.compile(
+    r'(?P<open><li class="hz-verification__claim" data-status="(?P<status>[^"]+)" '
+    r'data-raw-status="(?P<raw>[^"]+)">\n)'
+    r'<span class="hz-verification__status">(?P<label>.*?)</span>\n'
+    r'<p>(?P<claim>.*?)</p>',
+    re.DOTALL,
+)
+_PUBLIC_COUNTS_RE = re.compile(r"<span>Утверждений: .*?</span>")
 
 
 def _runs(root: Path) -> list[tuple[Path, dict[str, Any]]]:
@@ -164,6 +177,57 @@ def _incident_lines(root: Path) -> list[str]:
             if links:
                 lines.append(f"  {' · '.join(links)}")
     return lines
+
+
+def sanitize_article_verification(markdown: str, language: str = "ru") -> str:
+    """Apply deterministic claim-kind guards to already generated pages."""
+    language_root = language.lower().replace("_", "-").partition("-")[0]
+    copy = _VERIFICATION_COPY.get(language_root, _VERIFICATION_COPY["en"])
+
+    def replace_claim(match: re.Match[str]) -> str:
+        status = match.group("status")
+        if status not in {"official_announcement", "official_release"}:
+            return match.group(0)
+        raw_kind = "announcement" if status == "official_announcement" else "release"
+        claim = html.unescape(match.group("claim"))
+        kind = conservative_claim_kind(raw_kind, claim, claim)
+        new_status = public_claim_status(kind, match.group("raw"), None)
+        if new_status == status:
+            return match.group(0)
+        opening = match.group("open").replace(
+            f'data-status="{status}"', f'data-status="{new_status}"'
+        )
+        label = copy["statuses"].get(new_status, copy["statuses"]["check_error"])
+        return (
+            opening
+            + f'<span class="hz-verification__status">{label}</span>\n'
+            + f'<p>{match.group("claim")}</p>'
+        )
+
+    updated = _PUBLIC_CLAIM_RE.sub(replace_claim, markdown)
+    matches = list(_PUBLIC_CLAIM_RE.finditer(updated))
+    if language_root == "ru" and matches:
+        counts = Counter(match.group("status") for match in matches)
+        parts = [
+            f'{copy["statuses"].get(status, copy["statuses"]["check_error"])}: {count}'
+            for status, count in counts.items()
+        ]
+        count_markup = f'<span>Утверждений: {len(matches)} · {" · ".join(parts)}</span>'
+        updated = _PUBLIC_COUNTS_RE.sub(count_markup, updated, count=1)
+    return updated
+
+
+def refresh_article_pages(root: Path, language: str = "ru") -> int:
+    changed = 0
+    for path in sorted(root.glob("*/*.md")):
+        if path.name == "index.md":
+            continue
+        before = path.read_text(encoding="utf-8")
+        after = sanitize_article_verification(before, language)
+        if after != before:
+            _atomic_write_text(path, after)
+            changed += 1
+    return changed
 
 
 def build_site_page(root: Path) -> str:
@@ -424,10 +488,19 @@ def main() -> None:
         type=Path,
         help="write the latest complete run as a public Markdown page",
     )
+    parser.add_argument(
+        "--refresh-articles",
+        type=Path,
+        help="refresh deterministic verification labels in generated article pages",
+    )
     args = parser.parse_args()
     if args.write_site:
         _atomic_write_text(args.write_site, build_site_page(args.root))
         print(f"Wrote verification page: {args.write_site}")
+        return
+    if args.refresh_articles:
+        changed = refresh_article_pages(args.refresh_articles)
+        print(f"Refreshed verification labels in {changed} article pages")
         return
     summary = summarize(args.root)
     print(

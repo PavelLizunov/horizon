@@ -2,7 +2,12 @@ from __future__ import annotations
 
 import json
 
-from scripts.dev_verification_status import build_site_page, format_summary, summarize
+from scripts.dev_verification_status import (
+    build_site_page,
+    format_summary,
+    sanitize_article_verification,
+    summarize,
+)
 
 
 def test_status_uses_latest_complete_run_when_newer_attempt_is_partial(tmp_path) -> None:
@@ -183,3 +188,23 @@ def test_site_page_uses_public_claims_statuses_and_source_links(tmp_path) -> Non
     assert "**предварительно** — Protocol X failed on network Y" in page
     assert "private ledger copy" not in page
     assert "private excerpt" not in page
+
+
+def test_generated_article_labels_can_be_sanitized_without_an_api_call() -> None:
+    markdown = """<aside class="hz-verification-summary" data-state="complete">
+<span>Утверждений: 2 · Найден источник анонса: 2</span>
+</aside>
+<li class="hz-verification__claim" data-status="official_announcement" data-raw-status="supported_by_evidence">
+<span class="hz-verification__status">Найден источник анонса</span>
+<p>Vendor announced Product X.</p>
+</li>
+<li class="hz-verification__claim" data-status="official_announcement" data-raw-status="supported_by_evidence">
+<span class="hz-verification__status">Найден источник анонса</span>
+<p>Product X benchmark score rose from 12.8 to 62.7.</p>
+</li>"""
+
+    updated = sanitize_article_verification(markdown)
+
+    assert "Найден источник анонса: 1" in updated
+    assert "Значение зафиксировано прямым источником: 1" in updated
+    assert 'data-status="source_documented_quantity"' in updated
