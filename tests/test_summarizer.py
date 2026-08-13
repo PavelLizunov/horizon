@@ -543,6 +543,10 @@ def test_build_article_pages_shows_public_verification_on_article_only():
             "input_tokens": 10_000,
             "output_tokens": 2_000,
             "estimated_cost_usd": 0.0028,
+            "pricing": {
+                "input_per_million_usd": 0.14,
+                "output_per_million_usd": 0.28,
+            },
         },
         "claims": [
             {
@@ -566,12 +570,25 @@ def test_build_article_pages_shows_public_verification_on_article_only():
     assert "## Claim checks" in article.markdown
     assert "Check: completed" in article.markdown
     assert "12 000 verification tokens (input 10 000 / output 2 000)" in article.markdown
-    assert "≈ $0.002800 API rate estimate" in article.markdown
+    assert (
+        "DeepSeek API base-rate usage: ≈ $0.002800 "
+        "($0.14/M input, $0.28/M output; cache discount excluded)"
+        in article.markdown
+    )
     assert "Supported by the cited sources" in article.markdown
     assert "Product &lt;X&gt; shipped" in article.markdown
     assert 'href="https://vendor.example/release?q=1&amp;lang=en"' in article.markdown
     assert "javascript:" not in article.markdown
     assert "Claim checks" not in index.markdown
+
+    ru_article = DailySummarizer().build_article_pages(
+        [item], "2026-08-13", language="ru"
+    )[0]
+    assert (
+        "Расход по базовому тарифу DeepSeek API: ≈ $0.002800 "
+        "($0.14/млн вход, $0.28/млн выход; без скидки кэша)"
+        in ru_article.markdown
+    )
 
 
 def test_article_page_says_when_verification_was_not_run():

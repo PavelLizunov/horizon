@@ -337,7 +337,8 @@ def verification_summary_markup(payload: object, language: str) -> str:
             input_tokens = output_tokens = 0
         total_tokens = input_tokens + output_tokens
         if total_tokens:
-            model = html.escape(str(usage.get("model") or "LLM"))
+            model_name = str(usage.get("model") or "LLM")
+            model = html.escape(model_name)
             token_text = f"{total_tokens:,}".replace(",", " ")
             input_text = f"{input_tokens:,}".replace(",", " ")
             output_text = f"{output_tokens:,}".replace(",", " ")
@@ -355,6 +356,24 @@ def verification_summary_markup(payload: object, language: str) -> str:
                 cost_text = f"≈ ${cost:.6f} API rate estimate"
                 if language_root == "ru":
                     cost_text = f"≈ ${cost:.6f} по тарифу API"
+                pricing = usage.get("pricing")
+                if "deepseek" in model_name.lower() and isinstance(pricing, dict):
+                    input_rate = pricing.get("input_per_million_usd")
+                    output_rate = pricing.get("output_per_million_usd")
+                    if isinstance(input_rate, (int, float)) and isinstance(
+                        output_rate, (int, float)
+                    ):
+                        cost_text = (
+                            f"DeepSeek API base-rate usage: ≈ ${cost:.6f} "
+                            f"(${input_rate:g}/M input, ${output_rate:g}/M output; "
+                            "cache discount excluded)"
+                        )
+                        if language_root == "ru":
+                            cost_text = (
+                                "Расход по базовому тарифу DeepSeek API: "
+                                f"≈ ${cost:.6f} (${input_rate:g}/млн вход, "
+                                f"${output_rate:g}/млн выход; без скидки кэша)"
+                            )
                 detail += f" · {cost_text}"
             lines.append(f"<small>{detail}</small>")
     lines.append("</aside>")
