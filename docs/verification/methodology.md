@@ -101,6 +101,18 @@ AVeriTeC, DEFAME, OpenFactCheck, W3C PROV, Schema.org ClaimReview and C2PA. They
 are references, not runtime dependencies. No third-party code is copied without
 checking its exact license and attribution requirements.
 
+## Viewing the latest result
+
+On the machine that runs Horizon, print a compact summary of the newest attempt
+and the last completed evidence run:
+
+```bash
+.venv/bin/python scripts/dev_verification_status.py
+```
+
+Add `--json` for machine-readable output. The report remains internal while the
+human-review release gates are unmet; it does not add badges to public articles.
+
 ## Privacy and retention
 
 The shadow MVP excludes private/restricted sources. It stores normalized text
