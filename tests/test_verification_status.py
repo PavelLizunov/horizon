@@ -202,13 +202,19 @@ def test_generated_article_labels_can_be_sanitized_without_an_api_call() -> None
 <li class="hz-verification__claim" data-status="official_announcement" data-raw-status="supported_by_evidence">
 <span class="hz-verification__status">Найден источник анонса</span>
 <p>Product X benchmark score rose from 12.8 to 62.7.</p>
+</li>
+<li class="hz-verification__claim" data-status="source_documented_quantity" data-raw-status="supported_by_evidence">
+<span class="hz-verification__status">Значение зафиксировано прямым источником</span>
+<p>Vendor released Product X with 1.7 trillion parameters.</p>
 </li>"""
 
     updated = sanitize_article_verification(markdown)
 
     assert "Найден источник анонса: 1" in updated
     assert "Значение зафиксировано прямым источником: 1" in updated
+    assert "Найдена запись о релизе: 1" in updated
     assert 'data-status="source_documented_quantity"' in updated
+    assert 'data-status="official_release"' in updated
 
 
 def test_generated_article_refresh_handles_an_issue_directory(tmp_path) -> None:

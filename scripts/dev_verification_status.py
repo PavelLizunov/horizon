@@ -186,11 +186,20 @@ def sanitize_article_verification(markdown: str, language: str = "ru") -> str:
 
     def replace_claim(match: re.Match[str]) -> str:
         status = match.group("status")
-        if status not in {"official_announcement", "official_release"}:
+        if match.group("raw") != "supported_by_evidence":
             return match.group(0)
-        raw_kind = "announcement" if status == "official_announcement" else "release"
         claim = html.unescape(match.group("claim"))
-        kind = conservative_claim_kind(raw_kind, claim, claim)
+        action_kind = conservative_claim_kind("announcement", claim, claim)
+        if action_kind in {"announcement", "release"}:
+            kind = action_kind
+        elif status in {"official_announcement", "official_release"}:
+            kind = conservative_claim_kind(
+                "announcement" if status == "official_announcement" else "release",
+                claim,
+                claim,
+            )
+        else:
+            return match.group(0)
         new_status = public_claim_status(kind, match.group("raw"), None)
         if new_status == status:
             return match.group(0)
