@@ -220,24 +220,33 @@ def _strip_tool_tokens(text: str) -> str:
     return _TOOL_TOKEN_RE.sub("", text)
 
 
-def _verification_markup(payload: object, language: str) -> str:
+def verification_site_markup(
+    payload: object,
+    language: str,
+    *,
+    heading_level: int = 2,
+    include_note: bool = True,
+) -> str:
     if not isinstance(payload, dict) or not isinstance(payload.get("claims"), list):
         return ""
     claims = [claim for claim in payload["claims"] if isinstance(claim, dict)]
     if not claims:
         return ""
+    if heading_level not in range(1, 7):
+        raise ValueError("heading_level must be between 1 and 6")
 
     language_root = language.lower().replace("_", "-").partition("-")[0]
     copy = _VERIFICATION_COPY.get(language_root, _VERIFICATION_COPY["en"])
     statuses = copy["statuses"]
     stances = copy["stances"]
     lines = [
-        f'## {copy["title"]}',
+        f'{"#" * heading_level} {copy["title"]}',
         "",
         '<div class="hz-verification">',
-        f'<p class="hz-verification__note">{copy["note"]}</p>',
-        '<ol class="hz-verification__claims">',
     ]
+    if include_note:
+        lines.append(f'<p class="hz-verification__note">{copy["note"]}</p>')
+    lines.append('<ol class="hz-verification__claims">')
     for claim in claims:
         status = str(claim.get("status", "verification_error"))
         status_label = statuses.get(status, statuses["verification_error"])
@@ -523,7 +532,7 @@ def article_site_markup(
     # only the trailing one may go — a --- inside block content must survive.
     markdown = re.sub(r"\n---\s*$", "\n", markdown.rstrip() + "\n")
     markdown = _localize_frozen_labels(markdown)
-    verification_markup = _verification_markup(verification, language)
+    verification_markup = verification_site_markup(verification, language)
     if verification_markup:
         markdown = markdown.rstrip() + "\n\n" + verification_markup + "\n"
     # The page type is declared, not inferred. The first cut hung the whole

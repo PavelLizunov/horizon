@@ -59,6 +59,10 @@ log "index: regenerate"
   'from src.storage.manager import StorageManager; StorageManager.write_site_index()' \
   || log "index: FAILED — the archive page may list nothing"
 
+log "verification page: regenerate"
+.venv/bin/python scripts/dev_verification_status.py --write-site docs/checks.md \
+  || log "verification page: FAILED — the previous page stays in place"
+
 # Publish text immediately. The pipeline has already sent Telegram by now, so
 # every minute spent before this call is another minute of broken links.
 if [[ ! -x "$HOME/bin/mkdocs" ]]; then

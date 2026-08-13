@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 
-from scripts.dev_verification_status import format_summary, summarize
+from scripts.dev_verification_status import build_site_page, format_summary, summarize
 
 
 def test_status_uses_latest_complete_run_when_newer_attempt_is_partial(tmp_path) -> None:
@@ -66,3 +66,79 @@ def test_status_uses_latest_complete_run_when_newer_attempt_is_partial(tmp_path)
         "models": ["test-model"],
     }
     assert "Last complete run" in format_summary(status)
+
+
+def test_site_page_uses_public_claims_statuses_and_source_links(tmp_path) -> None:
+    run = tmp_path / "20260813T090000-complete"
+    run.joinpath("reports").mkdir(parents=True)
+    run.joinpath("inputs").mkdir()
+    run.joinpath("manifest.json").write_text(
+        json.dumps(
+            {
+                "run_id": run.name,
+                "stage": "evidence",
+                "updated_at": "2026-08-13T09:30:00Z",
+                "input_ledger": "inputs/items.jsonl",
+            }
+        ),
+        encoding="utf-8",
+    )
+    run.joinpath("inputs", "items.jsonl").write_text(
+        json.dumps(
+            {
+                "item_id": "item-1",
+                "snapshot_type": "selected",
+                "payload": {
+                    "title": "Release <X>",
+                    "url": "https://news.example/release?q=1&lang=ru",
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    run.joinpath("claims.jsonl").write_text(
+        json.dumps(
+            {"claim_id": "claim-1", "normalized_claim": "Version 2 released"}
+        ),
+        encoding="utf-8",
+    )
+    run.joinpath("evidence.jsonl").write_text(
+        "\n".join(
+            json.dumps(row)
+            for row in (
+                {
+                    "record_type": "snapshot",
+                    "snapshot_id": "snapshot-1",
+                    "final_url": "https://source.example/proof",
+                    "normalized_text": "private ledger copy",
+                },
+                {
+                    "record_type": "card",
+                    "evidence_id": "evidence-1",
+                    "evidence_snapshot_id": "snapshot-1",
+                    "stance": "supports",
+                    "excerpt": "private excerpt",
+                },
+            )
+        ),
+        encoding="utf-8",
+    )
+    run.joinpath("reports", "one.json").write_text(
+        json.dumps(
+            {
+                "item_id": "item-1",
+                "status_by_claim": {"claim-1": "supported_by_evidence"},
+                "evidence_ids_by_claim": {"claim-1": ["evidence-1"]},
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    page = build_site_page(tmp_path)
+
+    assert "# Проверка новостей" in page
+    assert "Release &lt;X&gt;" in page
+    assert "Поддерживается указанными источниками" in page
+    assert 'href="https://source.example/proof"' in page
+    assert "private ledger copy" not in page
+    assert "private excerpt" not in page
