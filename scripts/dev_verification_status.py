@@ -219,7 +219,7 @@ def sanitize_article_verification(markdown: str, language: str = "ru") -> str:
 
 def refresh_article_pages(root: Path, language: str = "ru") -> int:
     changed = 0
-    for path in sorted(root.glob("*/*.md")):
+    for path in sorted(root.rglob("*.md")):
         if path.name == "index.md":
             continue
         before = path.read_text(encoding="utf-8")

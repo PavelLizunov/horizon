@@ -5,6 +5,7 @@ import json
 from scripts.dev_verification_status import (
     build_site_page,
     format_summary,
+    refresh_article_pages,
     sanitize_article_verification,
     summarize,
 )
@@ -208,3 +209,21 @@ def test_generated_article_labels_can_be_sanitized_without_an_api_call() -> None
     assert "Найден источник анонса: 1" in updated
     assert "Значение зафиксировано прямым источником: 1" in updated
     assert 'data-status="source_documented_quantity"' in updated
+
+
+def test_generated_article_refresh_handles_an_issue_directory(tmp_path) -> None:
+    article = tmp_path / "tech-news-1.md"
+    article.write_text(
+        '<li class="hz-verification__claim" data-status="official_announcement" '
+        'data-raw-status="supported_by_evidence">\n'
+        '<span class="hz-verification__status">Найден источник анонса</span>\n'
+        '<p>Product X benchmark score rose to 62.7.</p>\n</li>',
+        encoding="utf-8",
+    )
+    (tmp_path / "index.md").write_text("index", encoding="utf-8")
+
+    assert refresh_article_pages(tmp_path) == 1
+    assert 'data-status="source_documented_quantity"' in article.read_text(
+        encoding="utf-8"
+    )
+    assert (tmp_path / "index.md").read_text(encoding="utf-8") == "index"
