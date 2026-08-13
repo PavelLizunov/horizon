@@ -369,12 +369,22 @@ class ShadowLedger:
                     )
                 existing = snapshot_records.get(snapshot.snapshot_id)
                 record = snapshot.to_dict()
-                if existing is not None and existing != record:
+                identity_fields = (
+                    "schema_version",
+                    "normalized_object_hash",
+                    "final_url",
+                    "access_status",
+                    "normalizer",
+                    "normalized_text",
+                )
+                if existing is not None and any(
+                    existing[field] != record[field] for field in identity_fields
+                ):
                     raise LedgerCorruptionError(
                         f"conflicting evidence snapshot id: {snapshot.snapshot_id}"
                     )
-                snapshot_records[snapshot.snapshot_id] = record
-                snapshots_by_id[snapshot.snapshot_id] = snapshot
+                snapshot_records.setdefault(snapshot.snapshot_id, record)
+                snapshots_by_id.setdefault(snapshot.snapshot_id, snapshot)
             for card in result.evidence_cards:
                 if card.claim_id != result.claim.claim_id:
                     raise LedgerCorruptionError(

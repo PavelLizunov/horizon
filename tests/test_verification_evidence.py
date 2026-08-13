@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import asyncio
 from dataclasses import replace
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 import hashlib
 import json
 
@@ -633,3 +633,90 @@ def test_ledger_persists_evidence_cards_reports_and_exact_locators(tmp_path) -> 
         / snapshot.normalized_object_hash
     )
     assert object_path.read_text(encoding="utf-8") == snapshot.normalized_text
+
+
+def test_ledger_reuses_same_document_fetched_at_different_times(tmp_path) -> None:
+    item = ContentItem(
+        id="rss:item-1",
+        source_type=SourceType.RSS,
+        title="Product X released",
+        url="https://vendor.example/release",
+        content="Product X version 2 was released on August 11.",
+        published_at=NOW,
+        fetched_at=NOW,
+    )
+    ledger = ShadowLedger.start(
+        [item], root=tmp_path, run_id="run-reused-evidence", captured_at=NOW
+    )
+    ledger.capture_selected(
+        [item],
+        url_dedup_members={item.id: [item.id]},
+        topic_dedup_members={item.id: [item.id]},
+        captured_at=NOW,
+    )
+    selected = ledger.selected_snapshots[0]
+    first_claim = replace(_claim(), selected_input_snapshot_id=selected.snapshot_id)
+    second_claim = replace(
+        first_claim,
+        claim_id="claim-2",
+        normalized_claim="Product X release was independently reported",
+    )
+    claim_outcome = ClaimExtractionOutcome(
+        selected_input_snapshot_id=selected.snapshot_id,
+        item_id=item.id,
+        status="ok",
+        claims=(first_claim, second_claim),
+        model="test",
+    )
+    ledger.capture_claims([claim_outcome], captured_at=NOW)
+
+    first_snapshot = build_evidence_snapshot(
+        _fetch_outcome(
+            "https://vendor.example/release",
+            b"Product X version 2 was officially released on August 11.",
+        ),
+        retrieved_at=NOW,
+    )
+    assert first_snapshot is not None
+    second_snapshot = replace(
+        first_snapshot,
+        requested_url="https://search.example/redirect",
+        retrieved_at=(NOW + timedelta(minutes=1)).isoformat(),
+    )
+    results = [
+        ClaimVerificationResult(
+            claim=claim,
+            adjudication=adjudicate_claim(claim, []),
+            evidence_snapshots=(snapshot,),
+            evidence_cards=(),
+            stop_reason="no_novelty",
+            search_calls=1,
+            documents_attempted=1,
+            documents_fetched=1,
+            cache_reuse=0,
+        )
+        for claim, snapshot in (
+            (first_claim, first_snapshot),
+            (second_claim, second_snapshot),
+        )
+    ]
+    report = build_verification_report(
+        run_id=ledger.run_id,
+        selected_snapshot=selected,
+        claim_outcome=claim_outcome,
+        claim_results=results,
+        artifacts={},
+        created_at=NOW,
+    )
+
+    ledger.capture_verification(results, [report], captured_at=NOW)
+
+    snapshots = [
+        json.loads(line)
+        for line in (ledger.run_dir / "evidence.jsonl")
+        .read_text(encoding="utf-8")
+        .splitlines()
+        if '"record_type":"snapshot"' in line
+    ]
+    assert len(snapshots) == 1
+    assert snapshots[0]["retrieved_at"] == first_snapshot.retrieved_at
