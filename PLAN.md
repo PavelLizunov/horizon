@@ -256,7 +256,10 @@ articles and five shadow-verified articles. Verification used 297,825 tokens
 $0.054550 in DeepSeek list prices. No VPN item cleared the first-day thresholds,
 so the source set stays bounded until more days show whether that is signal or
 over-filtering. The run also added a hard failure when every AI analysis fails,
-instead of publishing an empty "successful" issue.
+instead of publishing an empty "successful" issue. The optional pronunciation
+review stays disabled after `deepseek-v4-pro` exhausted both 4,096- and
+8,192-token response limits without completing its compact JSON; the measured
+static lexicon and independent Whisper audio check remain active.
 
 ### [ ] V4. Add early technical signals and incident state
 

@@ -107,10 +107,11 @@ reading is promoted to the static Tera lexicon; Qwen remains unaffected.
 The model is opt-in and never inherits `ai.model`: unset means skip, and naming
 the primary model is refused. A malformed response or API failure is visible in
 the narration log but falls back to the measured static lexicon, so a secondary
-review cannot delay the readable site or remove audio. The production gateway
-uses `deepseek-v4-pro` with thinking disabled for this pass. Promote a
-reviewed reading into `_TERA_PRONUNCIATIONS`; the per-issue JSON is the
-review trail, not an unbounded source of global truth.
+review cannot delay the readable site or remove audio. Production leaves this
+model unset: `deepseek-v4-pro` exhausted both 4,096- and 8,192-token response
+limits without completing the compact JSON on the measured 13 August issue.
+Promote a reviewed reading into `_TERA_PRONUNCIATIONS`; the per-issue JSON is
+the review trail, not an unbounded source of global truth.
 
 The original audit also found two English sections in the now-retired 4 August
 legacy issue. That was an upstream content-language problem, not a pronunciation

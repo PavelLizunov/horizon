@@ -226,7 +226,7 @@ def test_pronunciation_review_sends_full_context_to_the_cheap_client():
     _, user, kwargs = client.request
     assert "tech-news-2" in user
     assert "Taalas для пользователей" in user
-    assert kwargs == {"temperature": 0.0, "max_tokens": 8192}
+    assert kwargs == {"temperature": 0.0, "max_tokens": 4096}
 
 
 def test_pronunciation_review_refuses_the_primary_model(monkeypatch, capsys, tmp_path):

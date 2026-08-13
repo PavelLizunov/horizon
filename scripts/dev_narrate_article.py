@@ -214,7 +214,7 @@ async def _review_pronunciations(texts: dict[str, str], client) -> list[dict[str
         PRONUNCIATION_SYSTEM,
         json.dumps(payload, ensure_ascii=False),
         temperature=0.0,
-        max_tokens=8192,
+        max_tokens=4096,
     )
     return _parse_pronunciation_review(response, "\n".join(reviewed.values()))
 

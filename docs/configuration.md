@@ -115,7 +115,7 @@ mispronounce:
 {
   "ai": {
     "model": "deepseek-v4-flash",
-    "pronunciation_model": "deepseek-v4-pro"
+    "pronunciation_model": null
   }
 }
 ```
