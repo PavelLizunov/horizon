@@ -247,13 +247,16 @@ feeds, four checked public Telegram channels, one global GDELT query and one
 Russian Google News query. VPN category groups admit at most 12 items without
 limiting unmatched technology, finance or video items.
 
-### [ ] V3. Complete the first live OpenCode Go run
+### [x] V3. Complete the first live OpenCode Go run
 
-The configuration and API key are valid, but OpenCode currently returns
-`RegionError` for DeepSeek V4 Flash until the workspace owner opts in to the
-model's China-hosted endpoint. Enable it in the Go console, then run one bounded
-live fetch/analyse/publish cycle and inspect noise, evidence labels, cache usage
-and quota cost before widening the source set.
+The owner enabled the China-hosted model endpoint and the 2026-08-13 recovery
+run completed with paid `deepseek-v4-flash`: 118 unique inputs, 11 published
+articles and five shadow-verified articles. Verification used 297,825 tokens
+(31,744 cached input, 143,156 ordinary input, 122,925 output), estimated at
+$0.054550 in DeepSeek list prices. No VPN item cleared the first-day thresholds,
+so the source set stays bounded until more days show whether that is signal or
+over-filtering. The run also added a hard failure when every AI analysis fails,
+instead of publishing an empty "successful" issue.
 
 ### [ ] V4. Add early technical signals and incident state
 
