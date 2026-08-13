@@ -198,6 +198,36 @@ class ClaimVerificationResult:
         }
 
 
+def build_public_verification(
+    claim_results: Iterable[ClaimVerificationResult],
+) -> dict[str, Any]:
+    """Return the small, source-linked subset that is safe to publish."""
+    claims = []
+    for result in claim_results:
+        snapshots = {
+            snapshot.snapshot_id: snapshot for snapshot in result.evidence_snapshots
+        }
+        sources = []
+        seen_sources = set()
+        for card in result.evidence_cards:
+            if card.stance not in {"supports", "contradicts", "context"}:
+                continue
+            snapshot = snapshots.get(card.evidence_snapshot_id)
+            source_key = (snapshot.final_url, card.stance) if snapshot else None
+            if snapshot is None or source_key in seen_sources:
+                continue
+            seen_sources.add(source_key)
+            sources.append({"url": snapshot.final_url, "stance": card.stance})
+        claims.append(
+            {
+                "text": result.claim.normalized_claim,
+                "status": result.adjudication.status,
+                "sources": sources,
+            }
+        )
+    return {"schema_version": "public-verification/v1", "claims": claims}
+
+
 @dataclass
 class ItemVerificationBudget:
     max_model_calls: int

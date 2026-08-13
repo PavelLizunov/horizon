@@ -176,9 +176,103 @@ _PROFILE_ICONS = {
 # a reader nothing about where the material came from; the source link does.
 _INTERNAL_SOURCE_TOKENS = {"rss", "archive", "api", "web", "html", "unknown"}
 
+_VERIFICATION_COPY = {
+    "en": {
+        "title": "Claim checks",
+        "note": "Experimental check against public sources. This is evidence coverage, not an absolute truth label.",
+        "source": "Source",
+        "statuses": {
+            "supported_by_evidence": "Supported by the cited sources",
+            "contradicted_by_evidence": "Contradicted by the cited sources",
+            "mixed_evidence": "Sources disagree",
+            "insufficient_evidence": "Not enough evidence",
+            "not_checkable": "Not checkable from public sources",
+            "verification_error": "Check not completed",
+        },
+        "stances": {
+            "supports": "supports",
+            "contradicts": "contradicts",
+            "context": "context",
+        },
+    },
+    "ru": {
+        "title": "Проверка утверждений",
+        "note": "Экспериментальная проверка по открытым источникам. Это оценка доказательств, а не безусловная метка истины.",
+        "source": "Источник",
+        "statuses": {
+            "supported_by_evidence": "Поддерживается указанными источниками",
+            "contradicted_by_evidence": "Противоречит указанным источникам",
+            "mixed_evidence": "Источники расходятся",
+            "insufficient_evidence": "Недостаточно доказательств",
+            "not_checkable": "Нельзя проверить по открытым источникам",
+            "verification_error": "Проверка не завершена",
+        },
+        "stances": {
+            "supports": "подтверждает",
+            "contradicts": "опровергает",
+            "context": "контекст",
+        },
+    },
+}
+
 
 def _strip_tool_tokens(text: str) -> str:
     return _TOOL_TOKEN_RE.sub("", text)
+
+
+def _verification_markup(payload: object, language: str) -> str:
+    if not isinstance(payload, dict) or not isinstance(payload.get("claims"), list):
+        return ""
+    claims = [claim for claim in payload["claims"] if isinstance(claim, dict)]
+    if not claims:
+        return ""
+
+    language_root = language.lower().replace("_", "-").partition("-")[0]
+    copy = _VERIFICATION_COPY.get(language_root, _VERIFICATION_COPY["en"])
+    statuses = copy["statuses"]
+    stances = copy["stances"]
+    lines = [
+        f'## {copy["title"]}',
+        "",
+        '<div class="hz-verification">',
+        f'<p class="hz-verification__note">{copy["note"]}</p>',
+        '<ol class="hz-verification__claims">',
+    ]
+    for claim in claims:
+        status = str(claim.get("status", "verification_error"))
+        status_label = statuses.get(status, statuses["verification_error"])
+        text = html.escape(str(claim.get("text", "")))
+        lines += [
+            f'<li class="hz-verification__claim" data-status="{html.escape(status, quote=True)}">',
+            f'<span class="hz-verification__status">{status_label}</span>',
+            f'<p>{text}</p>',
+        ]
+        sources = claim.get("sources")
+        if isinstance(sources, list):
+            source_lines = []
+            for index, source in enumerate(sources, start=1):
+                if not isinstance(source, dict):
+                    continue
+                safe_url = _safe_url(source.get("url", ""))
+                if safe_url is None:
+                    continue
+                try:
+                    domain = urlsplit(str(source.get("url", ""))).netloc.removeprefix(
+                        "www."
+                    )
+                except ValueError:
+                    domain = ""
+                label = domain or f'{copy["source"]} {index}'
+                stance = stances.get(str(source.get("stance", "")))
+                suffix = f" · {stance}" if stance else ""
+                source_lines.append(
+                    f'<li><a href="{safe_url}">{html.escape(label)}</a>{suffix}</li>'
+                )
+            if source_lines:
+                lines += ['<ul class="hz-verification__sources">', *source_lines, "</ul>"]
+        lines.append("</li>")
+    lines += ["</ol>", "</div>"]
+    return "\n".join(lines)
 
 
 def _plain_text(value: str) -> str:
@@ -343,6 +437,8 @@ def article_site_markup(
     *,
     profile_id: Optional[str] = None,
     issue_date: Optional[str] = None,
+    verification: object = None,
+    language: str = "en",
 ) -> str:
     """Restructure a rendered item for its own site page. Site-only.
 
@@ -427,6 +523,9 @@ def article_site_markup(
     # only the trailing one may go — a --- inside block content must survive.
     markdown = re.sub(r"\n---\s*$", "\n", markdown.rstrip() + "\n")
     markdown = _localize_frozen_labels(markdown)
+    verification_markup = _verification_markup(verification, language)
+    if verification_markup:
+        markdown = markdown.rstrip() + "\n\n" + verification_markup + "\n"
     # The page type is declared, not inferred. The first cut hung the whole
     # article treatment — section numbering included — off `:has(.hz-byline)`,
     # which meant a page that happened to lack a byline silently rendered as
@@ -558,6 +657,10 @@ class DailySummarizer:
                             body,
                             profile_id=group.profile_id,
                             issue_date=date,
+                            verification=view_item.item.metadata.get(
+                                "evidence_ledger"
+                            ),
+                            language=language,
                         )
                         + _pager_markup(labels["issue"]),
                     )

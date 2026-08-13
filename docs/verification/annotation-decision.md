@@ -5,6 +5,20 @@ title: Evidence Ledger annotation decision
 
 # Evidence Ledger annotation decision
 
+## Owner opt-in — 2026-08-13
+
+The owner has now explicitly requested that evidence results be visible on the
+site. A new `verification.publish_to_site` switch implements that request while
+remaining `false` by default. When enabled, checked article pages show each core
+claim, its evidence status, and links to the public sources used. The section is
+labelled experimental and describes evidence coverage; it does not use absolute
+`true`/`false` or `verified` badges.
+
+The 100-story/300-claim accuracy gate below is still missing. This opt-in is an
+owner-visible canary, not a claim that the original general-release gates passed.
+
+## Original decision — 2026-08-11
+
 **Decision date:** 2026-08-11.
 **Decision:** do not add a public annotation canary. Keep the feature disabled
 by default and shadow-only; the measured deployment may enable the internal

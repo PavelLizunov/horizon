@@ -818,6 +818,61 @@ a.hz-tag:hover {
   padding-top: 0;
 }
 
+/* -- Проверка утверждений ------------------------------------------------- */
+
+.hz-verification {
+  max-width: var(--hz-measure);
+}
+
+.hz-verification__note {
+  color: var(--hz-muted);
+  font-size: var(--hz-t-small);
+}
+
+.hz-verification__claims {
+  list-style: none;
+  margin: var(--hz-space-4) 0 0;
+  padding: 0;
+}
+
+.hz-verification__claim {
+  margin: 0;
+  padding: var(--hz-space-4) 0;
+  border-top: var(--hz-hairline) solid var(--hz-border);
+}
+
+.hz-verification__claim:last-child {
+  border-bottom: var(--hz-hairline) solid var(--hz-border);
+}
+
+.hz-verification__status {
+  display: block;
+  margin-bottom: var(--hz-space-2);
+  font-family: var(--hz-font-meta);
+  font-size: var(--hz-t-micro);
+  font-weight: 600;
+  letter-spacing: var(--hz-tr-label);
+  text-transform: uppercase;
+  color: var(--hz-text-2);
+}
+
+.hz-verification__claim[data-status="insufficient_evidence"] .hz-verification__status,
+.hz-verification__claim[data-status="not_checkable"] .hz-verification__status,
+.hz-verification__claim[data-status="verification_error"] .hz-verification__status {
+  color: var(--hz-muted);
+}
+
+.hz-verification__sources {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--hz-space-2) var(--hz-space-4);
+  margin: var(--hz-space-2) 0 0;
+  padding: 0;
+  list-style: none;
+  font-family: var(--hz-font-meta);
+  font-size: var(--hz-t-small);
+}
+
 /* ===========================================================================
    §13  ВЫПУСК, АРХИВ, ПОИСК, ПУСТЫЕ СОСТОЯНИЯ, ПАГИНАЦИЯ                 [B]
    Самый крупный блок работы: четыре шаблона страниц целиком. Пока вывод

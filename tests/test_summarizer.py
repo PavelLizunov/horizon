@@ -533,6 +533,60 @@ def test_build_article_pages_one_page_per_item_plus_index():
     assert len(pages) == 3  # two articles + the issue index
 
 
+def test_build_article_pages_shows_public_verification_on_article_only():
+    item = _make_item(1)
+    item.metadata["evidence_ledger"] = {
+        "schema_version": "public-verification/v1",
+        "claims": [
+            {
+                "text": "Product <X> shipped",
+                "status": "supported_by_evidence",
+                "sources": [
+                    {
+                        "url": "https://vendor.example/release?q=1&lang=en",
+                        "stance": "supports",
+                    },
+                    {"url": "javascript:alert(1)", "stance": "supports"},
+                ],
+            }
+        ],
+    }
+
+    article, index = DailySummarizer().build_article_pages(
+        [item], "2026-08-13", language="en"
+    )
+
+    assert "## Claim checks" in article.markdown
+    assert "Supported by the cited sources" in article.markdown
+    assert "Product &lt;X&gt; shipped" in article.markdown
+    assert 'href="https://vendor.example/release?q=1&amp;lang=en"' in article.markdown
+    assert "javascript:" not in article.markdown
+    assert "Claim checks" not in index.markdown
+
+
+def test_verification_copy_accepts_locale_style_language_code():
+    item = _make_item(1)
+    item.processing.artifacts["ru-RU"] = item.processing.artifacts["en"].model_copy(
+        update={"language": "ru-RU"}
+    )
+    item.metadata["evidence_ledger"] = {
+        "claims": [
+            {
+                "text": "Утверждение",
+                "status": "insufficient_evidence",
+                "sources": [],
+            }
+        ]
+    }
+
+    article, _ = DailySummarizer().build_article_pages(
+        [item], "2026-08-13", language="ru-RU"
+    )
+
+    assert "## Проверка утверждений" in article.markdown
+    assert "Недостаточно доказательств" in article.markdown
+
+
 def test_build_article_pages_slug_is_the_anchor_without_its_prefix():
     # The deep-link contract: the Telegram headline builder derives the same
     # slug from the same anchor, so one page per article stays one derivation.

@@ -681,11 +681,12 @@ class CollectionConfig(BaseModel):
 
 
 class VerificationConfig(BaseModel):
-    """Hard ceilings for the disabled-by-default evidence shadow pipeline."""
+    """Controls the disabled-by-default evidence verification pipeline."""
 
     model_config = ConfigDict(extra="forbid")
 
     enabled: bool = False
+    publish_to_site: bool = False
     max_items_per_run: int = Field(default=5, ge=1)
     max_core_claims_per_item: int = Field(default=3, ge=1, le=3)
     max_queries_per_claim: int = Field(default=3, ge=1)

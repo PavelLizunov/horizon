@@ -326,6 +326,7 @@ def test_verification_is_disabled_by_default_and_writes_nothing(
         ),
     )
     assert config.verification.enabled is False
+    assert config.verification.publish_to_site is False
     orchestrator = HorizonOrchestrator(config, SimpleNamespace())
     item = _analyzed(_item("one", content="body"), 9.0)
     enriched_ids = []

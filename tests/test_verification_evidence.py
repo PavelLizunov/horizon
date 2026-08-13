@@ -22,6 +22,7 @@ from src.verification.evidence import (
     adjudicate_claim,
     anchor_evidence_assessments,
     build_evidence_snapshot,
+    build_public_verification,
     build_query_templates,
     build_verification_report,
 )
@@ -135,6 +136,84 @@ def test_query_templates_are_deterministic_and_include_counterquery() -> None:
     assert "official release changelog" in queries[0]
     assert "Product X" in queries[1]
     assert "correction denied false" in queries[2]
+
+
+def test_public_verification_contains_claim_status_and_links_only() -> None:
+    snapshot = build_evidence_snapshot(
+        _fetch_outcome(
+            "https://vendor.example/release",
+            b"Product X version 2 was officially released on August 11.",
+        ),
+        retrieved_at=NOW,
+    )
+    assert snapshot is not None
+    card = replace(
+        _card(stance="supports"),
+        evidence_snapshot_id=snapshot.snapshot_id,
+    )
+    result = ClaimVerificationResult(
+        claim=_claim(),
+        adjudication=AdjudicationResult(status="supported_by_evidence"),
+        evidence_snapshots=(snapshot,),
+        evidence_cards=(card, replace(card, evidence_id="duplicate")),
+        stop_reason="sufficient",
+        search_calls=1,
+        documents_attempted=1,
+        documents_fetched=1,
+        cache_reuse=0,
+    )
+
+    public = build_public_verification([result])
+
+    assert public == {
+        "schema_version": "public-verification/v1",
+        "claims": [
+            {
+                "text": "Product X version 2 was released on August 11",
+                "status": "supported_by_evidence",
+                "sources": [
+                    {
+                        "url": "https://vendor.example/release",
+                        "stance": "supports",
+                    }
+                ],
+            }
+        ],
+    }
+    assert "normalized_text" not in str(public)
+    assert "excerpt" not in str(public)
+
+
+def test_public_verification_preserves_opposing_stances_from_same_url() -> None:
+    snapshot = build_evidence_snapshot(
+        _fetch_outcome("https://source.example/story", b"Evidence text"),
+        retrieved_at=NOW,
+    )
+    assert snapshot is not None
+    support = replace(
+        _card(stance="supports"),
+        evidence_snapshot_id=snapshot.snapshot_id,
+    )
+    contradiction = replace(
+        support,
+        evidence_id="evidence-2",
+        stance="contradicts",
+    )
+    result = ClaimVerificationResult(
+        claim=_claim(),
+        adjudication=AdjudicationResult(status="mixed_evidence"),
+        evidence_snapshots=(snapshot,),
+        evidence_cards=(support, contradiction),
+        stop_reason="sufficient",
+        search_calls=1,
+        documents_attempted=1,
+        documents_fetched=1,
+        cache_reuse=0,
+    )
+
+    sources = build_public_verification([result])["claims"][0]["sources"]
+
+    assert [source["stance"] for source in sources] == ["supports", "contradicts"]
 
 
 def test_assessment_excerpt_round_trips_and_exact_copies_share_origin() -> None:

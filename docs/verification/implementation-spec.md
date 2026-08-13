@@ -43,6 +43,7 @@ model in this repository. Defaults preserve the existing pipeline.
 {
   "verification": {
     "enabled": false,
+    "publish_to_site": false,
     "max_items_per_run": 5,
     "max_core_claims_per_item": 3,
     "max_queries_per_claim": 3,
@@ -53,9 +54,11 @@ model in this repository. Defaults preserve the existing pipeline.
 }
 ```
 
-The first implementation is shadow-only, so it has no mode setting. Add a mode
-enum when annotation is actually implemented; `enforce` is not a v1 mode. No
-per-profile override is needed while only the `tech-news` canary is in scope.
+Verification remains shadow-only unless `publish_to_site` is explicitly enabled.
+That opt-in adds an experimental evidence section to article pages; it does not
+change filtering, scoring, summaries, Telegram delivery, or source citations in
+the generated artifact. `enforce` is not a v1 mode. No per-profile override is
+needed while only the `tech-news` canary is in scope.
 Code selects items whose resolved
 `item.processing.classification.profile == "tech-news"`, then checks the first
 `max_items_per_run` in the existing final selection order. The verifier does not

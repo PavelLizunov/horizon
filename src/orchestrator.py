@@ -39,6 +39,7 @@ from .verification.claims import ClaimExtractionOutcome, ClaimExtractor
 from .verification.evidence import (
     EvidenceVerifier,
     ItemVerificationBudget,
+    build_public_verification,
     build_verification_report,
     verification_error_result,
 )
@@ -414,6 +415,7 @@ class HorizonOrchestrator:
 
                     all_claim_results = []
                     reports = []
+                    public_verification_by_item = {}
                     items_by_id = {item.id: item for item in important_items}
                     for snapshot, claim_outcome in zip(snapshots, claim_outcomes):
                         claim_results = []
@@ -543,10 +545,21 @@ class HorizonOrchestrator:
                                 artifact_audit=audit_outcome,
                             )
                         )
+                        if claim_results:
+                            public_verification_by_item[snapshot.item_id] = (
+                                build_public_verification(claim_results)
+                            )
                     verification_ledger.capture_verification(
                         all_claim_results,
                         reports,
                     )
+                    if verification_config.publish_to_site:
+                        for item_id, public_verification in (
+                            public_verification_by_item.items()
+                        ):
+                            item = items_by_id.get(item_id)
+                            if item is not None:
+                                item.metadata["evidence_ledger"] = public_verification
                 except Exception as verification_error:
                     self.console.print(
                         f"[yellow]{self.icons['warning']} Verification shadow stage "
