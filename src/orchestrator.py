@@ -40,6 +40,7 @@ from .verification.evidence import (
     EvidenceVerifier,
     ItemVerificationBudget,
     build_public_verification,
+    build_token_usage_report,
     build_verification_report,
     verification_error_result,
 )
@@ -366,6 +367,7 @@ class HorizonOrchestrator:
                     snapshots = verification_ledger.selected_snapshots
                     claim_client = None
                     claim_elapsed: Dict[str, float] = {}
+                    claim_token_usage: Dict[str, tuple[int, int]] = {}
                     if not snapshots:
                         claim_outcomes = []
                     else:
@@ -390,6 +392,7 @@ class HorizonOrchestrator:
                             )
                             claim_outcomes = []
                             for snapshot in snapshots:
+                                usage_before = get_usage_snapshot()
                                 started = asyncio.get_running_loop().time()
                                 try:
                                     async with asyncio.timeout(
@@ -408,6 +411,13 @@ class HorizonOrchestrator:
                                         ),
                                     )
                                 claim_outcomes.append(outcome)
+                                usage_after = get_usage_snapshot()
+                                claim_token_usage[snapshot.snapshot_id] = (
+                                    usage_after.total_input_tokens
+                                    - usage_before.total_input_tokens,
+                                    usage_after.total_output_tokens
+                                    - usage_before.total_output_tokens,
+                                )
                                 claim_elapsed[snapshot.snapshot_id] = (
                                     asyncio.get_running_loop().time() - started
                                 )
@@ -418,6 +428,7 @@ class HorizonOrchestrator:
                     public_verification_by_item = {}
                     items_by_id = {item.id: item for item in important_items}
                     for snapshot, claim_outcome in zip(snapshots, claim_outcomes):
+                        usage_before = get_usage_snapshot()
                         claim_results = []
                         budget = ItemVerificationBudget(
                             max_model_calls=(
@@ -535,6 +546,25 @@ class HorizonOrchestrator:
                                         - audit_started
                                     ),
                                 )
+                        usage_after = get_usage_snapshot()
+                        claim_input, claim_output = claim_token_usage.get(
+                            snapshot.snapshot_id, (0, 0)
+                        )
+                        token_usage = build_token_usage_report(
+                            claim_input
+                            + usage_after.total_input_tokens
+                            - usage_before.total_input_tokens,
+                            claim_output
+                            + usage_after.total_output_tokens
+                            - usage_before.total_output_tokens,
+                            model=self.config.ai.model,
+                            input_price_per_million_usd=(
+                                verification_config.input_price_per_million_usd
+                            ),
+                            output_price_per_million_usd=(
+                                verification_config.output_price_per_million_usd
+                            ),
+                        )
                         reports.append(
                             build_verification_report(
                                 run_id=verification_ledger.run_id,
@@ -543,23 +573,41 @@ class HorizonOrchestrator:
                                 claim_results=claim_results,
                                 artifacts=artifacts,
                                 artifact_audit=audit_outcome,
+                                token_usage=token_usage,
                             )
                         )
-                        if claim_results:
-                            public_verification_by_item[snapshot.item_id] = (
-                                build_public_verification(claim_results)
+                        state = (
+                            "check_failed"
+                            if claim_outcome.status == "error"
+                            or (
+                                claim_results
+                                and all(
+                                    result.adjudication.status
+                                    == "verification_error"
+                                    for result in claim_results
+                                )
                             )
+                            else "no_claims"
+                            if not claim_outcome.claims
+                            else "checked"
+                        )
+                        public_verification_by_item[snapshot.item_id] = (
+                            build_public_verification(
+                                claim_results,
+                                state=state,
+                                token_usage=token_usage,
+                            )
+                        )
                     verification_ledger.capture_verification(
                         all_claim_results,
                         reports,
                     )
                     if verification_config.publish_to_site:
-                        for item_id, public_verification in (
-                            public_verification_by_item.items()
-                        ):
-                            item = items_by_id.get(item_id)
-                            if item is not None:
-                                item.metadata["evidence_ledger"] = public_verification
+                        for item in important_items:
+                            item.metadata["evidence_ledger"] = (
+                                public_verification_by_item.get(item.id)
+                                or build_public_verification([], state="not_checked")
+                            )
                 except Exception as verification_error:
                     self.console.print(
                         f"[yellow]{self.icons['warning']} Verification shadow stage "

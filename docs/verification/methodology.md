@@ -111,7 +111,10 @@ and the last completed evidence run:
 ```
 
 Add `--json` for machine-readable output. The report remains internal while the
-human-review release gates are unmet; it does not add badges to public articles.
+human-review release gates are unmet unless the owner explicitly enables
+`verification.publish_to_site`. With that opt-in, the site shows cautious
+evidence statuses, source links, and per-article verification usage; it never
+uses absolute `true` or `false` labels.
 
 ## Privacy and retention
 

@@ -24,6 +24,7 @@ from src.verification.evidence import (
     build_evidence_snapshot,
     build_public_verification,
     build_query_templates,
+    build_token_usage_report,
     build_verification_report,
 )
 from src.verification.fetch import DocumentFetchOutcome
@@ -167,6 +168,7 @@ def test_public_verification_contains_claim_status_and_links_only() -> None:
 
     assert public == {
         "schema_version": "public-verification/v1",
+        "state": "checked",
         "claims": [
             {
                 "text": "Product X version 2 was released on August 11",
@@ -182,6 +184,28 @@ def test_public_verification_contains_claim_status_and_links_only() -> None:
     }
     assert "normalized_text" not in str(public)
     assert "excerpt" not in str(public)
+
+
+def test_token_usage_report_prices_input_and_output_separately() -> None:
+    usage = build_token_usage_report(
+        100_000,
+        10_000,
+        model="deepseek-v4-flash",
+        input_price_per_million_usd=0.20,
+        output_price_per_million_usd=0.40,
+    )
+
+    assert usage == {
+        "model": "deepseek-v4-flash",
+        "input_tokens": 100_000,
+        "output_tokens": 10_000,
+        "total_tokens": 110_000,
+        "estimated_cost_usd": 0.024,
+        "pricing": {
+            "input_per_million_usd": 0.20,
+            "output_per_million_usd": 0.40,
+        },
+    }
 
 
 def test_public_verification_preserves_opposing_stances_from_same_url() -> None:

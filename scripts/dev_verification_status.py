@@ -9,7 +9,12 @@ from pathlib import Path
 from typing import Any
 
 from src._file_utils import _atomic_write_text
-from src.ai.summarizer import _escape_markdown, _safe_url, verification_site_markup
+from src.ai.summarizer import (
+    _escape_markdown,
+    _safe_url,
+    verification_site_markup,
+    verification_summary_markup,
+)
 
 
 def _runs(root: Path) -> list[tuple[Path, dict[str, Any]]]:
@@ -200,12 +205,20 @@ def build_site_page(root: Path) -> str:
                     "sources": sources,
                 }
             )
+        payload = {
+            "state": "checked",
+            "claims": public_claims,
+            "token_usage": report.get("token_usage"),
+        }
+        summary_markup = verification_summary_markup(payload, "ru")
         markup = verification_site_markup(
-            {"claims": public_claims},
+            payload,
             "ru",
             heading_level=3,
             include_note=False,
         )
+        if summary_markup:
+            lines.append(summary_markup)
         if markup:
             lines.append(markup)
     return "\n".join(lines).rstrip() + "\n"

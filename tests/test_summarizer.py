@@ -537,6 +537,13 @@ def test_build_article_pages_shows_public_verification_on_article_only():
     item = _make_item(1)
     item.metadata["evidence_ledger"] = {
         "schema_version": "public-verification/v1",
+        "state": "checked",
+        "token_usage": {
+            "model": "deepseek-v4-flash",
+            "input_tokens": 10_000,
+            "output_tokens": 2_000,
+            "estimated_cost_usd": 0.0028,
+        },
         "claims": [
             {
                 "text": "Product <X> shipped",
@@ -557,11 +564,30 @@ def test_build_article_pages_shows_public_verification_on_article_only():
     )
 
     assert "## Claim checks" in article.markdown
+    assert "Check: completed" in article.markdown
+    assert "12 000 verification tokens (input 10 000 / output 2 000)" in article.markdown
+    assert "≈ $0.002800 API rate estimate" in article.markdown
     assert "Supported by the cited sources" in article.markdown
     assert "Product &lt;X&gt; shipped" in article.markdown
     assert 'href="https://vendor.example/release?q=1&amp;lang=en"' in article.markdown
     assert "javascript:" not in article.markdown
     assert "Claim checks" not in index.markdown
+
+
+def test_article_page_says_when_verification_was_not_run():
+    item = _make_item(1)
+    item.metadata["evidence_ledger"] = {
+        "schema_version": "public-verification/v1",
+        "state": "not_checked",
+        "claims": [],
+    }
+
+    article, _ = DailySummarizer().build_article_pages(
+        [item], "2026-08-13", language="en"
+    )
+
+    assert "Check: not run for this article" in article.markdown
+    assert "## Claim checks" not in article.markdown
 
 
 def test_verification_copy_accepts_locale_style_language_code():

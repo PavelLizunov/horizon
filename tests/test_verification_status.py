@@ -130,6 +130,13 @@ def test_site_page_uses_public_claims_statuses_and_source_links(tmp_path) -> Non
                 "item_id": "item-1",
                 "status_by_claim": {"claim-1": "supported_by_evidence"},
                 "evidence_ids_by_claim": {"claim-1": ["evidence-1"]},
+                "token_usage": {
+                    "model": "deepseek-v4-flash",
+                    "input_tokens": 1_000,
+                    "output_tokens": 200,
+                    "total_tokens": 1_200,
+                    "estimated_cost_usd": 0.00028,
+                },
             }
         ),
         encoding="utf-8",
@@ -147,5 +154,7 @@ def test_site_page_uses_public_claims_statuses_and_source_links(tmp_path) -> Non
     assert "Release &lt;X&gt;" in page
     assert "Поддерживается указанными источниками" in page
     assert 'href="https://source.example/proof"' in page
+    assert "1 200 токенов проверки (вход 1 000 / выход 200)" in page
+    assert "≈ $0.000280 по тарифу API" in page
     assert "private ledger copy" not in page
     assert "private excerpt" not in page

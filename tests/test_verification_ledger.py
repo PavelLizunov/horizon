@@ -359,3 +359,6 @@ def test_verification_limits_are_validated() -> None:
 
     with pytest.raises(ValidationError):
         VerificationConfig(max_core_claims_per_item=4)
+
+    with pytest.raises(ValidationError):
+        VerificationConfig(input_price_per_million_usd=0.2)

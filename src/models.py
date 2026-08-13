@@ -4,7 +4,14 @@ from datetime import datetime, timezone
 from enum import Enum
 import re
 from typing import Annotated, Literal, Optional, List, Dict, Any, NamedTuple, Union
-from pydantic import BaseModel, ConfigDict, HttpUrl, Field, field_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    HttpUrl,
+    Field,
+    field_validator,
+    model_validator,
+)
 
 
 class SourceType(str, Enum):
@@ -687,12 +694,22 @@ class VerificationConfig(BaseModel):
 
     enabled: bool = False
     publish_to_site: bool = False
+    input_price_per_million_usd: Optional[float] = Field(default=None, ge=0)
+    output_price_per_million_usd: Optional[float] = Field(default=None, ge=0)
     max_items_per_run: int = Field(default=5, ge=1)
     max_core_claims_per_item: int = Field(default=3, ge=1, le=3)
     max_queries_per_claim: int = Field(default=3, ge=1)
     max_documents_per_claim: int = Field(default=6, ge=1)
     max_model_calls_per_item: int = Field(default=10, ge=1)
     timeout_seconds_per_item: float = Field(default=300, gt=0)
+
+    @model_validator(mode="after")
+    def validate_pricing_pair(self):
+        if (self.input_price_per_million_usd is None) != (
+            self.output_price_per_million_usd is None
+        ):
+            raise ValueError("verification input/output prices must be set together")
+        return self
 
 
 class DigestConfig(BaseModel):

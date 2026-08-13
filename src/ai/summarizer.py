@@ -181,6 +181,14 @@ _VERIFICATION_COPY = {
         "title": "Claim checks",
         "note": "Experimental check against public sources. This is evidence coverage, not an absolute truth label.",
         "source": "Source",
+        "summary": "Check",
+        "claim_count": "Claims",
+        "states": {
+            "checked": "completed",
+            "not_checked": "not run for this article",
+            "no_claims": "no checkable core claims",
+            "check_failed": "not completed",
+        },
         "statuses": {
             "supported_by_evidence": "Supported by the cited sources",
             "contradicted_by_evidence": "Contradicted by the cited sources",
@@ -199,6 +207,14 @@ _VERIFICATION_COPY = {
         "title": "Проверка утверждений",
         "note": "Экспериментальная проверка по открытым источникам. Это оценка доказательств, а не безусловная метка истины.",
         "source": "Источник",
+        "summary": "Проверка",
+        "claim_count": "Утверждений",
+        "states": {
+            "checked": "выполнена",
+            "not_checked": "для этой статьи не выполнялась",
+            "no_claims": "нет проверяемых ключевых утверждений",
+            "check_failed": "не завершена",
+        },
         "statuses": {
             "supported_by_evidence": "Поддерживается указанными источниками",
             "contradicted_by_evidence": "Противоречит указанным источникам",
@@ -281,6 +297,67 @@ def verification_site_markup(
                 lines += ['<ul class="hz-verification__sources">', *source_lines, "</ul>"]
         lines.append("</li>")
     lines += ["</ol>", "</div>"]
+    return "\n".join(lines)
+
+
+def verification_summary_markup(payload: object, language: str) -> str:
+    if not isinstance(payload, dict):
+        return ""
+    language_root = language.lower().replace("_", "-").partition("-")[0]
+    copy = _VERIFICATION_COPY.get(language_root, _VERIFICATION_COPY["en"])
+    claims = payload.get("claims")
+    if not isinstance(claims, list):
+        claims = []
+    state = str(payload.get("state") or ("checked" if claims else "not_checked"))
+    state_label = copy["states"].get(state, copy["states"]["check_failed"])
+    lines = [
+        f'<aside class="hz-verification-summary" data-state="{html.escape(state, quote=True)}">',
+        f'<strong>{copy["summary"]}: {state_label}</strong>',
+    ]
+    if claims:
+        counts: dict[str, int] = {}
+        for claim in claims:
+            if isinstance(claim, dict):
+                status = str(claim.get("status", "verification_error"))
+                counts[status] = counts.get(status, 0) + 1
+        status_parts = [
+            f'{copy["statuses"].get(status, copy["statuses"]["verification_error"])}: {count}'
+            for status, count in counts.items()
+        ]
+        lines.append(
+            f'<span>{copy["claim_count"]}: {len(claims)} · '
+            f'{" · ".join(status_parts)}</span>'
+        )
+    usage = payload.get("token_usage")
+    if isinstance(usage, dict):
+        try:
+            input_tokens = max(int(usage.get("input_tokens", 0)), 0)
+            output_tokens = max(int(usage.get("output_tokens", 0)), 0)
+        except (TypeError, ValueError):
+            input_tokens = output_tokens = 0
+        total_tokens = input_tokens + output_tokens
+        if total_tokens:
+            model = html.escape(str(usage.get("model") or "LLM"))
+            token_text = f"{total_tokens:,}".replace(",", " ")
+            input_text = f"{input_tokens:,}".replace(",", " ")
+            output_text = f"{output_tokens:,}".replace(",", " ")
+            detail = (
+                f"{model} · {token_text} verification tokens "
+                f"(input {input_text} / output {output_text})"
+            )
+            if language_root == "ru":
+                detail = (
+                    f"{model} · {token_text} токенов проверки "
+                    f"(вход {input_text} / выход {output_text})"
+                )
+            cost = usage.get("estimated_cost_usd")
+            if isinstance(cost, (int, float)) and cost >= 0:
+                cost_text = f"≈ ${cost:.6f} API rate estimate"
+                if language_root == "ru":
+                    cost_text = f"≈ ${cost:.6f} по тарифу API"
+                detail += f" · {cost_text}"
+            lines.append(f"<small>{detail}</small>")
+    lines.append("</aside>")
     return "\n".join(lines)
 
 
@@ -475,6 +552,7 @@ def article_site_markup(
     article silently changed its own address.
     """
     markdown = _strip_tool_tokens(markdown)
+    verification_summary = verification_summary_markup(verification, language)
     # Section headings. The block title may contain escaped markdown; it was
     # escaped for inline bold context, and heading context accepts the same.
     markdown = _BLOCK_TITLE_RE.sub(r"## \1\n\n", markdown)
@@ -522,6 +600,8 @@ def article_site_markup(
             ]
             if byline_index is not None:
                 lines[byline_index] = ""
+        if verification_summary:
+            head += ["", verification_summary]
         lines[h1_index] = "\n".join(head)
         if lede_index is not None:
             # attr_list only decorates a paragraph from its own line.

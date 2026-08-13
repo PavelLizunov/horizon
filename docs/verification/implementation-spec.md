@@ -44,6 +44,8 @@ model in this repository. Defaults preserve the existing pipeline.
   "verification": {
     "enabled": false,
     "publish_to_site": false,
+    "input_price_per_million_usd": null,
+    "output_price_per_million_usd": null,
     "max_items_per_run": 5,
     "max_core_claims_per_item": 3,
     "max_queries_per_claim": 3,
@@ -63,6 +65,19 @@ Code selects items whose resolved
 `item.processing.classification.profile == "tech-news"`, then checks the first
 `max_items_per_run` in the existing final selection order. The verifier does not
 create a second ranking policy.
+
+When site publication is enabled, every new article states whether its core
+claims were checked. Checked articles show a compact result above the lede and
+the claim/source detail below the analysis. The report records exact provider-
+reported input and output tokens used by claim extraction, evidence assessment,
+and final-artifact audit for that article. Search and document fetching use no
+LLM tokens.
+
+The two optional price fields turn those counts into a pay-as-you-go estimate.
+They must be configured together and kept aligned with the active provider and
+region. The value is not an invoice: prepaid token plans, cache discounts,
+promotions, taxes, and provider-side adjustments require the provider's billing
+export for an exact charged amount.
 
 ## Snapshot contract
 

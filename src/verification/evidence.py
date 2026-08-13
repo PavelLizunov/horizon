@@ -200,6 +200,9 @@ class ClaimVerificationResult:
 
 def build_public_verification(
     claim_results: Iterable[ClaimVerificationResult],
+    *,
+    state: str = "checked",
+    token_usage: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Return the small, source-linked subset that is safe to publish."""
     claims = []
@@ -225,7 +228,50 @@ def build_public_verification(
                 "sources": sources,
             }
         )
-    return {"schema_version": "public-verification/v1", "claims": claims}
+    public = {
+        "schema_version": "public-verification/v1",
+        "state": state,
+        "claims": claims,
+    }
+    if token_usage is not None:
+        public["token_usage"] = token_usage
+    return public
+
+
+def build_token_usage_report(
+    input_tokens: int,
+    output_tokens: int,
+    *,
+    model: str,
+    input_price_per_million_usd: float | None = None,
+    output_price_per_million_usd: float | None = None,
+) -> dict[str, Any]:
+    """Build exact token counts and an optional configured-price estimate."""
+    if input_tokens < 0 or output_tokens < 0:
+        raise ValueError("token counts must not be negative")
+    usage: dict[str, Any] = {
+        "model": model,
+        "input_tokens": input_tokens,
+        "output_tokens": output_tokens,
+        "total_tokens": input_tokens + output_tokens,
+    }
+    if (
+        input_price_per_million_usd is not None
+        and output_price_per_million_usd is not None
+    ):
+        usage["estimated_cost_usd"] = round(
+            (
+                input_tokens * input_price_per_million_usd
+                + output_tokens * output_price_per_million_usd
+            )
+            / 1_000_000,
+            8,
+        )
+        usage["pricing"] = {
+            "input_per_million_usd": input_price_per_million_usd,
+            "output_per_million_usd": output_price_per_million_usd,
+        }
+    return usage
 
 
 @dataclass
@@ -942,6 +988,7 @@ def build_verification_report(
     claim_results: Iterable[ClaimVerificationResult],
     artifacts: dict[str, Any],
     artifact_audit: Any | None = None,
+    token_usage: dict[str, Any] | None = None,
     created_at: datetime | None = None,
 ) -> dict[str, Any]:
     results = list(claim_results)
@@ -1015,6 +1062,8 @@ def build_verification_report(
     if artifact_audit is not None:
         report["unchecked_factual_spans"] = artifact_audit.unchecked_by_language
         report["artifact_audit"] = artifact_audit.report_dict()
+    if token_usage is not None:
+        report["token_usage"] = token_usage
     return report
 
 
