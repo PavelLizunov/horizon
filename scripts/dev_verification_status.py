@@ -17,6 +17,7 @@ from src.ai.summarizer import (
     verification_summary_markup,
 )
 from src.verification.evidence import public_claim_status
+from src.verification.claims import conservative_claim_kind
 
 
 def _runs(root: Path) -> list[tuple[Path, dict[str, Any]]]:
@@ -279,7 +280,11 @@ def build_site_page(root: Path) -> str:
                         "source_class": card.get("source_class"),
                     }
                 )
-            kind = str(claim.get("kind") or "other")
+            kind = conservative_claim_kind(
+                str(claim.get("kind") or "other"),
+                str(claim.get("source_text") or ""),
+                str(claim.get("normalized_claim") or ""),
+            )
             public_claims.append(
                 {
                     "text": claim["normalized_claim"],

@@ -11,6 +11,7 @@ from src.verification.claims import (
     ClaimExtractor,
     ClaimProposal,
     anchor_claims,
+    conservative_claim_kind,
 )
 from src.verification.ledger import build_selected_input_snapshot
 
@@ -113,6 +114,7 @@ def test_announcement_and_release_kinds_require_an_action(
     )
 
     assert anchor_claims(snapshot, [proposal])[0].kind == expected
+    assert conservative_claim_kind(kind, normalized_claim, normalized_claim) == expected
 
 
 class _Client:

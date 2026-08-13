@@ -262,7 +262,7 @@ review stays disabled after `deepseek-v4-pro` exhausted both 4,096- and
 8,192-token response limits without completing its compact JSON; the measured
 static lexicon and independent Whisper audio check remain active.
 
-### [ ] V4. Make verification honest, fresh and incident-aware
+### [x] V4. Make verification honest, fresh and incident-aware
 
 The first OpenCode Go run proved that the shadow mechanics work but the public
 meaning does not: four of five artifact audits failed, one successful audit
@@ -290,8 +290,21 @@ primitives and removes the false implication of a universal truth check.
 - [x] V4f. Remove the duplicate reader-facing fact-check vocabulary. The article
   may retain analysis prose, but only Evidence Ledger owns source-coverage
   labels on the site.
-- [ ] V4g. Ship with offline tests, a strict site build and one bounded paid
+- [x] V4g. Ship with offline tests, a strict site build and one bounded paid
   OpenCode Go canary. Record real latency, statuses, token usage and publication.
+
+  Canary `20260813T215925-b1929a6a6e674f0f984ac540fbdd1d1a` checked 15 claims
+  in five final Russian articles with paid `deepseek-v4-flash`: 5 supported,
+  9 insufficient and 1 not-checkable; zero verification/search errors. It used
+  216,016 tokens (12,032 cached input, 124,984 ordinary input, 79,000 output),
+  estimated at $0.039651 in configured DeepSeek base API prices. Five report
+  durations totalled 833.5 seconds; the slowest was 202.9 seconds. The previous
+  runtime used 297,825 verification tokens for five items, so removing the
+  same-model artifact audit reduced this measured run by about 27%. The strict
+  MkDocs build passed and the live `/checks/` page returned 200 with 5 article
+  summaries, 15 claims and 21 public source links at 1280x720 without horizontal
+  overflow. The canary also motivated a deterministic guard that prevents a
+  benchmark or capability claim from inheriting an announcement/release label.
 
 ---
 

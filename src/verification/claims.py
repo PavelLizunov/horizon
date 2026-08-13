@@ -30,6 +30,15 @@ ClaimKind = Literal[
 ClaimImportance = Literal["headline", "load_bearing"]
 ClaimCheckability = Literal["checkable", "ambiguous", "not_checkable"]
 ClaimExtractionError = Literal["invalid_response", "model_error", "timeout"]
+_CLAIM_KINDS = {
+    "announcement",
+    "release",
+    "quote",
+    "quantity",
+    "event",
+    "opinion",
+    "other",
+}
 
 _ANNOUNCEMENT_TERMS = re.compile(
     r"\b(announce(?:d|ment|s)?|unveil(?:ed|s)?|introduc(?:e|ed|es|tion)|"
@@ -192,18 +201,30 @@ def anchor_claims(
     return tuple(cards)
 
 
-def _conservative_kind(proposal: ClaimProposal) -> ClaimKind:
+def conservative_claim_kind(
+    kind: str,
+    source_text: str,
+    normalized_claim: str,
+) -> ClaimKind:
     """Prevent primary-source provenance from upgrading a different claim."""
-    if proposal.kind not in {"announcement", "release"}:
-        return proposal.kind
-    text = f"{proposal.source_text} {proposal.normalized_claim}"
-    if proposal.kind == "announcement" and _ANNOUNCEMENT_TERMS.search(text):
+    if kind not in {"announcement", "release"}:
+        return kind if kind in _CLAIM_KINDS else "other"  # type: ignore[return-value]
+    text = f"{source_text} {normalized_claim}"
+    if kind == "announcement" and _ANNOUNCEMENT_TERMS.search(text):
         return "announcement"
-    if proposal.kind == "release" and _RELEASE_TERMS.search(text):
+    if kind == "release" and _RELEASE_TERMS.search(text):
         return "release"
     if _QUANTITY_TERMS.search(text):
         return "quantity"
     return "other"
+
+
+def _conservative_kind(proposal: ClaimProposal) -> ClaimKind:
+    return conservative_claim_kind(
+        proposal.kind,
+        proposal.source_text,
+        proposal.normalized_claim,
+    )
 
 
 def _anchor_valid_claims(
