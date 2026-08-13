@@ -108,6 +108,19 @@ def test_analyze_batch_concurrent_preserves_order(monkeypatch):
     assert [item.id for item in result] == [item.id for item in items]
 
 
+def test_analyze_batch_raises_when_every_item_fails(monkeypatch):
+    analyzer = ContentAnalyzer(SimpleNamespace(), PROFILES)
+    items = [_make_item("rss:test:1"), _make_item("rss:test:2")]
+
+    async def fail(_item):
+        raise PermissionError("provider denied the request")
+
+    monkeypatch.setattr(analyzer, "_analyze_item", fail)
+
+    with pytest.raises(RuntimeError, match="AI analysis failed for all 2 items"):
+        asyncio.run(analyzer.analyze_batch(items))
+
+
 def test_analyze_item_accepts_valid_result():
     result = {
         "score": 8.5,

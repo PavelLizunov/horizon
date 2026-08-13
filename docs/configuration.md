@@ -107,15 +107,15 @@ rules, and block tool permissions.
 
 Configure which AI model analyzes and enriches your content.
 
-Narration may optionally use a separate cheap model to inspect the complete
+Narration may optionally use a separate model to inspect the complete
 Russian issue for Latin names and technical phrases that TeraTTS is likely to
 mispronounce:
 
 ```json
 {
   "ai": {
-    "model": "qwen3.8-max",
-    "pronunciation_model": "deepseek-v4-flash-0731"
+    "model": "deepseek-v4-flash",
+    "pronunciation_model": "deepseek-v4-pro"
   }
 }
 ```

@@ -58,12 +58,17 @@ class ContentAnalyzer:
         throttle_sec = self._get_throttle_sec()
         concurrency = self._get_concurrency()
         semaphore = asyncio.Semaphore(concurrency)
+        failures = 0
+        first_error = None
 
         async def _process(item: ContentItem, index: int, progress_task) -> ContentItem:
+            nonlocal failures, first_error
             async with semaphore:
                 try:
                     await self._analyze_item(item)
                 except Exception as e:
+                    failures += 1
+                    first_error = first_error or e
                     logger.error("Error analyzing item %s: %s", item.id, e)
                     if item.processing:
                         item.processing.analysis = ContentAnalysis(
@@ -90,6 +95,10 @@ class ContentAnalyzer:
             ]
             analyzed_items = await asyncio.gather(*coros)
 
+        if items and failures == len(items):
+            raise RuntimeError(
+                f"AI analysis failed for all {len(items)} items"
+            ) from first_error
         return analyzed_items
 
     @retry(

@@ -93,22 +93,22 @@ still reach Tera after the current lexicon, so new names have one reviewable
 backlog instead of being rediscovered by scanning the archive. The reports are
 runtime state and are gitignored.
 
-When `ai.pronunciation_model` names a separate cheap model, preparation also
+When `ai.pronunciation_model` names a separate model, preparation also
 sends that model the complete prepared text of the issue plus the candidate
 counts. It asks for only names, brands, commands, abbreviations and uncommon
 phrases that a Russian voice is likely to omit or distort. The response is
 accepted only when the written phrase occurs in that issue, contains Latin,
 and the proposed reading is Cyrillic without markup. Accepted readings are
 stored in `data/pronunciation-reviews/<issue>.json` for review. Suggestions do
-not reach Tera automatically: the cheap model can translate instead of
+not reach Tera automatically: the secondary model can translate instead of
 transcribing or confidently guess an unfamiliar brand. Only a manually reviewed
 reading is promoted to the static Tera lexicon; Qwen remains unaffected.
 
 The model is opt-in and never inherits `ai.model`: unset means skip, and naming
 the primary model is refused. A malformed response or API failure is visible in
-the narration log but falls back to the measured static lexicon, so a cheap
+the narration log but falls back to the measured static lexicon, so a secondary
 review cannot delay the readable site or remove audio. The production gateway
-uses `deepseek-v4-flash-0731` with thinking disabled for this pass. Promote a
+uses `deepseek-v4-pro` with thinking disabled for this pass. Promote a
 reviewed reading into `_TERA_PRONUNCIATIONS`; the per-issue JSON is the
 review trail, not an unbounded source of global truth.
 

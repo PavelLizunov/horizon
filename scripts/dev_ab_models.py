@@ -7,7 +7,7 @@ results side by side, so grading looks at the same inputs twice.
 **This spends real money on both sides.** Keep --limit small.
 
     uv run python scripts/dev_capture_items.py --limit 12 --no-video
-    uv run python scripts/dev_ab_models.py qwen3.8-max deepseek-v4-flash-0731
+    uv run python scripts/dev_ab_models.py deepseek-v4-flash deepseek-v4-pro
 """
 
 import argparse
