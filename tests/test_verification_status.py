@@ -79,6 +79,7 @@ def test_site_page_uses_public_claims_statuses_and_source_links(tmp_path) -> Non
                 "stage": "evidence",
                 "updated_at": "2026-08-13T09:30:00Z",
                 "input_ledger": "inputs/items.jsonl",
+                "reports": {"one": "unused-in-fixture"},
             }
         ),
         encoding="utf-8",
@@ -131,6 +132,12 @@ def test_site_page_uses_public_claims_statuses_and_source_links(tmp_path) -> Non
                 "evidence_ids_by_claim": {"claim-1": ["evidence-1"]},
             }
         ),
+        encoding="utf-8",
+    )
+    empty = tmp_path / "20260813T100000-empty"
+    empty.mkdir()
+    empty.joinpath("manifest.json").write_text(
+        json.dumps({"stage": "evidence", "reports": {}}),
         encoding="utf-8",
     )
 

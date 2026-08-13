@@ -105,7 +105,7 @@ def build_site_page(root: Path) -> str:
         (
             (run_dir, manifest)
             for run_dir, manifest in _runs(root)
-            if manifest.get("stage") == "evidence"
+            if manifest.get("stage") == "evidence" and manifest.get("reports")
         ),
         None,
     )
