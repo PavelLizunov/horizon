@@ -71,6 +71,10 @@ log "verification page: regenerate"
 .venv/bin/python scripts/dev_verification_status.py --write-site docs/checks.md \
   || log "verification page: FAILED — the previous page stays in place"
 
+log "collection page: regenerate"
+.venv/bin/python scripts/dev_collection_status.py --write-site docs/collection.md \
+  || log "collection page: FAILED - the previous page stays in place"
+
 log "article verification: refresh public wording and labels"
 .venv/bin/python scripts/dev_verification_status.py --refresh-articles docs/digest \
   || log "article verification: FAILED - generated pages stay unchanged"

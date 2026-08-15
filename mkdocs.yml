@@ -115,5 +115,6 @@ nav:
   # One name for one thing: the nav said "Дайджесты" while the page heading and
   # the button on the home page both said "Архив выпусков".
   - Архив выпусков: digest/index.md
+  - Что мы собираем: collection.md
   - Покрытие источниками: checks.md
   - Поиск: search.md

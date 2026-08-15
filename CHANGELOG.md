@@ -27,6 +27,14 @@ invoice. Reader-facing claim text is the exact span from the article, and stays
 in the article's language rather than exposing the model's internal normalized
 proposition.
 
+### The public site shows the active collection scope
+
+A generated “Что мы собираем” page now lists the production categories,
+enabled feeds/channels/searches, collection window, and last-run counts. It is
+built from the live runtime config while deliberately omitting credentials and
+URL query strings, so a deployed profile can no longer exist only in code and
+remain invisible to the reader.
+
 ### VPN coverage is an evidence-first radar
 
 Two profiles separate VPN/proxy engineering from censorship and access
