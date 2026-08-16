@@ -137,6 +137,8 @@ def test_should_fallback_detects_retryable_errors():
     assert ChainedAIClient._should_fallback(Exception("401 unauthorized")) is True
     assert ChainedAIClient._should_fallback(Exception("403 forbidden")) is True
     assert ChainedAIClient._should_fallback(Exception("quota exceeded")) is True
+    assert ChainedAIClient._should_fallback(Exception("GoUsageLimitError: Weekly usage limit reached")) is True
+    assert ChainedAIClient._should_fallback(Exception("CreditsError: Insufficient balance")) is True
     assert ChainedAIClient._should_fallback(Exception("502 bad gateway")) is True
     assert ChainedAIClient._should_fallback(Exception("503 service unavailable")) is True
     assert ChainedAIClient._should_fallback(Exception("Empty response from provider")) is True
@@ -269,3 +271,37 @@ def test_create_chained_client_rejects_unknown_provider():
     )
     with pytest.raises(ValueError, match="Unsupported AI provider in chain"):
         _create_chained_client(config)
+
+
+def test_create_fallback_chained_client_from_configs():
+    """create_ai_client builds chained client when fallback_configs is specified."""
+    from src.ai.client import create_ai_client
+
+    config = AIConfig(
+        provider=AIProvider.OPENAI,
+        model="deepseek-v4-flash",
+        api_key_env="OPENCODE_ZEN_API_KEY",
+        base_url="https://opencode.ai/zen/go/v1",
+        fallback_configs=[
+            {
+                "provider": "openai",
+                "model": "deepseek-v4-flash-free",
+                "base_url": "https://opencode.ai/zen/v1",
+            },
+            {
+                "provider": "openai",
+                "model": "hy3-free",
+                "base_url": "https://opencode.ai/zen/v1",
+            }
+        ]
+    )
+
+    client = create_ai_client(config)
+    assert isinstance(client, ChainedAIClient)
+    assert len(client.configs) == 3
+    assert client.configs[0].model == "deepseek-v4-flash"
+    assert client.configs[0].base_url == "https://opencode.ai/zen/go/v1"
+    assert client.configs[1].model == "deepseek-v4-flash-free"
+    assert client.configs[1].base_url == "https://opencode.ai/zen/v1"
+    assert client.configs[2].model == "hy3-free"
+    assert client.configs[2].base_url == "https://opencode.ai/zen/v1"

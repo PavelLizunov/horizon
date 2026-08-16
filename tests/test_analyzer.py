@@ -335,3 +335,14 @@ def test_analysis_comment_budget_is_profile_configurable(monkeypatch):
 
 def _comment_section(user_prompt: str) -> str:
     return user_prompt.split("Community Comments:\n", 1)[1].split("\n", 1)[0]
+
+
+def test_is_retryable_analysis_error_detects_hard_quota():
+    from src.ai.analyzer import _is_retryable_analysis_error
+
+    assert _is_retryable_analysis_error(Exception("429 Rate limit exceeded")) is True
+    assert _is_retryable_analysis_error(Exception("503 Service Unavailable")) is True
+    assert _is_retryable_analysis_error(Exception("GoUsageLimitError: Weekly usage limit reached")) is False
+    assert _is_retryable_analysis_error(Exception("CreditsError: Insufficient balance")) is False
+    assert _is_retryable_analysis_error(Exception("insufficient_quota")) is False
+    assert _is_retryable_analysis_error(Exception("Invalid API key")) is False

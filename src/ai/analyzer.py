@@ -6,7 +6,7 @@ from typing import List, Optional
 from pydantic import ValidationError
 from rich.console import Console
 from rich.progress import Progress, SpinnerColumn, BarColumn, TextColumn, MofNCompleteColumn
-from tenacity import retry, stop_after_attempt, wait_exponential
+from tenacity import retry, retry_if_exception, stop_after_attempt, wait_exponential
 
 logger = logging.getLogger(__name__)
 
@@ -19,6 +19,29 @@ from ..processing.content import select_content, split_content
 from ..processing.profiles import ProfileRegistry
 
 DEFAULT_THROTTLE_SEC = 0.0
+
+
+def _is_retryable_analysis_error(exc: BaseException) -> bool:
+    """Return False for unrecoverable quota / billing errors to avoid pointless retry loops."""
+    msg = str(exc).lower()
+    body = str(getattr(exc, "body", "")).lower()
+    combined = f"{msg} {body}"
+    if any(
+        q in combined
+        for q in (
+            "gousagelimiterror",
+            "weekly usage limit",
+            "creditserror",
+            "insufficient_quota",
+            "insufficient balance",
+            "account deactivated",
+            "invalid api-key",
+            "invalid api key",
+        )
+    ):
+        return False
+    return True
+
 
 class ContentAnalyzer:
     """Analyzes content items using AI to determine importance."""
@@ -102,8 +125,10 @@ class ContentAnalyzer:
         return analyzed_items
 
     @retry(
+        retry=retry_if_exception(_is_retryable_analysis_error),
         stop=stop_after_attempt(3),
-        wait=wait_exponential(min=2, max=10)
+        wait=wait_exponential(min=2, max=10),
+        reraise=True,
     )
     async def _analyze_item(self, item: ContentItem) -> None:
         """Analyze a single content item.

@@ -658,8 +658,12 @@ class ChainedAIClient(AIClient):
                 last_error = exc
                 if i < len(self.configs) - 1:
                     logger.warning(
-                        "Provider %s failed (%s), falling back to %s...",
-                        self.configs[i].provider.value, exc, self.configs[i + 1].provider.value,
+                        "Provider %s (%s) failed (%s), falling back to %s (%s)...",
+                        self.configs[i].provider.value,
+                        self.configs[i].model,
+                        exc,
+                        self.configs[i + 1].provider.value,
+                        self.configs[i + 1].model,
                     )
         raise RuntimeError(f"All providers failed. Last error: {last_error}")
 
@@ -667,13 +671,26 @@ class ChainedAIClient(AIClient):
     def _should_fallback(exc: Exception) -> bool:
         """Determine if an error warrants fallback to the next provider."""
         msg = str(exc).lower()
-        if "429" in msg or "rate limit" in msg:
+        body = str(getattr(exc, "body", "")).lower()
+        combined = f"{msg} {body}"
+        if "429" in combined or "rate limit" in combined or "ratelimit" in combined:
             return True
-        if "401" in msg or "403" in msg or "quota" in msg or "exceeded" in msg:
+        if (
+            "401" in combined
+            or "403" in combined
+            or "quota" in combined
+            or "exceeded" in combined
+            or "usage limit" in combined
+            or "gousagelimiterror" in combined
+            or "creditserror" in combined
+            or "insufficient balance" in combined
+            or "balance" in combined
+            or "invalid api" in combined
+        ):
             return True
-        if "502" in msg or "503" in msg or "service unavailable" in msg:
+        if "502" in combined or "503" in combined or "service unavailable" in combined:
             return True
-        if "empty response" in msg:
+        if "empty response" in combined:
             return True
         return False
 
@@ -721,6 +738,36 @@ def _create_chained_client(config: AIConfig) -> ChainedAIClient:
     return ChainedAIClient(chain_configs)
 
 
+def _create_fallback_chained_client(config: AIConfig) -> ChainedAIClient:
+    """Build a ChainedAIClient from explicit fallback_configs."""
+    chain_configs: List[AIConfig] = [config]
+    for fb in config.fallback_configs or []:
+        if isinstance(fb, dict):
+            provider_val = fb.get("provider", config.provider.value)
+            provider = AIProvider(provider_val) if isinstance(provider_val, str) else provider_val
+            defaults = AI_PROVIDER_DEFAULTS.get(provider, {})
+            fb_cfg = AIConfig(
+                provider=provider,
+                model=fb.get("model", defaults.get("model", config.model)),
+                api_key_env=fb.get("api_key_env", config.api_key_env),
+                base_url=fb.get("base_url", defaults.get("base_url")),
+                temperature=fb.get("temperature", config.temperature),
+                max_tokens=fb.get("max_tokens", config.max_tokens),
+                throttle_sec=fb.get("throttle_sec", config.throttle_sec),
+                analysis_concurrency=fb.get("analysis_concurrency", config.analysis_concurrency),
+                enrichment_concurrency=fb.get("enrichment_concurrency", config.enrichment_concurrency),
+                languages=config.languages,
+                enable_thinking=fb.get("enable_thinking", config.enable_thinking),
+                pronunciation_model=fb.get("pronunciation_model", config.pronunciation_model),
+                azure_endpoint_env=fb.get("azure_endpoint_env", config.azure_endpoint_env),
+                api_version=fb.get("api_version", config.api_version),
+            )
+            chain_configs.append(fb_cfg)
+        elif isinstance(fb, AIConfig):
+            chain_configs.append(fb)
+    return ChainedAIClient(chain_configs)
+
+
 def create_ai_client(config: AIConfig) -> AIClient:
     """Factory function to create appropriate AI client.
 
@@ -733,6 +780,8 @@ def create_ai_client(config: AIConfig) -> AIClient:
     Raises:
         ValueError: If provider is not supported
     """
+    if config.fallback_configs:
+        return _create_fallback_chained_client(config)
     if config.provider_chain:
         return _create_chained_client(config)
     return _create_single_client(config)
