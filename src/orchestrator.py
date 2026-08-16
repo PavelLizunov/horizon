@@ -1208,7 +1208,38 @@ class HorizonOrchestrator:
         settings = self.config.processing.profile_settings.get(profile_id)
         effective_threshold = threshold
         if effective_threshold is None and settings is not None:
-            effective_threshold = settings.threshold
+            category = item.metadata.get("category")
+            if not category and item.processing.analysis and item.processing.analysis.tags:
+                normalized_tags = [
+                    t.lower().lstrip("#").replace("-", "").replace("_", "").replace(" ", "")
+                    for t in item.processing.analysis.tags
+                ]
+                for cat_key in settings.category_thresholds:
+                    clean_cat = cat_key.lower().replace("-", "").replace("_", "").replace(" ", "")
+                    if clean_cat in normalized_tags or any(clean_cat in t for t in normalized_tags):
+                        category = cat_key
+                        item.metadata["category"] = cat_key
+                        break
+                    if clean_cat == "llm" and any(
+                        alias in t
+                        for t in normalized_tags
+                        for alias in (
+                            "llm",
+                            "largelanguagemodel",
+                            "localllm",
+                            "generativeai",
+                            "ai",
+                            "artificialintelligence",
+                        )
+                    ):
+                        category = cat_key
+                        item.metadata["category"] = cat_key
+                        break
+
+            if category and category in settings.category_thresholds:
+                effective_threshold = settings.category_thresholds[category]
+            else:
+                effective_threshold = settings.threshold
         if effective_threshold is None:
             # Fail open, but say so. A profile with no profile_settings entry
             # otherwise admits every item regardless of score — including 1/10 —

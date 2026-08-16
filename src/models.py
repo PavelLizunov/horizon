@@ -673,6 +673,7 @@ class ProfileSettingsConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     threshold: Optional[float] = Field(default=None, ge=0, le=10)
+    category_thresholds: Dict[str, float] = Field(default_factory=dict)
     topic_dedup: bool = True
 
 

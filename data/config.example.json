@@ -17,6 +17,9 @@
     "profile_settings": {
       "tech-news": {
         "threshold": 7.0,
+        "category_thresholds": {
+          "llm": 4.5
+        },
         "topic_dedup": true
       },
       "tech-blog": {
