@@ -343,7 +343,12 @@ class HorizonOrchestrator:
             self.console.print("")
 
             # 6. Search related stories + enrich with background knowledge (2nd AI pass)
-            await self.enrich_items(important_items)
+            enrichment_result = await self.enrich_items(important_items)
+            if enrichment_result and enrichment_result.failed_ids:
+                failed_set = set(enrichment_result.failed_ids)
+                important_items = [
+                    item for item in important_items if item.id not in failed_set
+                ]
 
             if verification_ledger is not None:
                 try:
