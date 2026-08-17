@@ -18,7 +18,10 @@
       "tech-news": {
         "threshold": 7.0,
         "category_thresholds": {
-          "llm": 4.5
+          "llm": 4.5,
+          "ai-tools": 4.5,
+          "ai-workflows": 4.5,
+          "sdd": 4.5
         },
         "topic_dedup": true
       },
@@ -476,6 +479,17 @@
         "categories": [
           "circumvention-tool",
           "community-project"
+        ]
+      },
+      "ai-tools-workflows": {
+        "name": "Инструменты и подходы в использовании ИИ",
+        "limit": 4,
+        "categories": [
+          "ai-tools",
+          "ai-workflows",
+          "ai-dev",
+          "sdd",
+          "spec-driven-development"
         ]
       }
     },

@@ -1240,6 +1240,27 @@ class HorizonOrchestrator:
                         category = cat_key
                         item.metadata["category"] = cat_key
                         break
+                    if clean_cat in ("aitools", "aiworkflows", "aidev", "sdd", "specdrivendevelopment") and any(
+                        alias in t
+                        for t in normalized_tags
+                        for alias in (
+                            "sdd",
+                            "specdrivendevelopment",
+                            "aitools",
+                            "aiworkflow",
+                            "aiworkflows",
+                            "aidev",
+                            "aicoding",
+                            "promptengineering",
+                            "agentic",
+                            "vibecoding",
+                            "devtools",
+                            "developerproductivity",
+                        )
+                    ):
+                        category = cat_key
+                        item.metadata["category"] = cat_key
+                        break
 
             if category and category in settings.category_thresholds:
                 effective_threshold = settings.category_thresholds[category]

@@ -12,6 +12,6 @@ Evaluate the importance of timely technology news for readers interested in soft
 
 # Evaluation guidance
 
-Consider technical depth, novelty, likely impact, source quality, relevance to software engineering and AI systems, and concrete supporting details. Open-weights models, local LLM quantization (e.g. GGUF/EXL2), inference optimizations, and practical open-source AI tools have strong practical interest. Treat substantive community debate as additional evidence of value, but do not equate popularity with technical importance. Do not reward exaggerated headlines.
+Consider technical depth, novelty, likely impact, source quality, relevance to software engineering and AI systems, and concrete supporting details. Open-weights models, local LLM quantization (e.g. GGUF/EXL2), inference optimizations, and practical open-source AI tools have strong practical interest. Practical AI engineering methodologies, development workflows (such as Spec-Driven Development / SDD, agentic workflows, vibe coding with rigor, test-driven AI development), developer tooling, and innovative AI integration patterns have high practical value. Treat substantive community debate as additional evidence of value, but do not equate popularity with technical importance. Do not reward exaggerated headlines.
 
 Use three to five specific topic tags.

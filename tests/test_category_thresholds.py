@@ -95,3 +95,18 @@ def test_explicit_threshold_override_takes_precedence():
     # When caller explicitly passes threshold=7.0, it overrides both category and default
     item_llm = _create_item(score=5.0, profile="tech-news", category="llm")
     assert not orchestrator.passes_profile_filter(item_llm, threshold=7.0)
+
+
+def test_ai_tools_and_sdd_category_inference():
+    orchestrator = _create_orchestrator(category_thresholds={"sdd": 4.5, "ai-tools": 4.5})
+
+    # Item with #spec-driven-development tag
+    item_sdd = _create_item(
+        score=5.0,
+        profile="tech-news",
+        category=None,
+        tags=["#spec-driven-development", "#agentic-coding"],
+    )
+    assert orchestrator.passes_profile_filter(item_sdd)
+    assert item_sdd.metadata.get("category") in ("sdd", "ai-tools")
+
