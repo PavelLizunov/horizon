@@ -225,30 +225,48 @@ def sanitize_article_verification(
         )
 
     updated = _PUBLIC_CLAIM_RE.sub(replace_claim, markdown)
-    matches = list(_PUBLIC_CLAIM_RE.finditer(updated))
-    if language_root == "ru" and matches:
-        counts = Counter(match.group("status") for match in matches)
+    valid_matches = [
+        match for match in _PUBLIC_CLAIM_RE.finditer(updated)
+        if match.group("status") not in {"check_error", "verification_error"}
+    ]
+    if language_root == "ru" and valid_matches:
+        counts = Counter(match.group("status") for match in valid_matches)
         parts = [
             f'{copy["statuses"].get(status, copy["statuses"]["check_error"])}: {count}'
             for status, count in counts.items()
         ]
-        count_markup = f'<span>Утверждений: {len(matches)} · {" · ".join(parts)}</span>'
+        count_markup = f'<span>Утверждений: {len(valid_matches)} · {" · ".join(parts)}</span>'
         updated = _PUBLIC_COUNTS_RE.sub(count_markup, updated, count=1)
 
     def clean_summary_box(match: re.Match[str]) -> str:
         box = match.group(0)
-        if 'data-state="not_checked"' in box or not matches:
+        if (
+            'data-state="not_checked"' in box
+            or 'data-state="check_error"' in box
+            or 'data-state="check_failed"' in box
+            or 'data-state="not_applicable"' in box
+            or "проверка прервана" in box.lower()
+            or not valid_matches
+        ):
             return ""
         box = re.sub(r"\n?<small>.*?</small>", "", box, flags=re.DOTALL)
         box = re.sub(r"\n?<span>(?:Проверено|Checked):.*?</span>", "", box)
         return box
 
     updated = re.sub(
-        r'<aside class="hz-verification-summary"[^>]*>.*?</aside>',
+        r'<aside class="hz-verification-summary"[^>]*>.*?</aside>\n?',
         clean_summary_box,
         updated,
         flags=re.DOTALL,
     )
+
+    if not valid_matches:
+        updated = re.sub(
+            r'## (?:Проверка источников|Source coverage)[^\n]*\n\n<div class="hz-verification">.*?</div>\n?',
+            '',
+            updated,
+            flags=re.DOTALL,
+        )
     return updated
 
 

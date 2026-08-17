@@ -302,7 +302,12 @@ def verification_site_markup(
         != language_root
     ):
         return ""
-    claims = [claim for claim in payload["claims"] if isinstance(claim, dict)]
+    claims = [
+        claim
+        for claim in payload["claims"]
+        if isinstance(claim, dict)
+        and claim.get("status") not in {"verification_error", "check_error"}
+    ]
     if not claims:
         return ""
     if heading_level not in range(1, 7):
@@ -381,14 +386,8 @@ def verification_summary_markup(
     if not isinstance(claims, list) or not claims:
         return ""
     state = str(payload.get("state") or "complete")
-    if state == "not_checked":
+    if state in {"not_checked", "check_error", "check_failed", "not_applicable"}:
         return ""
-    copy = _VERIFICATION_COPY.get(language_root, _VERIFICATION_COPY["en"])
-    state_label = copy["states"].get(state, copy["states"]["check_failed"])
-    lines = [
-        f'<aside class="hz-verification-summary" data-state="{html.escape(state, quote=True)}">',
-        f'<strong>{copy["summary"]}: {state_label}</strong>',
-    ]
     counts: dict[str, int] = {}
     for claim in claims:
         if isinstance(claim, dict):
@@ -396,13 +395,22 @@ def verification_summary_markup(
                 claim.get("public_status")
                 or claim.get("status", "verification_error")
             )
-            counts[status] = counts.get(status, 0) + 1
+            if status not in {"verification_error", "check_error"}:
+                counts[status] = counts.get(status, 0) + 1
+    if not counts:
+        return ""
+    copy = _VERIFICATION_COPY.get(language_root, _VERIFICATION_COPY["en"])
+    state_label = copy["states"].get(state, copy["states"]["checked"])
+    lines = [
+        f'<aside class="hz-verification-summary" data-state="{html.escape(state, quote=True)}">',
+        f'<strong>{copy["summary"]}: {state_label}</strong>',
+    ]
     status_parts = [
         f'{copy["statuses"].get(status, copy["statuses"]["verification_error"])}: {count}'
         for status, count in counts.items()
     ]
     lines.append(
-        f'<span>{copy["claim_count"]}: {len(claims)} · '
+        f'<span>{copy["claim_count"]}: {sum(counts.values())} · '
         f'{" · ".join(status_parts)}</span>'
     )
     if include_usage:
