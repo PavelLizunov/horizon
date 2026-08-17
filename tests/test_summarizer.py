@@ -577,9 +577,8 @@ def test_build_article_pages_shows_public_verification_on_article_only():
 
     assert "## Source coverage" in article.markdown
     assert "Sources: key-claim check completed" in article.markdown
-    assert "DeepSeek API base-rate usage: ≈ $0.001000" in article.markdown
-    assert "12 000 verification tokens" in article.markdown
-    assert "Cache 7 000 · regular input 3 000 · output 2 000" in article.markdown
+    assert "DeepSeek API base-rate" not in article.markdown
+    assert "verification tokens" not in article.markdown
     assert "Release record located" in article.markdown
     assert "Product &lt;X&gt; shipped" in article.markdown
     assert 'href="https://vendor.example/release?q=1&amp;lang=en"' in article.markdown
@@ -589,11 +588,8 @@ def test_build_article_pages_shows_public_verification_on_article_only():
     ru_article = DailySummarizer().build_article_pages(
         [item], "2026-08-13", language="ru"
     )[0]
-    assert (
-        "Оценка по базовому тарифу DeepSeek API: ≈ $0.001000"
-        in ru_article.markdown
-    )
-    assert "Кэш: 7 000 · обычный вход: 3 000 · выход: 2 000" in ru_article.markdown
+    assert "Источники: ключевые утверждения проверены" in ru_article.markdown
+    assert "токенов проверки" not in ru_article.markdown
 
 
 def test_article_page_says_when_verification_was_not_run():
@@ -608,7 +604,7 @@ def test_article_page_says_when_verification_was_not_run():
         [item], "2026-08-13", language="en"
     )
 
-    assert "Sources: not run for this article" in article.markdown
+    assert "hz-verification-summary" not in article.markdown
     assert "## Source coverage" not in article.markdown
 
 

@@ -472,7 +472,9 @@ def build_site_page(root: Path) -> str:
                         .replace("+00:00", "Z")
                     )
                     break
-        summary_markup = verification_summary_markup(payload, "ru")
+        summary_markup = verification_summary_markup(
+            payload, "ru", include_usage=True
+        )
         markup = verification_site_markup(
             payload,
             "ru",
