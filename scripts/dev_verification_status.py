@@ -260,9 +260,16 @@ def sanitize_article_verification(
         flags=re.DOTALL,
     )
 
+    def clean_individual_claim(match: re.Match[str]) -> str:
+        if match.group("status") in {"check_error", "verification_error"}:
+            return ""
+        return match.group(0)
+
+    updated = _PUBLIC_CLAIM_RE.sub(clean_individual_claim, updated)
+
     if not valid_matches:
         updated = re.sub(
-            r'## (?:Проверка источников|Source coverage)[^\n]*\n\n<div class="hz-verification">.*?</div>\n?',
+            r'## (?:Покрытие новостей источниками|Покрытие источниками|Проверка источников|Source coverage)[^\n]*\n\n<div class="hz-verification">.*?</div>\n?',
             '',
             updated,
             flags=re.DOTALL,
