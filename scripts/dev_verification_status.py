@@ -234,6 +234,21 @@ def sanitize_article_verification(
         ]
         count_markup = f'<span>Утверждений: {len(matches)} · {" · ".join(parts)}</span>'
         updated = _PUBLIC_COUNTS_RE.sub(count_markup, updated, count=1)
+
+    def clean_summary_box(match: re.Match[str]) -> str:
+        box = match.group(0)
+        if 'data-state="not_checked"' in box or not matches:
+            return ""
+        box = re.sub(r"\n?<small>.*?</small>", "", box, flags=re.DOTALL)
+        box = re.sub(r"\n?<span>(?:Проверено|Checked):.*?</span>", "", box)
+        return box
+
+    updated = re.sub(
+        r'<aside class="hz-verification-summary"[^>]*>.*?</aside>',
+        clean_summary_box,
+        updated,
+        flags=re.DOTALL,
+    )
     return updated
 
 
