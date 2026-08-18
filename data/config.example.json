@@ -389,8 +389,29 @@
           "profile": "video"
         },
         {
-          "name": "Example Channel By Id",
-          "channel": "UCBJycsmduvYEL83R_U4JriQ",
+          "name": "TechnoTim",
+          "channel": "@TechnoTim",
+          "enabled": true,
+          "max_videos": 3,
+          "profile": "video"
+        },
+        {
+          "name": "NetworkChuck",
+          "channel": "@NetworkChuck",
+          "enabled": true,
+          "max_videos": 3,
+          "profile": "video"
+        },
+        {
+          "name": "Серверные Технологии",
+          "channel": "@server-technologies",
+          "enabled": true,
+          "max_videos": 3,
+          "profile": "video"
+        },
+        {
+          "name": "Theo - t3.gg",
+          "channel": "@t3dotgg",
           "enabled": true,
           "max_videos": 3,
           "profile": "video"
