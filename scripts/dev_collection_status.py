@@ -58,8 +58,10 @@ def _safe_url(value: object) -> str | None:
         return None
     if parsed.scheme not in {"http", "https"} or not parsed.hostname:
         return None
-    # Query strings may contain feed keys. They are irrelevant on the public page.
     host = parsed.hostname + (f":{parsed.port}" if parsed.port else "")
+    if "4pda.to" in parsed.hostname and "showtopic=" in parsed.query:
+        return urlunsplit((parsed.scheme, host, parsed.path, parsed.query, ""))
+    # Query strings may contain feed keys. They are irrelevant on the public page.
     return urlunsplit((parsed.scheme, host, parsed.path, "", ""))
 
 
