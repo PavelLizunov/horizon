@@ -37,6 +37,7 @@ SOURCE_NAMES = {
     "gdelt": "GDELT",
     "google_news": "Google News",
     "video": "YouTube",
+    "fourpda": "4PDA",
 }
 
 
@@ -165,6 +166,18 @@ def configured_sources(config: dict[str, Any]) -> list[dict[str, Any]]:
                     if str(channel).startswith(("http://", "https://"))
                     else f"https://youtube.com/{channel}"
                 ),
+            )
+
+    fourpda = sources.get("fourpda") or {}
+    if fourpda.get("enabled", False):
+        for item in fourpda.get("topics") or []:
+            tid = item.get("topic_id") or ""
+            _entry(
+                rows,
+                "fourpda",
+                item.get("name") or f"тема {tid}",
+                item,
+                url=f"https://4pda.to/forum/index.php?showtopic={tid}",
             )
     return rows
 

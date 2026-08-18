@@ -138,6 +138,10 @@ def test_mcp_filter_and_reporting_support_every_registered_source() -> None:
                     "enabled": True,
                     "channels": [{"channel": "UCBJycsmduvYEL83R_U4JriQ"}],
                 },
+                "fourpda": {
+                    "enabled": True,
+                    "topics": [{"topic_id": 1110469}],
+                },
             },
         }
     )

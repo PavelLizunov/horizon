@@ -48,6 +48,7 @@ def make_sources(**overrides):  # type: ignore[no-untyped-def]
         "gdelt": [],
         "google_news": [],
         "video": SimpleNamespace(enabled=False, channels=[]),
+        "fourpda": SimpleNamespace(enabled=False, topics=[]),
     }
     values.update(overrides)
     return SimpleNamespace(**values)

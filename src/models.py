@@ -29,6 +29,7 @@ class SourceType(str, Enum):
     GDELT = "gdelt"
     GOOGLE_NEWS = "google_news"
     VIDEO = "video"
+    FOURPDA = "fourpda"
 
 
 class SourceDefinition(NamedTuple):
@@ -51,6 +52,7 @@ SOURCE_REGISTRY = {
     SourceType.GDELT.value: SourceDefinition("gdelt", config_is_list=True),
     SourceType.GOOGLE_NEWS.value: SourceDefinition("google_news", config_is_list=True),
     SourceType.VIDEO.value: SourceDefinition("video", item_fields=("channels",)),
+    SourceType.FOURPDA.value: SourceDefinition("fourpda", item_fields=("topics",)),
 }
 
 ProfileRoute = Optional[Union[str, List[str]]]
@@ -539,6 +541,24 @@ GoogleNewsConfigList = Annotated[
 ]
 
 
+class FourPDATopicConfig(BaseModel):
+    """Configuration for a monitored 4PDA forum topic."""
+
+    topic_id: Union[int, str]
+    name: Optional[str] = None
+    enabled: bool = True
+    fetch_limit: int = 30
+    category: Optional[str] = "ru-field-report"
+    profile: ProfileRoute = "censorship-watch"
+
+
+class FourPDAConfig(BaseModel):
+    """4PDA forum topics scraper configuration."""
+
+    enabled: bool = False
+    topics: List[FourPDATopicConfig] = Field(default_factory=list)
+
+
 class SourcesConfig(BaseModel):
     """All sources configuration."""
 
@@ -553,6 +573,7 @@ class SourcesConfig(BaseModel):
     gdelt: GDELTConfigList = Field(default_factory=list)
     google_news: GoogleNewsConfigList = Field(default_factory=list)
     video: VideoConfig = Field(default_factory=VideoConfig)
+    fourpda: FourPDAConfig = Field(default_factory=FourPDAConfig)
 
 
 class WebhookConfig(BaseModel):

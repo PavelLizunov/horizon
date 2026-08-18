@@ -28,6 +28,7 @@ from .scrapers.ossinsight import OSSInsightScraper
 from .scrapers.gdelt import GDELTScraper
 from .scrapers.google_news import GoogleNewsScraper
 from .scrapers.video import VideoScraper
+from .scrapers.fourpda import FourPDAScraper
 from .ai.client import create_ai_client
 from .ai.analyzer import ContentAnalyzer
 from .ai.summarizer import DailySummarizer
@@ -813,6 +814,12 @@ class HorizonOrchestrator:
             if video_cfg.enabled and (video_cfg.channels or video_cfg.mode == "sidecar"):
                 video_scraper = VideoScraper(video_cfg, client, self.config.ai)
                 tasks.append(self._fetch_with_progress("YouTube", video_scraper, since))
+
+            # 4PDA forum topics (censorship, VPN field reports)
+            fourpda_cfg = getattr(self.config.sources, "fourpda", None)
+            if fourpda_cfg and getattr(fourpda_cfg, "enabled", False) and getattr(fourpda_cfg, "topics", None):
+                fourpda_scraper = FourPDAScraper(fourpda_cfg, client)
+                tasks.append(self._fetch_with_progress("4PDA", fourpda_scraper, since))
 
             # Fetch all concurrently
             outcomes = await asyncio.gather(*tasks)

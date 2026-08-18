@@ -436,6 +436,19 @@
       "min_duration_sec": 120,
       "min_transcript_rate": 0.5,
       "min_transcript_coverage": 0.75
+    },
+    "fourpda": {
+      "enabled": false,
+      "topics": [
+        {
+          "topic_id": 1110469,
+          "name": "Суверенный Интернет – обсуждение",
+          "enabled": true,
+          "fetch_limit": 30,
+          "category": "ru-field-report",
+          "profile": "censorship-watch"
+        }
+      ]
     }
   },
   "collection": {
