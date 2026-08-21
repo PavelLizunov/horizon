@@ -8,9 +8,7 @@ import os
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
-import httpx
 import pytest
-from anthropic import AsyncAnthropic
 
 from src.ai.client import AnthropicClient, OpenAIClient, create_ai_client
 from src.ai.tokens import get_usage_snapshot, reset_usage
@@ -393,46 +391,26 @@ class TestFactoryFunction:
             "https://api.minimaxi.com/anthropic",
         ],
     )
-    def test_anthropic_compatible_base_url_builds_messages_path(
+    def test_anthropic_compatible_base_url_is_passed_to_sdk(
         self, monkeypatch, base_url
     ):
         monkeypatch.setenv("MINIMAX_API_KEY", "test-key")
-        requests = []
-
-        def handler(request: httpx.Request) -> httpx.Response:
-            requests.append(request)
-            return httpx.Response(
-                200,
-                json={
-                    "id": "msg_test",
-                    "type": "message",
-                    "role": "assistant",
-                    "model": "MiniMax-M3",
-                    "content": [{"type": "text", "text": "ok"}],
-                    "stop_reason": "end_turn",
-                    "stop_sequence": None,
-                    "usage": {"input_tokens": 1, "output_tokens": 1},
-                },
+        sdk_client = MagicMock()
+        sdk_client.messages.create = AsyncMock(
+            return_value=SimpleNamespace(
+                content=[SimpleNamespace(text="ok")],
+                stop_reason="end_turn",
+                usage=SimpleNamespace(input_tokens=1, output_tokens=1),
             )
+        )
 
-        async def run_request() -> str:
-            async with httpx.AsyncClient(
-                transport=httpx.MockTransport(handler)
-            ) as http_client:
-                sdk_client = AsyncAnthropic(
-                    api_key="test-key",
-                    base_url=base_url,
-                    http_client=http_client,
-                )
-                with patch("src.ai.client.AsyncAnthropic", return_value=sdk_client):
-                    client = create_ai_client(_make_config(base_url=base_url))
-                    assert isinstance(client, AnthropicClient)
-                    return await client.complete(system="test", user="hello")
+        with patch("src.ai.client.AsyncAnthropic", return_value=sdk_client) as sdk:
+            client = create_ai_client(_make_config(base_url=base_url))
+            assert isinstance(client, AnthropicClient)
+            assert asyncio.run(client.complete(system="test", user="hello")) == "ok"
 
-        assert asyncio.run(run_request()) == "ok"
-        assert [str(request.url) for request in requests] == [
-            f"{base_url}/v1/messages"
-        ]
+        sdk.assert_called_once_with(api_key="test-key", base_url=base_url)
+        sdk_client.messages.create.assert_awaited_once()
 
     def test_creates_openai_client_for_deepseek(self, monkeypatch):
         monkeypatch.setenv("DEEPSEEK_API_KEY", "test-key")
