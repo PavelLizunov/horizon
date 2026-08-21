@@ -285,3 +285,39 @@ becomes the item content.
 visual summary, full description, and `has_transcript` metadata.
 
 See [Video Source](video-source.md) for the anti-bot details and debugging guide.
+
+## 4PDA (Forum Topics)
+
+**File**: `src/scrapers/fourpda.py`
+
+Ingests user discussion posts from specific 4PDA forum topics (such as ISP network anomalies, censorship, DPI bypass methods, and VPN protocols). Fetches forum pages using `windows-1251` character encoding and requires no authentication or API keys.
+
+1. **Date Parsing** — Parses Russian relative and absolute dates (*«Сегодня, 14:20»*, *«Вчера, 23:26»*, *«17.08.26, 18:43»*) in Moscow time (UTC+3) and converts them to UTC.
+2. **Content Sanitization** — Strips quote blocks (`quote_body`), edit reasons, dropdown menus, and user badge icons. Skips pinned rules/FAQ header posts and trivial one-word comments.
+3. **Deep Links** — Assigns exact post deep-link URLs (`https://4pda.to/forum/index.php?showtopic={topic_id}&view=findpost&p={post_id}`).
+
+**Config** (`sources.fourpda`):
+
+```json
+{
+  "enabled": true,
+  "topics": [
+    {
+      "topic_id": 1110469,
+      "name": "Суверенный Интернет – обсуждение",
+      "enabled": true,
+      "fetch_limit": 30,
+      "category": "ru-field-report",
+      "profile": "censorship-watch"
+    }
+  ]
+}
+```
+
+- `topic_id` — numeric 4PDA topic ID from URL (`showtopic=1110469`)
+- `fetch_limit` — maximum posts to ingest per topic per run
+- `category` — category tag (default: `"ru-field-report"`)
+- `profile` — profile routing (default: `"censorship-watch"`)
+
+**Extracted data**: title, URL (direct post link), author, publication timestamp (UTC), cleaned post body, and topic metadata.
+

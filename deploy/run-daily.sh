@@ -57,6 +57,10 @@ log "pipeline: start"
 .venv/bin/horizon --hours "${HORIZON_HOURS:-24}"
 pipeline_status=$?
 log "pipeline: exit $pipeline_status"
+if [[ $pipeline_status -ne 0 ]]; then
+  log "pipeline: failed with code $pipeline_status — aborting site publish and narration"
+  exit $pipeline_status
+fi
 
 # The archive index is generated from the issues on disk, and it is also tracked
 # so a fresh clone can build. Any git operation on this machine restores the

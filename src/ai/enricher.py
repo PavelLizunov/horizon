@@ -152,7 +152,7 @@ class ContentEnricher:
         config = getattr(self.client, "config", None)
         return max(getattr(config, "enrichment_concurrency", 1), 1)
 
-    @retry(stop=stop_after_attempt(3), wait=wait_exponential(min=2, max=10), reraise=True)
+    @retry(stop=stop_after_attempt(5), wait=wait_exponential(min=3, max=15), reraise=True)
     async def _complete(self, **kwargs: Any) -> str:
         return await self.client.complete(**kwargs)
 

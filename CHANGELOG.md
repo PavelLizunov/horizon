@@ -12,6 +12,34 @@ recoverable by reading the code.
 
 ## Unreleased
 
+### Spec-Driven Development (SDD) architecture adopted
+
+The repository transitions to structured Spec-Driven Development (SDD, GitHub Spec-Kit format).
+Specifications, technical plans, and granular task breakdowns live under `specs/`, governed by
+`specs/constitution.md` which defines architectural invariants, offline test guarantees, token cost
+discipline, and model segregation rules.
+
+### 4PDA Russian forum topics source (`sources.fourpda`)
+
+Added direct forum thread scraper (`src/scrapers/fourpda.py`) to capture community field reports on
+network anomalies, ISP throttling, and VPN circumvention techniques (e.g. topic `1110469`).
+Handles `windows-1251` character encoding, parses Russian relative timestamps (*«Сегодня, 14:20»*,
+*«Вчера, 23:26»*, *«17.08.26»*) into UTC, completely strips quotes (`quote_body`), edit notes,
+and user badge icons, and creates per-post deep links.
+
+### AI Tools, Workflows and SDD editorial category
+
+Introduced `ai-tools-workflows` category with relaxed threshold overrides (`category_thresholds: {"llm": 4.5, "ai-tools": 4.5, "sdd": 4.5}`)
+in the `tech-news` profile. Automatically groups and scores practical AI engineering content:
+Spec-Driven Development (SDD), agentic workflows, vibe coding, and developer tools.
+
+### Public verification output sanitized of technical noise
+
+Internal verification error states (`check_error`, `verification_error`, `not_checked`, `check_failed`)
+and empty verification blocks are completely omitted from public article pages. Readers only see
+verified claim sections when independent corroboration was genuinely obtained. Raw token accounting
+and approximate dollar cost banners are removed from public reader views.
+
 ### Evidence Ledger reports source coverage honestly
 
 Claims are now extracted from the final reader-visible article instead of from

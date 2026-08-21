@@ -302,7 +302,12 @@ def verification_site_markup(
         != language_root
     ):
         return ""
-    claims = [claim for claim in payload["claims"] if isinstance(claim, dict)]
+    claims = [
+        claim
+        for claim in payload["claims"]
+        if isinstance(claim, dict)
+        and claim.get("status") not in {"verification_error", "check_error"}
+    ]
     if not claims:
         return ""
     if heading_level not in range(1, 7):
@@ -362,7 +367,12 @@ def verification_site_markup(
     return "\n".join(lines)
 
 
-def verification_summary_markup(payload: object, language: str) -> str:
+def verification_summary_markup(
+    payload: object,
+    language: str,
+    *,
+    include_usage: bool = False,
+) -> str:
     if not isinstance(payload, dict):
         return ""
     language_root = language.lower().replace("_", "-").partition("-")[0]
@@ -372,89 +382,94 @@ def verification_summary_markup(payload: object, language: str) -> str:
         != language_root
     ):
         return ""
-    copy = _VERIFICATION_COPY.get(language_root, _VERIFICATION_COPY["en"])
     claims = payload.get("claims")
-    if not isinstance(claims, list):
-        claims = []
-    state = str(payload.get("state") or ("complete" if claims else "not_checked"))
-    state_label = copy["states"].get(state, copy["states"]["check_failed"])
+    if not isinstance(claims, list) or not claims:
+        return ""
+    state = str(payload.get("state") or "complete")
+    if state in {"not_checked", "check_error", "check_failed", "not_applicable"}:
+        return ""
+    counts: dict[str, int] = {}
+    for claim in claims:
+        if isinstance(claim, dict):
+            status = str(
+                claim.get("public_status")
+                or claim.get("status", "verification_error")
+            )
+            if status not in {"verification_error", "check_error"}:
+                counts[status] = counts.get(status, 0) + 1
+    if not counts:
+        return ""
+    copy = _VERIFICATION_COPY.get(language_root, _VERIFICATION_COPY["en"])
+    state_label = copy["states"].get(state, copy["states"]["checked"])
     lines = [
         f'<aside class="hz-verification-summary" data-state="{html.escape(state, quote=True)}">',
         f'<strong>{copy["summary"]}: {state_label}</strong>',
     ]
-    if claims:
-        counts: dict[str, int] = {}
-        for claim in claims:
-            if isinstance(claim, dict):
-                status = str(
-                    claim.get("public_status")
-                    or claim.get("status", "verification_error")
+    status_parts = [
+        f'{copy["statuses"].get(status, copy["statuses"]["verification_error"])}: {count}'
+        for status, count in counts.items()
+    ]
+    lines.append(
+        f'<span>{copy["claim_count"]}: {sum(counts.values())} · '
+        f'{" · ".join(status_parts)}</span>'
+    )
+    if include_usage:
+        checked_at = payload.get("checked_at")
+        source_age = payload.get("source_age_hours")
+        next_check = payload.get("next_check_at")
+        meta = []
+        if isinstance(checked_at, str) and checked_at:
+            label = "Проверено" if language_root == "ru" else "Checked"
+            meta.append(f"{label}: {html.escape(checked_at)}")
+        if isinstance(source_age, (int, float)):
+            label = "Source age" if language_root != "ru" else "Возраст новости"
+            unit = "h" if language_root != "ru" else "ч"
+            meta.append(f"{label}: {source_age:g} {unit}")
+        if isinstance(next_check, str) and next_check:
+            label = "Recheck after" if language_root != "ru" else "Повторить после"
+            meta.append(f"{label}: {html.escape(next_check)}")
+        if meta:
+            lines.append(f'<span>{" · ".join(meta)}</span>')
+        usage = payload.get("token_usage")
+        if isinstance(usage, dict):
+            try:
+                input_tokens = max(int(usage.get("input_tokens", 0)), 0)
+                output_tokens = max(int(usage.get("output_tokens", 0)), 0)
+                cached_input_tokens = min(
+                    max(int(usage.get("cached_input_tokens", 0)), 0), input_tokens
                 )
-                counts[status] = counts.get(status, 0) + 1
-        status_parts = [
-            f'{copy["statuses"].get(status, copy["statuses"]["verification_error"])}: {count}'
-            for status, count in counts.items()
-        ]
-        lines.append(
-            f'<span>{copy["claim_count"]}: {len(claims)} · '
-            f'{" · ".join(status_parts)}</span>'
-        )
-    checked_at = payload.get("checked_at")
-    source_age = payload.get("source_age_hours")
-    next_check = payload.get("next_check_at")
-    meta = []
-    if isinstance(checked_at, str) and checked_at:
-        label = "Проверено" if language_root == "ru" else "Checked"
-        meta.append(f"{label}: {html.escape(checked_at)}")
-    if isinstance(source_age, (int, float)):
-        label = "Source age" if language_root != "ru" else "Возраст новости"
-        unit = "h" if language_root != "ru" else "ч"
-        meta.append(f"{label}: {source_age:g} {unit}")
-    if isinstance(next_check, str) and next_check:
-        label = "Recheck after" if language_root != "ru" else "Повторить после"
-        meta.append(f"{label}: {html.escape(next_check)}")
-    if meta:
-        lines.append(f'<span>{" · ".join(meta)}</span>')
-    usage = payload.get("token_usage")
-    if isinstance(usage, dict):
-        try:
-            input_tokens = max(int(usage.get("input_tokens", 0)), 0)
-            output_tokens = max(int(usage.get("output_tokens", 0)), 0)
-            cached_input_tokens = min(
-                max(int(usage.get("cached_input_tokens", 0)), 0), input_tokens
-            )
-        except (TypeError, ValueError):
-            input_tokens = output_tokens = cached_input_tokens = 0
-        total_tokens = input_tokens + output_tokens
-        if total_tokens:
-            model_name = str(usage.get("model") or "LLM")
-            model = html.escape(model_name)
-            token_text = f"{total_tokens:,}".replace(",", " ")
-            cached_text = f"{cached_input_tokens:,}".replace(",", " ")
-            uncached_text = f"{input_tokens - cached_input_tokens:,}".replace(",", " ")
-            output_text = f"{output_tokens:,}".replace(",", " ")
-            usage_lines = [
-                f"{model} · {token_text} verification tokens",
-                f"Cache {cached_text} · regular input {uncached_text} · output {output_text}",
-            ]
-            if language_root == "ru":
+            except (TypeError, ValueError):
+                input_tokens = output_tokens = cached_input_tokens = 0
+            total_tokens = input_tokens + output_tokens
+            if total_tokens:
+                model_name = str(usage.get("model") or "LLM")
+                model = html.escape(model_name)
+                token_text = f"{total_tokens:,}".replace(",", " ")
+                cached_text = f"{cached_input_tokens:,}".replace(",", " ")
+                uncached_text = f"{input_tokens - cached_input_tokens:,}".replace(",", " ")
+                output_text = f"{output_tokens:,}".replace(",", " ")
                 usage_lines = [
-                    f"{model} · {token_text} токенов проверки",
-                    f"Кэш: {cached_text} · обычный вход: {uncached_text} · выход: {output_text}",
+                    f"{model} · {token_text} verification tokens",
+                    f"Cache {cached_text} · regular input {uncached_text} · output {output_text}",
                 ]
-            cost = usage.get("estimated_cost_usd")
-            if isinstance(cost, (int, float)) and cost >= 0:
-                cost_text = f"≈ ${cost:.6f} API rate estimate"
                 if language_root == "ru":
-                    cost_text = f"≈ ${cost:.6f} по тарифу API"
-                if "deepseek" in model_name.lower():
-                    cost_text = f"DeepSeek API base-rate usage: ≈ ${cost:.6f}"
+                    usage_lines = [
+                        f"{model} · {token_text} токенов проверки",
+                        f"Кэш: {cached_text} · обычный вход: {uncached_text} · выход: {output_text}",
+                    ]
+                cost = usage.get("estimated_cost_usd")
+                if isinstance(cost, (int, float)) and cost >= 0:
+                    cost_text = f"≈ ${cost:.6f} API rate estimate"
                     if language_root == "ru":
-                        cost_text = (
-                            f"Оценка по базовому тарифу DeepSeek API: ≈ ${cost:.6f}"
-                        )
-                usage_lines.insert(0, cost_text)
-            lines.append(f'<small>{"<br>".join(usage_lines)}</small>')
+                        cost_text = f"≈ ${cost:.6f} по тарифу API"
+                    if "deepseek" in model_name.lower():
+                        cost_text = f"DeepSeek API base-rate usage: ≈ ${cost:.6f}"
+                        if language_root == "ru":
+                            cost_text = (
+                                f"Оценка по базовому тарифу DeepSeek API: ≈ ${cost:.6f}"
+                            )
+                    usage_lines.insert(0, cost_text)
+                lines.append(f'<small>{"<br>".join(usage_lines)}</small>')
     lines.append("</aside>")
     return "\n".join(lines)
 

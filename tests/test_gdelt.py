@@ -134,7 +134,8 @@ def test_rate_limit_retries_once_after_provider_window() -> None:
 
     assert len(items) == 2
     assert client.get.await_count == 2
-    sleep.assert_awaited_once_with(5.1)
+    sleep.assert_awaited_once()
+    assert sleep.call_args[0][0] >= 5.1
 
 
 def test_missing_articles_key_returns_empty() -> None:

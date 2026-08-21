@@ -37,6 +37,7 @@ SOURCE_NAMES = {
     "gdelt": "GDELT",
     "google_news": "Google News",
     "video": "YouTube",
+    "fourpda": "4PDA",
 }
 
 
@@ -57,8 +58,10 @@ def _safe_url(value: object) -> str | None:
         return None
     if parsed.scheme not in {"http", "https"} or not parsed.hostname:
         return None
-    # Query strings may contain feed keys. They are irrelevant on the public page.
     host = parsed.hostname + (f":{parsed.port}" if parsed.port else "")
+    if "4pda.to" in parsed.hostname and "showtopic=" in parsed.query:
+        return urlunsplit((parsed.scheme, host, parsed.path, parsed.query, ""))
+    # Query strings may contain feed keys. They are irrelevant on the public page.
     return urlunsplit((parsed.scheme, host, parsed.path, "", ""))
 
 
@@ -165,6 +168,18 @@ def configured_sources(config: dict[str, Any]) -> list[dict[str, Any]]:
                     if str(channel).startswith(("http://", "https://"))
                     else f"https://youtube.com/{channel}"
                 ),
+            )
+
+    fourpda = sources.get("fourpda") or {}
+    if fourpda.get("enabled", False):
+        for item in fourpda.get("topics") or []:
+            tid = item.get("topic_id") or ""
+            _entry(
+                rows,
+                "fourpda",
+                item.get("name") or f"тема {tid}",
+                item,
+                url=f"https://4pda.to/forum/index.php?showtopic={tid}",
             )
     return rows
 

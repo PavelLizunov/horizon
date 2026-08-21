@@ -17,6 +17,12 @@
     "profile_settings": {
       "tech-news": {
         "threshold": 7.0,
+        "category_thresholds": {
+          "llm": 4.5,
+          "ai-tools": 4.5,
+          "ai-workflows": 4.5,
+          "sdd": 4.5
+        },
         "topic_dedup": true
       },
       "tech-blog": {
@@ -383,8 +389,29 @@
           "profile": "video"
         },
         {
-          "name": "Example Channel By Id",
-          "channel": "UCBJycsmduvYEL83R_U4JriQ",
+          "name": "TechnoTim",
+          "channel": "@TechnoTim",
+          "enabled": true,
+          "max_videos": 3,
+          "profile": "video"
+        },
+        {
+          "name": "NetworkChuck",
+          "channel": "@NetworkChuck",
+          "enabled": true,
+          "max_videos": 3,
+          "profile": "video"
+        },
+        {
+          "name": "Серверные Технологии",
+          "channel": "@server-technologies",
+          "enabled": true,
+          "max_videos": 3,
+          "profile": "video"
+        },
+        {
+          "name": "Theo - t3.gg",
+          "channel": "@t3dotgg",
           "enabled": true,
           "max_videos": 3,
           "profile": "video"
@@ -409,6 +436,19 @@
       "min_duration_sec": 120,
       "min_transcript_rate": 0.5,
       "min_transcript_coverage": 0.75
+    },
+    "fourpda": {
+      "enabled": false,
+      "topics": [
+        {
+          "topic_id": 1110469,
+          "name": "Суверенный Интернет – обсуждение",
+          "enabled": true,
+          "fetch_limit": 30,
+          "category": "ru-field-report",
+          "profile": "censorship-watch"
+        }
+      ]
     }
   },
   "collection": {
@@ -473,6 +513,17 @@
         "categories": [
           "circumvention-tool",
           "community-project"
+        ]
+      },
+      "ai-tools-workflows": {
+        "name": "Инструменты и подходы в использовании ИИ",
+        "limit": 4,
+        "categories": [
+          "ai-tools",
+          "ai-workflows",
+          "ai-dev",
+          "sdd",
+          "spec-driven-development"
         ]
       }
     },

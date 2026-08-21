@@ -28,6 +28,7 @@ from .scrapers.ossinsight import OSSInsightScraper
 from .scrapers.gdelt import GDELTScraper
 from .scrapers.google_news import GoogleNewsScraper
 from .scrapers.video import VideoScraper
+from .scrapers.fourpda import FourPDAScraper
 from .ai.client import create_ai_client
 from .ai.analyzer import ContentAnalyzer
 from .ai.summarizer import DailySummarizer
@@ -343,7 +344,12 @@ class HorizonOrchestrator:
             self.console.print("")
 
             # 6. Search related stories + enrich with background knowledge (2nd AI pass)
-            await self.enrich_items(important_items)
+            enrichment_result = await self.enrich_items(important_items)
+            if enrichment_result and enrichment_result.failed_ids:
+                failed_set = set(enrichment_result.failed_ids)
+                important_items = [
+                    item for item in important_items if item.id not in failed_set
+                ]
 
             if verification_ledger is not None:
                 try:
@@ -809,6 +815,12 @@ class HorizonOrchestrator:
                 video_scraper = VideoScraper(video_cfg, client, self.config.ai)
                 tasks.append(self._fetch_with_progress("YouTube", video_scraper, since))
 
+            # 4PDA forum topics (censorship, VPN field reports)
+            fourpda_cfg = getattr(self.config.sources, "fourpda", None)
+            if fourpda_cfg and getattr(fourpda_cfg, "enabled", False) and getattr(fourpda_cfg, "topics", None):
+                fourpda_scraper = FourPDAScraper(fourpda_cfg, client)
+                tasks.append(self._fetch_with_progress("4PDA", fourpda_scraper, since))
+
             # Fetch all concurrently
             outcomes = await asyncio.gather(*tasks)
             self.last_fetch_report = FetchReport(outcomes=list(outcomes))
@@ -1208,7 +1220,59 @@ class HorizonOrchestrator:
         settings = self.config.processing.profile_settings.get(profile_id)
         effective_threshold = threshold
         if effective_threshold is None and settings is not None:
-            effective_threshold = settings.threshold
+            category = item.metadata.get("category")
+            if not category and item.processing.analysis and item.processing.analysis.tags:
+                normalized_tags = [
+                    t.lower().lstrip("#").replace("-", "").replace("_", "").replace(" ", "")
+                    for t in item.processing.analysis.tags
+                ]
+                for cat_key in settings.category_thresholds:
+                    clean_cat = cat_key.lower().replace("-", "").replace("_", "").replace(" ", "")
+                    if clean_cat in normalized_tags or any(clean_cat in t for t in normalized_tags):
+                        category = cat_key
+                        item.metadata["category"] = cat_key
+                        break
+                    if clean_cat == "llm" and any(
+                        alias in t
+                        for t in normalized_tags
+                        for alias in (
+                            "llm",
+                            "largelanguagemodel",
+                            "localllm",
+                            "generativeai",
+                            "ai",
+                            "artificialintelligence",
+                        )
+                    ):
+                        category = cat_key
+                        item.metadata["category"] = cat_key
+                        break
+                    if clean_cat in ("aitools", "aiworkflows", "aidev", "sdd", "specdrivendevelopment") and any(
+                        alias in t
+                        for t in normalized_tags
+                        for alias in (
+                            "sdd",
+                            "specdrivendevelopment",
+                            "aitools",
+                            "aiworkflow",
+                            "aiworkflows",
+                            "aidev",
+                            "aicoding",
+                            "promptengineering",
+                            "agentic",
+                            "vibecoding",
+                            "devtools",
+                            "developerproductivity",
+                        )
+                    ):
+                        category = cat_key
+                        item.metadata["category"] = cat_key
+                        break
+
+            if category and category in settings.category_thresholds:
+                effective_threshold = settings.category_thresholds[category]
+            else:
+                effective_threshold = settings.threshold
         if effective_threshold is None:
             # Fail open, but say so. A profile with no profile_settings entry
             # otherwise admits every item regardless of score — including 1/10 —
