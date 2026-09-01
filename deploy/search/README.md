@@ -53,7 +53,7 @@ Two failure modes worth knowing, both from the same reboot:
 ## Run
 
 ```bash
-cd deploy/search && docker compose up -d     # first start (~300 MB pull)
+cd deploy/search && docker compose up -d     # first start downloads service images
 docker compose ps                            # es healthy + search-api up
 ```
 
@@ -79,10 +79,10 @@ CHANGELOG, not before.
 
 - Elasticsearch: localhost-only port, security off is acceptable because
   nothing outside the Mac can reach it.
-- search-api: read-only by construction (one GET endpoint, no ES admin
-  passthrough), LAN-facing on a trusted home network.
-- Public: only what Caddy proxies (`/api/search*`), which is search-api's
-  single endpoint.
+- search-api: read-only by construction (two aliases for the same GET operation,
+  no ES admin passthrough), LAN-facing on a trusted home network.
+- Public: Caddy exposes only `/api/search*`; the operation is unauthenticated and the
+  current server has no rate limit or concurrency cap, so ingress hardening is still needed.
 
 ## Ingress: two headers and an error page
 
@@ -94,7 +94,8 @@ live site rather than in review:
   previous stylesheet after a deploy. Theme assets carry a content hash and
   stay `immutable`; everything else is `no-cache`, which with the existing
   ETag is a cheap 304 rather than a re-download. `/api/search*` is excluded so
-  the service keeps its own `max-age=300`.
+  the service keeps its own `max-age=300` (currently even on 4xx/502 responses;
+  restricting that to successful responses is an open hardening item).
 - **`handle_errors`.** A dead link returned an *empty body* — zero bytes, no
   way back. It now serves `/not-found/`, with the 404 status preserved.
   That page is `docs/not-found.md`, not `404.md`: Material ships its own

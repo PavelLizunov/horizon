@@ -9,8 +9,8 @@ This repository is a maintained fork of [Thysrael/Horizon](https://github.com/Th
   VPN protocols, and bypass techniques from Russian discussion threads (§6.2);
 - a **published site** — the digest is rendered by MkDocs Material and shipped to an ingress,
   and Telegram carries only headlines that deep-link into it (§8);
-- **narration** — every published article gets a Russian voice track, generated locally,
-  graded by a second model, and linked from the page with a custom player (§6.5);
+- **narration** — the deployment attempts a Russian voice track per published article,
+  grades it with a second model, and links only tracks that pass (§6.5);
 - an **Evidence Ledger & fact-checking engine** (`verification`) — extracted core factual claims
   are verified against independent web searches, cost-accounted, and corroborated on site pages (§6.7).
 
@@ -20,12 +20,20 @@ are the source of truth for architectural decisions and feature development (§1
 Everything below is written so an AI coding agent (or a human) can work here safely without
 any outside context.
 
+## Instruction precedence and local guides
+
+- Direct system, developer, and user instructions take precedence over repository guides.
+- The closest `AGENTS.md` to a changed file owns local rules; parent guides still apply where
+  the local guide is silent.
+- Every tracked content directory has a local guide. Keep those guides scoped to local ownership,
+  invariants, API coupling, and narrow verification instead of copying this file.
+
 ## 1. What This Project Does
 
 Horizon is an AI-driven news digest and intelligence pipeline:
 
 ```
-fetch (scrapers) → analyze/score (LLM) → dedup/filter → enrich (LLM + web search)
+fetch → URL dedup → classify/score → filter/topic dedup → enrich (LLM + web search)
     → fact-check / verify (Evidence Ledger) → digest markdown → delivery (file / webhook / email / MCP)
                                             → site pages → build/ship → narration → build/ship
                                                                               (deploy/run-daily.sh)
@@ -42,13 +50,16 @@ configured in `data/config.json` (see §4) — never hardcoded.
 
 ```
 src/
+  ai/                # provider clients, scoring, enrichment, summarization, narration text
   scrapers/          # one module per source; video.py (YouTube), fourpda.py (4PDA topics)
-  ai/                # LLM clients, analyzer (scoring), enricher, summarizer
-                     #   narration.py prepares text for speech — pure and tested
-  processing/        # profiles engine, dedup, tools (web search)
-  services/          # webhook delivery, verification.py (fact-checking), verification_evaluator.py
-  mcp/               # MCP server exposing pipeline stages as tools
-  models.py          # ALL pydantic config models live here (Config, SourcesConfig, ...)
+  extractors/        # optional full-article extraction
+  processing/        # profiles engine, content selection, tools (web search)
+  verification/      # Evidence Ledger claims, evidence, fetching, audit, incidents, persistence
+  services/          # webhook/email delivery, search indexing, video and webhook CLIs
+  mcp/               # MCP server exposing staged pipeline tools and read-only resources
+  setup/             # interactive wizard, presets, source recommendations
+  storage/           # config/state loading and generated site-page persistence
+  models.py          # authoritative Pydantic config and serialized pipeline models
   orchestrator.py    # wires every stage together — read docs/pipeline.md first
 profiles/            # per-profile prompt/config dirs (tech-news, video, censorship-watch, ...)
 specs/               # Spec-Driven Development (SDD) specifications, plans, and task breakdowns
@@ -89,8 +100,6 @@ Run:
 
 ```bash
 horizon --hours 24              # full pipeline for the last 24h
-horizon --source video          # single source (useful for debugging)
-horizon --source fourpda        # single source (4PDA topics)
 horizon-video --hours 24        # video sidecar only (writes data/video-inbox.json)
 ```
 
@@ -103,12 +112,12 @@ With Evidence Ledger verification enabled: adds ~40 000 – 55 000 tokens per ve
 | Command | Cost |
 |---------|------|
 | `pytest` | free, offline, no API keys |
-| `scripts/dev_check_*.py` | **free of LLM tokens** — tests scrapers/parsers against target sites without AI calls. |
-| `horizon-video` | LLM tokens **only** for videos with no transcript (vision fallback). Usually near-zero. |
-| `horizon`, `horizon --source ...` | full price, every time |
+| Parser-only checks listed in `scripts/AGENTS.md` | no LLM tokens; some still use live network |
+| `horizon-video` | may spend LLM tokens when vision fallback is needed |
+| `horizon`, model scoring/A-B scripts, section-C scripts | model/API work; require owner approval |
 
-Never run `horizon` to "check that it works" — run the tests, then a
-`dev_check_*` script. If you genuinely need a paid run, ask the owner first.
+Never run `horizon` to "check that it works". Start with offline tests and only run a script
+after checking its cost/network class in `scripts/AGENTS.md`.
 
 Cutting cost: the lever is **output volume**, not model choice — raise profile
 thresholds, lower `digest.max_items`, or reduce enrichment blocks.
@@ -122,7 +131,7 @@ pytest tests/test_fourpda.py -q # 4PDA module only
 ```
 
 There is no project-wide linter configuration; follow the style of neighboring files.
-GitHub Actions (`.github/workflows/tests.yml`) runs pytest on push/PR.
+GitHub Actions (`.github/workflows/tests.yml`) runs pytest on pushes to `main` and on pull requests.
 
 ## 4. Configuration Model
 
@@ -188,8 +197,8 @@ Read `src/scrapers/fourpda.py` before modifying forum ingestion.
 
 ## 6.5 Narration
 
-Every published article gets a Russian voice track. Read `docs/narration.md`
-before touching it.
+The deployment attempts a Russian voice track for each published article and links only
+tracks that pass grading. Read `docs/narration.md` before touching it.
 
 Shape: `src/ai/narration.py` prepares the text (pure, tested, offline).
 `scripts/dev_narrate_article.py` runs on the host in a **separate venv** (`~/tts/.venv`)
@@ -206,24 +215,25 @@ with TeraTTSv2 / `ru_f1` and Whisper grading.
 
 ## 6.7 Evidence Ledger & Fact-Checking Verification
 
-Read `docs/verification/` and `src/services/verification.py` before touching verification logic.
+Read `docs/verification/` and `src/verification/AGENTS.md` before touching verification logic.
 
-- Extracts 1–3 core verifiable factual claims from enriched articles.
-- Performs targeted search queries (DuckDuckGo / Google) and reads source pages.
-- Grades claim corroboration: `supported`, `partially_supported`, `disputed`, `unverified`.
-- Renders clean public markdown banners on site pages **only** when verified with valid sources.
+- Extracts 1–3 core verifiable factual claims from reader-visible enriched articles.
+- Performs bounded targeted searches, fetches public source documents, and grades evidence stance.
+- Persists versioned claim, evidence, report, public-view, and incident-ledger schemas.
+- Renders reader-facing claim coverage only from valid, source-linked verification results.
 
 ### Invariants for Verification
 1. **Public pages must not show internal error statuses.** Statuses like `verification_error`, `check_error`, `check_failed`, or `not_checked` must remain invisible to readers — no scary "Проверка прервана" banners on live articles.
-2. **Never leak raw dollar costs or token accounting to public site pages.** Token usage is tracked internally in run manifests and logs, not in article banners.
+2. **Article banners omit raw dollar costs and token accounting.** The public checks page currently publishes usage and estimates by explicit implementation/test/changelog contract, conflicting with older constitution/spec wording. Do not change either side silently; resolve it through an owner-approved API/policy decision.
 3. **Graceful fallback on search rate limits.** If search fails or times out, the article publishes normally with uncorroborated claims omitted.
 
 ## 7. AI Backend Notes
 
 - Any provider works; the deployment this fork is tuned for uses an
   OpenAI-compatible gateway (DashScope/Qwen/DeepSeek) with a single `api_key_env`.
-- Category thresholds can be overridden per category in `profile.json` or `config.json`
-  (e.g. `category_thresholds: {"llm": 4.5, "ai-tools": 4.5, "sdd": 4.5}`).
+- Runtime score thresholds and category overrides live only under
+  `processing.profile_settings.<profile>` in config; profile directories own prompts and content
+  shape, not filtering policy (for example `category_thresholds: {"llm": 4.5, "sdd": 4.5}`).
 - Vision calls reuse `ai.model` (base64 data-URI).
 
 ## 8. Deployment
@@ -233,8 +243,22 @@ and `deploy/RUNBOOK.md`.
 
 - Runtime deps: `node` (yt-dlp JS solver) and `ffmpeg`.
 - Narration venv: `~/tts/.venv`.
-- Audio storage: Cloudflare R2 bucket proxied via Caddy vhost.
-- Web ingress: `root@192.168.0.210:/srv/digest.ninitux.com`.
+- Site, search, SSH, and audio destinations are deployment-specific. Do not copy concrete
+  endpoints into new code or docs; changing existing operational defaults requires owner review.
+
+## Public APIs and compatibility
+
+Treat these as versioned compatibility surfaces, even when implemented as Python or JSON rather
+than HTTP: Pydantic config and `ContentItem` models, CLI entry points and flags, profile JSON and
+prompt contracts, MCP tool/resource names and envelopes, run artifact files and schema versions,
+search API responses, webhook placeholders/statuses, and published page/deep-link paths.
+
+Before changing one of them:
+
+1. Write or update the owning `specs/` documents with compatibility and migration behavior.
+2. Prefer additive changes; never silently rename fields, statuses, tools, resources, stages, or URLs.
+3. Add offline contract/regression tests and update the owning README plus local `AGENTS.md`.
+4. Do not implement an API redesign from an audit finding alone; agree the target contract first.
 
 ## 9. Measurement Discipline
 

@@ -5,10 +5,9 @@ title: Pipeline Map
 
 # Pipeline Map
 
-`src/orchestrator.py` is the largest file in the project (~950 lines) and wires
-every stage together. This page is the map: what runs in what order, which
-method owns it, and which config keys steer it. Read this before opening the
-file — it is a long file, not a complicated one.
+`src/orchestrator.py` is the largest file in the project and wires every stage
+together. This page is the map: what runs in what order, which method owns it,
+and which config keys steer it. Read this before changing pipeline behavior.
 
 > **Why it is not split into stage modules.** Upstream
 > ([Thysrael/Horizon](https://github.com/Thysrael/Horizon)) edits
@@ -20,23 +19,26 @@ file — it is a long file, not a complicated one.
 
 ## The Run
 
-`HorizonOrchestrator.run()` is the whole story, numbered 1–7 in the source.
+`HorizonOrchestrator.run()` owns the numbered 1–7 flow; verification is an
+optional shadow stage between enrichment and rendering.
 
-| # | Stage | Method | Config |
-|---|-------|--------|--------|
+| # | Stage | Method / owner | Config |
+|---|-------|----------------|--------|
 | 0 | Email subscription check | `EmailManager.check_subscriptions` | `email.imap_enabled` |
 | 1 | Time window | `_determine_time_window()` | `collection.time_window_hours`, `--hours` |
-| 2 | Fetch every enabled source, concurrently | `fetch_all_sources()` | `sources.*` |
-| 3 | Merge same-URL items across sources | `merge_cross_source_duplicates()` | — |
-| 4 | Score with the LLM (1st pass) | `analyze_items()` | `ai.*`, profile `analysis.md` |
-| 5 | Filter, dedup by topic, balance | `select_digest_items()` | `processing.profile_settings`, `digest.*` |
-| 6 | Enrich with web search (2nd pass) | `enrich_items()` | profile `enrichment.md` |
-| 7 | Render + deliver per language | `_generate_summary()`, `DailySummarizer` | `ai.languages`, `digest.profile_order` |
+| 2 | Fetch every enabled source concurrently | `fetch_all_sources()` | `sources.*` |
+| 3 | Merge items with the same normalized URL and requested profile | `merge_cross_source_duplicates()` | — |
+| 4 | Classify and score with the LLM | `analyze_items()` | `ai.*`, profile `match.md` / `analysis.md` |
+| 5 | Threshold, topic-deduplicate, expand selected discussion, and balance | `select_digest_items()` | `processing.profile_settings`, `digest.*` |
+| 6 | Enrich with allowed tools and a second LLM pass | `enrich_items()` | profile `enrichment.md` |
+| V | Capture selected lineage, extract/verify claims, update incidents | `src/verification/`, `ShadowLedger` | `verification.*` |
+| 7 | Render pages/summaries, index search, and deliver email/webhooks per language | `DailySummarizer`, `SearchIndexer` | `ai.languages`, `digest.*`, `search.*`, delivery config |
 
-Stage 5 expands into `filter_items()` → `merge_topic_duplicates()` →
-`apply_balanced_digest()` → `passes_profile_filter()`. Stage 2 fans out through
-`_fetch_with_progress()`, which catches per-source exceptions so one dead source
-cannot end the run.
+Stage 5 first applies `passes_profile_filter()`, then optional
+`merge_topic_duplicates()` and `apply_balanced_digest()`. Twitter discussion
+expansion can trigger targeted re-analysis, so eligibility and balancing are
+applied again afterward. Stage 2 fans out through `_fetch_with_progress()`, which
+records per-source failures so one dead source cannot end the run.
 
 ## Reporting Types
 
@@ -46,9 +48,11 @@ Defined at the top of `orchestrator.py`, before the class:
 - `FetchReport` — all outcomes; `.status`, `.all_failed`, `.failure_message()`.
   `run()` aborts only when **every** source failed.
 - `FilteringPipelineResult`, `BalancedDigestResult` — stage-5 diagnostics.
-- `_deduplication_url_key()` — URL normalisation shared by the dedup stages.
+- `_deduplication_url_key()` — URL identity normalization used by stage 3.
 
-These are also what the MCP server surfaces, so treat their shapes as public.
+These dataclasses are internal pipeline diagnostics. The MCP service selects and
+serializes parts of them into its own documented response envelopes; treat the MCP
+envelopes and artifact files—not the Python dataclasses themselves—as the public contract.
 
 ## Adding a Source
 
@@ -63,18 +67,17 @@ Five files, in this order (`AGENTS.md` §4 has the same list):
 The registry parity test (`tests/test_mcp_adapter.py`) fails if you skip step 1,
 and its fixture needs the new source too.
 
-## What This Fork Changed
+## Major Fork Extensions
 
-Everything above is upstream. This fork adds:
+| Area | Primary owners |
+|------|----------------|
+| YouTube video source and sidecar | `src/scrapers/video.py`, `src/services/video_cli.py`, `profiles/video/` |
+| 4PDA, GDELT, Google News, OSS Insight, and OpenBB sources | `src/scrapers/`, `src/models.py` |
+| Profile routing, topic deduplication, and balanced selection | `src/processing/`, `src/orchestrator.py` |
+| Evidence Ledger verification and incident history | `src/verification/`, verification sections in `src/orchestrator.py` |
+| Static article pages, archive search, narration, and host publishing | `src/ai/summarizer.py`, `src/services/search.py`, `scripts/`, `deploy/` |
+| Staged MCP tools/resources and run artifacts | `src/mcp/` |
 
-| Area | Files |
-|------|-------|
-| YouTube video source | `src/scrapers/video.py`, `src/services/video_cli.py`, `profiles/video/`, `tests/test_video.py` |
-| Config for it | `VideoConfig` / `VideoChannelConfig` in `src/models.py` |
-| Wiring | ~6 lines in `fetch_all_sources()` |
-| Deployment | `deploy/` |
-
-`src/orchestrator.py` is otherwise untouched, which is what keeps upstream
-merges cheap. Keep it that way: put video logic in `video.py`, not here.
-
-See `docs/video-source.md` for the video module itself.
+Keep source-specific extraction inside its scraper and preserve the orchestrator as
+integration wiring. See [Video Source](video-source.md) and
+[Verification](verification/) for the two largest specialized flows.

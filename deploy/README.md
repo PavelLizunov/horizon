@@ -1,15 +1,16 @@
 # Deployment
 
-Horizon is a periodic batch job: run it on a schedule, read the digest it writes to
-`data/summaries/` (and/or receive it via webhook/email). No daemon, no ports.
+The Horizon pipeline is a periodic batch job: run it on a schedule, read the digest it
+writes to `data/summaries/` (and/or receive it via webhook/email). The core job has no
+daemon or listening port; the optional archive-search stack under `deploy/search/` is separate.
 
 ## Choosing a Host
 
 | Host | Notes |
 |------|-------|
 | **macOS (Apple Silicon)** | Best fit: local ASR via mlx-whisper works. launchd template below. |
-| **Linux box / VM** | Fine for everything except local ASR — set `video.asr: "off"` and rely on subtitles + vision fallback. Use cron/systemd timer. |
-| **GitHub Actions cron** | Works for the pipeline itself (see upstream `daily-summary.yml`), but YouTube cookie handling and local ASR are impractical there. |
+| **Linux box / VM** | Fine for everything except local ASR — set `sources.video.asr: "off"` and rely on subtitles + vision fallback. Use cron/systemd timer. |
+| **GitHub Actions cron** | Can run the pipeline (the tracked `daily-summary.yml.disabled` is only a disabled template), but YouTube cookie handling and local ASR are impractical there. |
 
 YouTube access note: if the host egresses through a datacenter/VPN IP, expect
 bot-gate pressure — you will need the `cookies_file` setup described in
@@ -41,8 +42,9 @@ bot-gate pressure — you will need the `cookies_file` setup described in
    | `node` | yt-dlp's JS challenge solver | audio formats stay hidden → ASR never gets input |
    | `ffmpeg` | mlx-whisper audio decoding (`asr: "local"` only) | every ASR attempt fails |
 
-   `horizon --source video` logs a `Video preflight:` warning for each of these
-   at the start of a run, so check the log before hunting deeper.
+   An inline full run or `horizon-video --hours 24` logs `Video preflight:` warnings
+   for these dependencies. There is no `horizon --source` flag; remember that either
+   real collection path may use network/model resources, so prefer offline video tests first.
 
 3. Create `data/config.json` and `.env` from the examples. If you use YouTube
    cookies, place the exports under `data/` and `chmod 600` them.
@@ -122,7 +124,9 @@ pipeline run, because publishing is the only other thing that regenerates it.
 
 `tar` over ssh rather than `rsync`: a minimal ingress container often has no
 rsync, and installing packages on the edge proxy to copy static files is a poor
-trade. The site is fully regenerated each time, so replace-all is correct.
+trade. The current replace-all command is **not atomic**: it deletes the live tree
+before extraction, and a broken stream can leave the site partial or empty. Treat
+release-directory upload plus a final rename/symlink swap as an open hardening task.
 
 Caddy on the target only needs a file server:
 
@@ -165,7 +169,7 @@ minutes (including a cold model download).
 0 17 * * * cd $HOME/horizon && .venv/bin/horizon --hours 24 >> logs/horizon.log 2>&1
 ```
 
-With `video.asr` set to `"off"` unless you wire up a different ASR backend.
+Set `sources.video.asr` to `"off"` unless you wire up a different ASR backend.
 
 ## Operations
 
@@ -191,7 +195,7 @@ grep 'Video run'          ~/horizon/logs/horizon.log   # per-run extraction brea
 
 A healthy run logs `Video run: 9 videos: 7 subtitles, 1 ASR, 0 vision, 0
 description-only, 1 skipped, 0 failed`. When the share of videos yielding text
-falls below `video.min_transcript_rate` (default 0.5, needs ≥3 graded videos),
+falls below `sources.video.min_transcript_rate` (default 0.5, needs ≥3 graded videos),
 the line is promoted to a WARNING containing `Video run degraded` — that is the
 alert to act on. Set up whatever notifier you like on that string; the
 [weekly check](#weekly-check) below is the manual version.

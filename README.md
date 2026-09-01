@@ -1,42 +1,51 @@
 # Horizon
 
 Your own AI news radar. It collects from Hacker News, RSS, Reddit, Telegram,
-Twitter/X, GitHub, OpenBB and YouTube, scores and deduplicates what it finds,
-researches the background, and delivers a daily briefing.
+Twitter/X, GitHub, OpenBB, OSS Insight, GDELT, Google News, YouTube, and 4PDA;
+scores and deduplicates what it finds; researches the background; verifies
+reader-visible claims; and delivers a daily briefing.
 
 A maintained fork of [Thysrael/Horizon](https://github.com/Thysrael/Horizon) (MIT).
-Three things are this fork's own:
+Its five major additions are:
 
 - **YouTube as a source.** Channel videos become timestamped transcripts —
   subtitles first, on-device Whisper if there are none, a vision model reading
   storyboard frames if there is no audio worth transcribing. Nothing is scored
   from a title. See [docs/video-source.md](docs/video-source.md).
+- **4PDA as a source.** Selected forum topics become quote-stripped, time-normalized
+  field reports with deep links to their original posts.
 - **A published site.** The digest is rendered by MkDocs Material and shipped to
   an ingress; chat delivery carries headlines that deep-link into it, because a
   full digest does not fit in a message and is rejected rather than truncated.
-- **Narration.** Every published article gets a Russian voice track, generated
-  locally, graded by a second model that transcribes it back, and linked from
-  the page with a player. See [docs/narration.md](docs/narration.md).
+- **Narration.** The deployment attempts a Russian voice track for each published
+  article, generates it locally, and has a second model transcribe it back; only
+  tracks that pass grading are linked from the page player. See [docs/narration.md](docs/narration.md).
+- **Evidence Ledger verification.** Core factual claims are captured with replayable
+  lineage, checked against source documents, and published through a bounded
+  reader-facing schema. See [docs/verification/](docs/verification/).
 
 ## How it works
 
 ```
 config ─┐
-        ├─ fetch ─ deduplicate ─ score & filter ─ enrich ─ summarize ─┬─ site ─ narration
-sources ┘                                                            ├─ email
-                                                                     ├─ webhooks
-                                                                     └─ MCP
+        ├─ fetch ─ URL dedup ─ classify / score / filter ─ topic dedup ─ enrich ─ verify ─ summarize ─┬─ site ─ narration
+sources ┘                                                                                             ├─ email
+                                                                                                      ├─ webhooks
+                                                                                                      └─ MCP
 ```
 
 1. **Define** — sources, processing profiles, models, languages, delivery.
 2. **Fetch** — every configured source, concurrently.
-3. **Deduplicate** — the same story told on three platforms becomes one item.
-4. **Analyze and filter** — each item is scored by its profile's prompt against
-   your threshold.
-5. **Enrich** — the profile's content blocks, each using only the tools it is
-   allowed.
-6. **Summarize** — titles, leads, sections and cited sources, in your language.
-7. **Deliver** — site, email, webhooks, MCP, or plain files.
+3. **URL deduplicate** — items with the same normalized URL and requested profile merge.
+4. **Classify, analyze, and filter** — each item is routed, scored by its profile's
+   prompt, and compared with the configured threshold.
+5. **Topic deduplicate** — optional per-profile model grouping merges semantically
+   duplicate stories after scoring.
+6. **Enrich** — the profile's content blocks, each using only the tools it is allowed.
+7. **Verify** — capture selected-input lineage, extract core claims, fetch public
+   evidence, and build an auditable reader-facing view.
+8. **Summarize** — titles, leads, sections and cited sources, in your language.
+9. **Deliver** — site, email, webhooks, MCP, or plain files.
 
 ## Quick start
 
@@ -57,12 +66,13 @@ uv sync --extra openbb
 uv pip install --only-binary=:all: openbb openbb-benzinga
 ```
 
-Docker works too. Extras go in at build time, comma-separated
-(`EXTRAS=trafilatura,openbb`); the `twitter` extra additionally needs a
-Playwright browser and system packages the Dockerfile does not install.
+Docker works too. Optional extras go in at build time, comma-separated
+(for example `EXTRAS=openbb,narration`); `trafilatura` and `yt-dlp` are already
+standard dependencies. The `twitter` extra additionally needs a Playwright browser
+and system packages the Dockerfile does not install.
 
 ```bash
-docker compose build --build-arg EXTRAS=trafilatura horizon
+docker compose build --build-arg EXTRAS=openbb horizon
 ```
 
 ### Configure
@@ -131,7 +141,7 @@ uv run horizon --hours 24        # or: docker compose run --rm horizon --hours 2
 
 | Option | Default | What it does |
 |--------|---------|--------------|
-| `--hours N` | 24 | how far back to fetch |
+| `--hours N` | `collection.time_window_hours` (example: 24) | override how far back to fetch |
 | `-d`, `--data-dir PATH` | `data` | state directory: summaries, subscribers, config |
 | `-c`, `--config PATH` | `<data-dir>/config.json` | config file alone |
 | `-l`, `--log-level LEVEL` | `WARNING` | DEBUG / INFO / WARNING / ERROR / CRITICAL |
@@ -152,7 +162,11 @@ pages, then narrates them and republishes the pages with audio players.
 | Twitter / X | tweets from named users | yes |
 | GitHub | user events, repo releases | — |
 | OpenBB | company news by watchlist | — |
+| OSS Insight | trending repositories | — |
+| GDELT | queried global news events | — |
+| Google News | query-driven news RSS | — |
 | YouTube | new channel videos, as transcripts | — |
+| 4PDA | selected topic posts and field reports | — |
 
 ## Delivery
 
@@ -160,20 +174,30 @@ pages, then narrates them and republishes the pages with audio players.
 |---------|--------------|
 | Site | renders the digest with MkDocs Material and ships it to an ingress |
 | Email | SMTP/IMAP newsletter, handling subscribe and unsubscribe itself |
-| Webhooks | templated results to Feishu, DingTalk, Slack, Discord, or your own endpoint |
-| MCP | exposes each pipeline stage as a tool for AI assistants |
+| Webhooks | templated results to Feishu/Lark, DingTalk, Slack, Discord, or your own endpoint |
+| MCP | exposes fetch, score, filter, enrich, summarize, artifacts, metrics, and webhook delivery as tools/resources |
+| Search API | serves `GET /search` and `GET /api/search` archive results with five-minute public cache headers |
+
+## Interfaces and compatibility
+
+The public contract includes CLI commands and flags, Pydantic config and item models,
+profile JSON/prompts, MCP tool/resource envelopes and staged artifacts, verification schema
+versions, webhook templates/statuses, search responses, and published page URLs. Changes to
+those surfaces require a compatibility/migration plan, offline contract tests, and matching
+README/spec updates; see [AGENTS.md](AGENTS.md).
 
 ## Documentation
 
 | Guide | What is in it |
 |-------|---------------|
 | [Configuration](docs/configuration.md) | providers, sources, profiles, filtering, email, webhooks, MCP |
-| [Pipeline](docs/pipeline.md) | the seven stages mapped to the code that runs them |
+| [Pipeline](docs/pipeline.md) | the stages and delivery flow mapped to their code |
 | [Processing profiles](docs/profiles.md) | routing, prompts, enrichment blocks, tools |
 | [Scoring](docs/scoring.md) | how items are ranked |
 | [Scrapers](docs/scrapers.md) | per-source detail and how to add one |
 | [Video source](docs/video-source.md) | transcripts, ASR, vision fallback, anti-bot notes |
 | [Narration](docs/narration.md) | the speech pipeline, its checks, and the models tried and rejected |
+| [Evidence Ledger](docs/verification/) | verification model, public schema, evidence and audit behavior |
 | [Extractors](docs/extractors.md) | full-article extraction for RSS |
 | [Deployment](deploy/README.md) | scheduled runs, building and shipping the site |
 | [Agent guide](AGENTS.md) | working norms, invariants and secrets policy |
@@ -181,10 +205,11 @@ pages, then narrates them and republishes the pages with audio players.
 
 ## Status
 
-Runs in production daily: multi-source collection, profile-driven analysis and
-enrichment, deduplication, comment summaries, localized generation, narration,
-site publication, and webhook and email delivery. Tests are offline and run on
-every push.
+The maintained feature set covers multi-source collection, profile-driven analysis and
+enrichment, deduplication, comment summaries, Evidence Ledger verification,
+localized generation, narration, site publication, search indexing, webhooks,
+and email delivery. The deployment scripts support scheduled daily runs. Tests are
+offline and CI runs them on pushes to `main` and on pull requests.
 
 ## Contributing
 

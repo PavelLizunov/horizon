@@ -79,6 +79,7 @@ todo.txt
 docs/digest/*
 !docs/digest/
 !docs/digest/index.md
+!docs/digest/AGENTS.md
 
 # mkdocs build output
 site/

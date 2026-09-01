@@ -5,9 +5,10 @@ title: Narration (TeraTTSv2)
 
 # Narration (TeraTTSv2)
 
-Every published article gets a Russian voice track: the text is normalised, spoken
-locally on the Mac, checked by a *different* model, encoded to Opus, uploaded to
-object storage, and linked from the page.
+The deployment attempts a Russian voice track for each published article: text is
+normalised, spoken locally on the Mac, checked by a *different* model, and encoded
+to Opus. Only tracks that pass are uploaded and linked from the page; narration
+failure leaves the published text article intact.
 
 - **Text preparation**: `src/ai/narration.py` — pure, no models, no network
 - **Driver**: `scripts/dev_narrate_article.py` — runs on the Mac, in its own venv

@@ -500,7 +500,7 @@ Telegram scraping uses the public web preview at `https://t.me/s/<channel>`, so 
 
 ### Twitter
 
-Requires an [Apify](https://apify.com) account. Set `APIFY_TOKEN` in your `.env` file. The free tier includes $5/month of credit, enough for roughly 20,000 tweets.
+The default `apify` mode requires an [Apify](https://apify.com) account. Set `APIFY_TOKEN` in your `.env` file and consult the actor's current pricing before use; collection consumes platform credits. The alternative `playwright` mode uses local browser cookies and the optional `twitter` dependency.
 
 ```json
 {
@@ -603,6 +603,69 @@ Pulls top star-gain repositories from the [OSS Insight](https://ossinsight.io) p
 - `category` — optional tag for balanced digest grouping (e.g., `"oss-trending"`)
 
 No API key is required.
+
+### YouTube Video
+
+YouTube discovery uses channel RSS, then extracts content through subtitles, optional
+local ASR, and an optional vision fallback. `channel` accepts a `UC…` channel ID,
+`@handle`, or channel URL. See [Video Source](video-source.md) before enabling it:
+real collection uses network access, and vision fallback can consume model tokens.
+
+```json
+{
+  "sources": {
+    "video": {
+      "enabled": false,
+      "mode": "inline",
+      "channels": [
+        {
+          "name": "Example channel",
+          "channel": "@example",
+          "max_videos": 3,
+          "profile": "video"
+        }
+      ],
+      "subtitle_langs": ["en.*", "ru.*"],
+      "asr": "off",
+      "vision_fallback": true,
+      "min_duration_sec": 120
+    }
+  }
+}
+```
+
+Use `mode: "sidecar"` with `horizon-video` when video extraction must not delay the
+main digest. `asr: "local"` selects `mlx-whisper` on Apple Silicon; `"off"` skips
+that rung. Cookie exports are secret runtime files and must never be committed.
+
+### 4PDA Topics
+
+The 4PDA source monitors explicit forum topic IDs and emits individual, quote-stripped
+posts with deep links. Dates are interpreted in Moscow time before conversion to UTC.
+
+```json
+{
+  "sources": {
+    "fourpda": {
+      "enabled": false,
+      "topics": [
+        {
+          "topic_id": 1110469,
+          "name": "Суверенный Интернет — обсуждение",
+          "fetch_limit": 30,
+          "category": "ru-field-report",
+          "profile": "censorship-watch"
+        }
+      ]
+    }
+  }
+}
+```
+
+Known limitation: the current scraper copies the configured topic `profile` only into
+metadata instead of `ContentItem.profile`, so the source override is not honored by
+classification. Keep the field for forward compatibility, but do not rely on it until
+the known routing bug is fixed.
 
 ## Filtering
 
@@ -986,9 +1049,9 @@ uv run horizon-webhook --dry-run
 
 ## Static Site
 
-Horizon writes generated summaries to `data/summaries/` (or `<data-dir>/summaries/` when `--data-dir` is set) and copies publishable Markdown into `docs/` for the GitHub Pages site. The repository includes a ready-to-use workflow at `.github/workflows/daily-summary.yml`.
+Horizon writes generated summaries to `data/summaries/` (or `<data-dir>/summaries/` when `--data-dir` is set) and copies publishable Markdown into `docs/`. The current site is built by MkDocs; `.github/workflows/deploy-docs.yml` provides a manual preview deployment.
 
-To use GitHub Pages, enable Pages for the repository and run the scheduled workflow or trigger it manually. The generated site is built from the `docs/` directory.
+The tracked `.github/workflows/daily-summary.yml.disabled` file is a disabled legacy reference, not an active ready-to-use schedule. Review and update its publishing path before deliberately enabling any scheduled GitHub Pages run.
 
 ## MCP Server
 

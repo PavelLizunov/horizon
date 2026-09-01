@@ -20,6 +20,7 @@ The MCP layer does not reimplement Horizon business logic. It reuses the existin
 | `hz_get_run_stage` | Read items from a run stage |
 | `hz_get_run_summary` | Read a generated summary |
 | `hz_get_metrics` | Read in-memory server metrics |
+| `hz_send_webhook` | Send a saved summary and return structured delivery status |
 
 ## Resources
 

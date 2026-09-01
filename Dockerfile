@@ -14,7 +14,7 @@ COPY data ./data
 COPY profiles ./profiles
 COPY .env.example .env.example
 
-# Install optional extras from a comma-separated list, e.g. "trafilatura,openbb".
+# Install optional extras from a comma-separated list, e.g. "openbb,narration".
 ARG EXTRAS=""
 RUN set -eu; \
     set --; \

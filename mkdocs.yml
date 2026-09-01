@@ -76,6 +76,8 @@ exclude_docs: |
   _config.yml
   _includes/
   _posts/
+  AGENTS.md
+  **/AGENTS.md
   feed-*.xml
   assets/js/horizon.js
   assets/css/horizon.css
