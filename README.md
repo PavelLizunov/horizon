@@ -176,7 +176,7 @@ pages, then narrates them and republishes the pages with audio players.
 | Email | SMTP/IMAP newsletter, handling subscribe and unsubscribe itself |
 | Webhooks | templated results to Feishu/Lark, DingTalk, Slack, Discord, or your own endpoint |
 | MCP | exposes fetch, score, filter, enrich, summarize, artifacts, metrics, and webhook delivery as tools/resources |
-| Search API | serves `GET /search` and `GET /api/search` archive results with five-minute public cache headers |
+| Search API | serves `GET /search` and `GET /api/search`; successful archive results cache publicly for five minutes, while errors use `no-store` |
 
 ## Interfaces and compatibility
 

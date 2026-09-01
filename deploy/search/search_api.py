@@ -10,9 +10,11 @@ Stdlib only; runs in a python:slim container next to Elasticsearch.
 """
 
 import json
+import logging
+import math
 import os
 import re
-import urllib.error
+import threading
 import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlsplit
@@ -21,6 +23,15 @@ ES_URL = os.environ.get("ES_URL", "http://es:9200")
 ES_INDEX = os.environ.get("ES_INDEX", "horizon-articles")
 PORT = int(os.environ.get("PORT", "8788"))
 MAX_Q = 200
+MAX_CONCURRENCY = int(os.environ.get("SEARCH_MAX_CONCURRENCY", "8"))
+REQUEST_TIMEOUT = float(os.environ.get("SEARCH_REQUEST_TIMEOUT", "15"))
+
+if MAX_CONCURRENCY < 1:
+    raise ValueError("SEARCH_MAX_CONCURRENCY must be a positive integer")
+if not math.isfinite(REQUEST_TIMEOUT) or REQUEST_TIMEOUT <= 0:
+    raise ValueError("SEARCH_REQUEST_TIMEOUT must be a positive number")
+
+logger = logging.getLogger(__name__)
 
 # U+0001/U+0002 cannot occur in digest text and pass through HTML escaping
 # unchanged, which is what makes them usable as highlight markers.
@@ -63,7 +74,7 @@ def es_search(query: str) -> dict:
         headers={"Content-Type": "application/json"},
         method="POST",
     )
-    with urllib.request.urlopen(request, timeout=10) as response:
+    with urllib.request.urlopen(request, timeout=REQUEST_TIMEOUT) as response:
         return json.loads(response.read().decode("utf-8"))
 
 
@@ -136,16 +147,38 @@ class Handler(BaseHTTPRequestHandler):
             self._json({"total": 0, "hits": []})
             return
         try:
-            self._json(shape(es_search(q)))
-        except (urllib.error.URLError, OSError, ValueError) as error:
-            self._json({"total": 0, "hits": [], "error": str(error)}, status=502)
+            payload = shape(es_search(q))
+        except Exception:
+            logger.exception("Search backend request failed")
+            self._json(
+                {
+                    "total": 0,
+                    "hits": [],
+                    "error": "Search backend unavailable",
+                    "error_code": "backend_unavailable",
+                },
+                status=502,
+            )
+            return
+        self._json(payload)
+
+    def send_response_only(self, code, message=None):
+        self._response_status = code
+        super().send_response_only(code, message)
+
+    def end_headers(self):
+        status = getattr(self, "_response_status", 500)
+        cache_control = (
+            "public, max-age=300" if 200 <= status < 300 else "no-store"
+        )
+        self.send_header("Cache-Control", cache_control)
+        super().end_headers()
 
     def _json(self, payload: dict, status: int = 200) -> None:
         body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
         self.send_response(status)
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Content-Length", str(len(body)))
-        self.send_header("Cache-Control", "public, max-age=300")
         self.end_headers()
         self.wfile.write(body)
 
@@ -153,5 +186,45 @@ class Handler(BaseHTTPRequestHandler):
         pass
 
 
+class SearchHTTPServer(ThreadingHTTPServer):
+    """Threaded HTTP server with bounded workers and client socket timeouts."""
+
+    def __init__(
+        self,
+        server_address,
+        handler_class=Handler,
+        *,
+        max_concurrency: int = MAX_CONCURRENCY,
+        request_timeout: float = REQUEST_TIMEOUT,
+    ):
+        if max_concurrency < 1:
+            raise ValueError("max_concurrency must be positive")
+        if not math.isfinite(request_timeout) or request_timeout <= 0:
+            raise ValueError("request_timeout must be positive")
+        self.request_timeout = request_timeout
+        self._request_slots = threading.BoundedSemaphore(max_concurrency)
+        super().__init__(server_address, handler_class)
+
+    def get_request(self):
+        request, client_address = super().get_request()
+        request.settimeout(self.request_timeout)
+        return request, client_address
+
+    def process_request(self, request, client_address):
+        self._request_slots.acquire()
+        try:
+            super().process_request(request, client_address)
+        except BaseException:
+            self._request_slots.release()
+            raise
+
+    def process_request_thread(self, request, client_address):
+        try:
+            super().process_request_thread(request, client_address)
+        finally:
+            self._request_slots.release()
+
+
 if __name__ == "__main__":
-    ThreadingHTTPServer(("0.0.0.0", PORT), Handler).serve_forever()
+    with SearchHTTPServer(("0.0.0.0", PORT)) as server:
+        server.serve_forever()

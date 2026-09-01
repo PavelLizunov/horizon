@@ -35,9 +35,10 @@ services:
       - ./search_api.py:/app/search_api.py:ro
     environment:
       - ES_URL=http://es:9200
-    # LAN-facing on purpose: the Caddy ingress on 192.168.0.210 proxies
-    # /api/search here. The endpoint is read-only and returns digest content
-    # only, so LAN exposure is harmless on a home network.
+      - SEARCH_MAX_CONCURRENCY=${SEARCH_MAX_CONCURRENCY:-8}
+      - SEARCH_REQUEST_TIMEOUT=${SEARCH_REQUEST_TIMEOUT:-15}
+    # LAN-facing on purpose so the trusted Caddy ingress can proxy /api/search.
+    # The API is read-only, bounded, and still intended to stay behind ingress.
     ports:
       - "8788:8788"
     depends_on:

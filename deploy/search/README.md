@@ -61,6 +61,29 @@ Heap is pinned to 512 MB (`ES_JAVA_OPTS`); the archive is a few hundred small
 documents. Measured footprint: report after the first real deployment in the
 CHANGELOG, not before.
 
+The proxy also bounds its own resources:
+
+| Variable | Default | Effect |
+|---|---:|---|
+| `SEARCH_MAX_CONCURRENCY` | `8` | Maximum active request-handler threads; saturation back-pressures new connections through the finite listen backlog. |
+| `SEARCH_REQUEST_TIMEOUT` | `15` | Client socket inactivity timeout and Elasticsearch request timeout, in seconds. |
+
+Values must be positive; invalid values fail startup rather than silently disabling
+the guard.
+
+## HTTP contract
+
+- `GET /search?q=…` and `GET /api/search?q=…` are aliases. Query whitespace is
+  normalized, input is capped at 200 characters, and fewer than two characters
+  returns an empty HTTP 200 response without querying Elasticsearch.
+- Successful responses retain `{"total": <int>, "hits": [...]}` and
+  `Cache-Control: public, max-age=300`.
+- Backend failures return HTTP 502 with
+  `{"total": 0, "hits": [], "error": "Search backend unavailable", "error_code": "backend_unavailable"}`
+  and `Cache-Control: no-store`. Internal exception text stays in server logs.
+- Unknown GET paths remain 404; unsupported methods remain 501. All non-2xx
+  responses carry `Cache-Control: no-store`.
+
 ## Indexing
 
 - Live runs index themselves: `search.enabled: true` in `data/config.json`
@@ -81,8 +104,9 @@ CHANGELOG, not before.
   nothing outside the Mac can reach it.
 - search-api: read-only by construction (two aliases for the same GET operation,
   no ES admin passthrough), LAN-facing on a trusted home network.
-- Public: Caddy exposes only `/api/search*`; the operation is unauthenticated and the
-  current server has no rate limit or concurrency cap, so ingress hardening is still needed.
+- Public: Caddy exposes only `/api/search*`; the operation is unauthenticated, but
+  handler concurrency and request duration are bounded in the proxy. Ingress rate
+  limiting remains useful defense in depth.
 
 ## Ingress: two headers and an error page
 
@@ -94,8 +118,8 @@ live site rather than in review:
   previous stylesheet after a deploy. Theme assets carry a content hash and
   stay `immutable`; everything else is `no-cache`, which with the existing
   ETag is a cheap 304 rather than a re-download. `/api/search*` is excluded so
-  the service keeps its own `max-age=300` (currently even on 4xx/502 responses;
-  restricting that to successful responses is an open hardening item).
+  successful results keep the service's `max-age=300`; 4xx/5xx responses use
+  `no-store`.
 - **`handle_errors`.** A dead link returned an *empty body* — zero bytes, no
   way back. It now serves `/not-found/`, with the 404 status preserved.
   That page is `docs/not-found.md`, not `404.md`: Material ships its own

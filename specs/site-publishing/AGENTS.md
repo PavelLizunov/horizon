@@ -4,8 +4,8 @@ This directory governs the static site portal, article page rendering, dynamic s
 
 ## 1. Document Trio Authority & Status
 
-- **`spec.md`**: Defines site page structure (`/`, `/digest/`, `/collection/`, `/checks/`), search/feed capabilities, and public presentation standards. Its Lunr/Atom/RSS promise is stale: generated digest pages are excluded from the MkDocs index, archive search uses the separate Elasticsearch API, and legacy feed files are excluded. Reconcile that public contract explicitly before changing search or feed behavior.
-- **`plan.md`**: Architecture for `DailySummarizer` article generation, `StorageManager` index updates, `mkdocs build`, and `deploy/run-daily.sh` ingress shipping.
+- **`spec.md`**: Defines site page structure (`/`, `/digest/`, `/collection/`, `/checks/`), archive-search behavior, feed capabilities, and public presentation standards. Generated digest pages are excluded from MkDocs/Lunr indexing, archive search uses the bounded Elasticsearch proxy, and legacy feed artifacts are not published.
+- **`plan.md`**: Architecture for `DailySummarizer` article generation, `StorageManager` index updates, bounded archive search, `mkdocs build`, and `deploy/run-daily.sh` ingress shipping.
 - **`tasks.md`**: Implementation checklist. Changes must stay in sync with `src/ai/summarizer.py`, `scripts/dev_collection_status.py`, and `deploy/run-daily.sh`.
 - **Hierarchy & Traceability**: `spec.md` > `plan.md` > `tasks.md`. Requirements for public page sections must trace from `spec.md` to `summarizer.py` rendering logic and offline tests.
 
