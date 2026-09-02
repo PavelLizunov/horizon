@@ -4,6 +4,13 @@ The Horizon pipeline is a periodic batch job: run it on a schedule, read the dig
 writes to `data/summaries/` (and/or receive it via webhook/email). The core job has no
 daemon or listening port; the optional archive-search stack under `deploy/search/` is separate.
 
+The current operator deployment keeps the scheduled pipeline on macOS and runs
+archive search in a dedicated Debian/Linux guest under
+`horizon-elasticsearch.service` and `horizon-search-api.service`. The pipeline
+reaches the guest's loopback-only Elasticsearch through a persistent local SSH
+forward. Docker Compose under `deploy/search/` remains a supported reference/local
+alternative, not the current production topology.
+
 ## Choosing a Host
 
 | Host | Notes |
@@ -128,7 +135,7 @@ trade. The current replace-all command is **not atomic**: it deletes the live tr
 before extraction, and a broken stream can leave the site partial or empty. Treat
 release-directory upload plus a final rename/symlink swap as an open hardening task.
 
-Caddy on the target only needs a file server:
+Without optional archive search, Caddy on the target only needs a file server:
 
 ```
 digest.example.com {
@@ -139,7 +146,12 @@ digest.example.com {
 }
 ```
 
-`encode` matters: the built pages are ~83 KB raw and ~23 KB gzipped.
+`encode` matters: the built pages are ~83 KB raw and ~23 KB gzipped. When
+archive search is enabled, place the `/api/search*` handler from
+`search/README.md` before this static catch-all and exclude it from static cache
+rules. Production ingress also serves the built `/not-found/` page for errors
+while preserving the original HTTP status; validate the complete Caddy config
+before every reload.
 
 ### Public design preview
 
@@ -177,8 +189,11 @@ Set `sources.video.asr` to `"off"` unless you wire up a different ASR backend.
 - **Output**: `data/summaries/YYYY-MM-DD-*.md` (gitignored state).
 - **Cookies expiry**: when subtitle fetches start failing, re-export
   `data/youtube-cookies*.txt` (see `docs/video-source.md`).
-- **Updates**: `git pull && uv sync` — no service restart needed; the next
-  scheduled run picks up changes. Re-run with `--extra asr` if you use local ASR.
+- **Pipeline updates**: inspect the checkout for generated/local changes before
+  `git pull && uv sync`; never reset them blindly. No pipeline service restart is
+  needed—the next scheduled run picks up code. Re-run with `--extra asr` if you
+  use local ASR. Production Search API updates are separate artifact deployments
+  described in `search/README.md`.
 - **Secrets on the host**: `.env` and cookie files should be readable only by the
   service account (`chmod 600`). Never commit them.
 

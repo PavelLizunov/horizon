@@ -44,9 +44,9 @@ Verification activities are strictly resource-capped via `VerificationConfig` (`
 
 ## 5. Public Error & Usage Presentation
 
-1. **Error Hiding**: Readers must never see internal failure states (`verification_error`, `check_error`, `check_failed`, `not_checked`) or scary warning banners on live article pages. Unverified claims degrade gracefully by omitting public banners (`build_public_verification()`).
-2. **Current Split Behavior**: Article banners do not render token or cost details, but `build_public_verification()` may carry `token_usage`, and `scripts/dev_verification_status.py` currently publishes usage on the public checks page with `include_usage=True`.
-3. **Unresolved Policy Conflict**: The public checks behavior and its regression test/changelog conflict with the constitution and older specs that say raw token/dollar estimates stay private. Do not silently remove, broaden, or rename this output; an owner-approved contract decision must update policy docs, implementation, and tests together.
+1. **Error Hiding**: Readers must never see current internal states (`verification_error`, `check_error`, `not_checked`) or legacy/defensive `check_failed` inputs on live article pages. `build_public_verification()` may expose conservative coverage labels for healthy inconclusive checks, but renderers suppress operational failures.
+2. **Current Split Behavior**: Article banners do not render token or cost details, but `build_public_verification()` may carry `token_usage`, and `scripts/dev_verification_status.py` publishes usage on the public checks page with `include_usage=True`.
+3. **Unresolved Policy**: Preserve the split defined canonically in [`specs/verification-ledger/spec.md` §3](../../specs/verification-ledger/spec.md#3-open-usage-publication-decision); resolving it requires an owner-approved synchronized contract change.
 
 ## 6. Content Immutability & Incident Semantics
 

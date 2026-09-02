@@ -35,10 +35,12 @@ Spec-Driven Development (SDD), agentic workflows, vibe coding, and developer too
 
 ### Public verification output sanitized of technical noise
 
-Internal verification error states (`check_error`, `verification_error`, `not_checked`, `check_failed`)
-and empty verification blocks are completely omitted from public article pages. Readers only see
-verified claim sections when independent corroboration was genuinely obtained. Raw token accounting
-and approximate dollar cost banners are removed from public reader views.
+Current verification error states (`check_error`, `verification_error`, `not_checked`),
+legacy/defensive `check_failed` inputs, and empty verification blocks are omitted from
+public article pages. Operational failures stay hidden, while healthy inconclusive checks
+may still show conservative coverage labels. Raw token accounting and approximate dollar
+cost banners are removed from article views; the public checks page still publishes
+per-article usage under a tested contract whose policy resolution remains open.
 
 ### Evidence Ledger reports source coverage honestly
 
@@ -46,13 +48,14 @@ Claims are now extracted from the final reader-visible article instead of from
 the pre-enrichment item. The costly second audit by the same model is no longer
 part of the daily runtime. Public pages distinguish official announcements,
 release records, attributed quotes, independently corroborated events,
-primary/vendor quantities, provisional fresh events, insufficient coverage,
-and check failures; no universal “verified” badge is emitted. VPN/censorship
-events retain a small persistent state history and 24/72-hour review points.
-The article shows exact provider token counts and a configured DeepSeek base-API
-price estimate, including cached input, without presenting it as an OpenCode
-invoice. Reader-facing claim text is the exact span from the article, and stays
-in the article's language rather than exposing the model's internal normalized
+primary/vendor quantities, provisional fresh events, and insufficient coverage;
+operational check failures remain hidden and no universal “verified” badge is
+emitted. VPN/censorship events retain a small persistent state history and
+24/72-hour review points. Provider token counts and a configured DeepSeek base-API
+price estimate, including cached input, are retained in the public checks page
+without presenting them as an OpenCode invoice; article banners omit them.
+Reader-facing claim text is the exact span from the article and stays in the
+article's language rather than exposing the model's internal normalized
 proposition.
 
 ### The public site shows the active collection scope

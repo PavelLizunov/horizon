@@ -84,7 +84,11 @@ def build_search_documents(
 
 
 def build_search_query(query: str, size: int = 30) -> Dict[str, Any]:
-    """The query body the search API sends; kept here so tests pin it."""
+    """Build the library-side reference query pinned by offline tests.
+
+    The deployed stdlib proxy owns an independent live query shape with title
+    highlighting and sentinel tags; this helper is not called on that path.
+    """
     return {
         "query": {
             "multi_match": {

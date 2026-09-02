@@ -15,12 +15,12 @@ The MCP layer does not reimplement Horizon business logic. It reuses the existin
 | `hz_enrich_items` | Enrich filtered items into `enriched` |
 | `hz_generate_summary` | Generate markdown from a stage |
 | `hz_run_pipeline` | Run fetch -> score -> filter -> enrich -> summarize |
-| `hz_list_runs` | List recent run artifacts |
+| `hz_list_runs` | List recent runs and stage states |
 | `hz_get_run_meta` | Read metadata for a run |
 | `hz_get_run_stage` | Read items from a run stage |
 | `hz_get_run_summary` | Read a generated summary |
 | `hz_get_metrics` | Read in-memory server metrics |
-| `hz_send_webhook` | Send a saved summary and return structured delivery status |
+| `hz_send_webhook` | Send a webhook notification with specified variables and return structured delivery status |
 
 ## Resources
 
@@ -54,7 +54,7 @@ Each run writes artifacts under `data/mcp-runs/<run_id>/`:
 - `scored_items.json`
 - `filtered_items.json`
 - `enriched_items.json`
-- `summary-<lang>.md`
+- `summary-<language>.md`
 
 ## Design Principles
 

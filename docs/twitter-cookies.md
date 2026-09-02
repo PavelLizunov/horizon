@@ -72,7 +72,7 @@ uv run playwright install chromium
     "twitter": {
       "enabled": true,
       "mode": "playwright",
-      "users": ["karpathy", "ylecun"],
+      "users": ["example_user", "another_example"],
       "fetch_limit": 10,
       "cookie_dir": "data",
       "cookie_file_pattern": "x_cookies_*.json"

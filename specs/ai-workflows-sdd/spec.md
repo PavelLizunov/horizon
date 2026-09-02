@@ -13,7 +13,7 @@ Allows per-category threshold tuning within a shared profile:
 * `ai-tools`: 4.5 / 10
 * `ai-workflows`: 4.5 / 10
 * `sdd` / `spec-driven-development`: 4.5 / 10
-* General `tech-news`: 6.5 / 10
+* General `tech-news`: historical target 6.5 / 10. The schema has no universal threshold default; the tracked `data/config.example.json` currently demonstrates 7.0, while each operator's runtime config remains authoritative.
 
 ### 2.2 Editorial Groupings
 1. **Инструменты и подходы в использовании ИИ (`ai-tools-workflows`)**:

@@ -11,7 +11,7 @@ Generate high-quality Russian spoken voice tracks for all published digest artic
 * Pure Python module `src/ai/narration.py`.
 * Strip Markdown syntax, URLs, citations, code fences, and parenthetical artifacts.
 * Unspell tech acronyms phonetically by letter name (*«GPU»* → *«джи-пи-ю»*).
-* Apply vetted static pronunciation lexicon (`data/pronunciation_lexicon.json`).
+* Apply vetted static pronunciation lexicon (`_TERA_PRONUNCIATIONS` in `src/ai/narration.py`), with optional candidate review via `data/pronunciation-reviews/`.
 * Segment text into balanced chunks strictly within 120–400 characters.
 
 ### 2.2 Synthesis & Independent Grading
@@ -22,5 +22,5 @@ Generate high-quality Russian spoken voice tracks for all published digest artic
 
 ### 2.3 Audio Delivery
 * Encode audio at 1.25x tempo with ffmpeg.
-* Upload MP3 to Cloudflare R2 bucket or direct Caddy static storage.
+* Upload Opus (`.opus`) audio to static SSH storage or Cloudflare R2 bucket.
 * Attach accessible custom HTML5 audio player to MkDocs article pages.

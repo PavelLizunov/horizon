@@ -1,14 +1,14 @@
-# Runbook — Operating the Production Box
+# Runbook — Operating the Production Hosts
 
-For agents and humans driving the deployed instance remotely. Deployment
-*setup* lives in `README.md` next to this file; this page is about working on a
-box that already runs.
+For agents and humans driving the deployed pipeline and search hosts remotely.
+Deployment *setup* lives in `README.md` next to this file; this page is about
+working on an installation that already runs.
 
 > **No real hostnames, IPs or account names in this file.** It is tracked and
-> the repo is public (`AGENTS.md` §9). Every command below goes through an SSH
+> the repo is public (`AGENTS.md` §10). Every command below goes through an SSH
 > alias, so the actual address lives only in your local `~/.ssh/config`.
 
-## Reaching the Box
+## Reaching the Pipeline Box
 
 Define the alias once on the workstation — this is the only place the real
 address exists:
@@ -60,6 +60,25 @@ scp probe.py prod-mac:/tmp/probe.py
 | Runtime state | `~/horizon/data/` — config, cookies, `seen.json`, summaries |
 
 The box is configured not to sleep, so scheduled runs are not skipped.
+
+## Production Search Is a Separate Host
+
+The current archive-search backend does not run in Docker Desktop on the Mac.
+A dedicated Debian/Linux guest runs `horizon-elasticsearch.service` and
+`horizon-search-api.service`; Elasticsearch stays loopback-only there. An
+operator-managed launchd SSH tunnel exposes a local forwarded port on the Mac,
+and `search.url` points at that local endpoint.
+
+Use a separate pinned SSH alias such as `search-host` for read-only checks:
+
+```bash
+ssh search-host 'systemctl status horizon-elasticsearch.service horizon-search-api.service'
+ssh search-host "curl -fsS 'http://127.0.0.1:8788/api/search?q=test' >/dev/null"
+```
+
+The unit files, host alias, tunnel label, forwarded port, and guest address are
+private operator configuration and must not be copied into this repository.
+See `search/README.md` for the generic topology and API deployment checklist.
 
 ## Safe vs Unsafe Commands
 
@@ -116,11 +135,21 @@ Two things worth knowing when re-exporting:
 
 ## Deploying a Change
 
-The box tracks the GitHub repo, so changes arrive through it:
+The macOS pipeline box tracks the GitHub repo. Check its branch and working tree
+first because generated site files may be modified; preserve them rather than
+resetting blindly. Once the intended pull is confirmed:
 
 ```bash
+ssh prod-mac 'cd ~/horizon && git status --short --branch'
 ssh prod-mac 'cd ~/horizon && git pull && ~/bin/uv sync --extra asr'
 ```
 
 Drop `--extra asr` on non-Apple-Silicon hosts. Verify with the offline suite
 before pulling anything: `pytest` on the workstation, not on the box.
+
+That pull does **not** update production search. For a Search API-only change,
+copy the exact committed `deploy/search/search_api.py` to the search host's
+`/opt/horizon/search/search_api.py`, retain a rollback copy, and restart only
+`horizon-search-api.service`. Verify the artifact hash, both local endpoint
+aliases, and the public `/api/search` contract; do not restart Elasticsearch or
+run the paid pipeline.

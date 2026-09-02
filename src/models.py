@@ -392,7 +392,7 @@ class RedditConfig(BaseModel):
 class TelegramChannelConfig(BaseModel):
     """Configuration for monitoring a specific Telegram channel."""
 
-    channel: str  # channel username, e.g. "zaihuapd"
+    channel: str  # channel username, e.g. "example_channel"
     enabled: bool = True
     fetch_limit: int = 20
     category: Optional[str] = None
@@ -588,8 +588,8 @@ class WebhookConfig(BaseModel):
     headers: Optional[str] = None  # Custom headers, "Key: Value" per line
     delivery: str = "summary"  # summary, summary_and_items, or headlines
     # Base URL of the published digest site. Headline links deep-link into it
-    # as {link_base}/{date}-{lang}/#{anchor}. Unset falls back to each item's
-    # own source URL, so headline delivery works before the site exists.
+    # as {link_base}/{date}-{lang}/{slug}/. Unset falls back to each item's own
+    # source URL, so headline delivery works before the site exists.
     link_base: Optional[str] = None
     overview_position: str = "first"  # For summary_and_items: first, or last
     platform: str = "generic"  # generic, feishu, lark, dingtalk, slack, discord

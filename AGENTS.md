@@ -220,12 +220,12 @@ Read `docs/verification/` and `src/verification/AGENTS.md` before touching verif
 - Extracts 1–3 core verifiable factual claims from reader-visible enriched articles.
 - Performs bounded targeted searches, fetches public source documents, and grades evidence stance.
 - Persists versioned claim, evidence, report, public-view, and incident-ledger schemas.
-- Renders reader-facing claim coverage only from valid, source-linked verification results.
+- Renders type-aware reader-facing claim coverage, links only validated public sources, and suppresses operational error states.
 
 ### Invariants for Verification
-1. **Public pages must not show internal error statuses.** Statuses like `verification_error`, `check_error`, `check_failed`, or `not_checked` must remain invisible to readers — no scary "Проверка прервана" banners on live articles.
+1. **Public pages must not show internal error statuses.** Current `verification_error`, `check_error`, and `not_checked` states—and legacy/defensive `check_failed` inputs—must remain invisible to readers; no scary "Проверка прервана" banners belong on live articles.
 2. **Article banners omit raw dollar costs and token accounting.** The public checks page currently publishes usage and estimates by explicit implementation/test/changelog contract, conflicting with older constitution/spec wording. Do not change either side silently; resolve it through an owner-approved API/policy decision.
-3. **Graceful fallback on search rate limits.** If search fails or times out, the article publishes normally with uncorroborated claims omitted.
+3. **Graceful fallback on search rate limits.** If search fails or times out, the article publishes normally and operational errors stay hidden. A healthy but inconclusive check may still show a conservative coverage label.
 
 ## 7. AI Backend Notes
 
@@ -238,11 +238,15 @@ Read `docs/verification/` and `src/verification/AGENTS.md` before touching verif
 
 ## 8. Deployment
 
-Production runs on a macOS (Apple Silicon) box via launchd — see `deploy/README.md`
-and `deploy/RUNBOOK.md`.
+The scheduled pipeline runs on a macOS (Apple Silicon) box via launchd. Archive
+search runs separately on a dedicated Debian/Linux guest as
+`horizon-elasticsearch.service` plus `horizon-search-api.service`; the Mac indexes
+through an operator-managed local SSH forward. See `deploy/README.md`,
+`deploy/RUNBOOK.md`, and `deploy/search/README.md`.
 
-- Runtime deps: `node` (yt-dlp JS solver) and `ffmpeg`.
+- Pipeline runtime deps: `node` (yt-dlp JS solver) and `ffmpeg`.
 - Narration venv: `~/tts/.venv`.
+- The Compose search stack is reference/local only, not current production.
 - Site, search, SSH, and audio destinations are deployment-specific. Do not copy concrete
   endpoints into new code or docs; changing existing operational defaults requires owner review.
 

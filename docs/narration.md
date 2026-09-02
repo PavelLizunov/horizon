@@ -43,7 +43,7 @@ than an empty gap.
 ```
 published page (docs/digest/<issue>/<slug>.md)
   └─ narration_text()   strip refs and URLs, expand numbers and dates
-      └─ chunks()       120…700 characters, cut on sentence boundaries
+      └─ chunks()       120…400 characters, cut on sentence boundaries
           └─ TeraTTSv2  Russian voice, Tera-only pronunciation pass
               └─ whisper-large-v3-turbo  transcribe and grade
                   ├─ reached_the_end() ≥ 0.70  → keep
@@ -162,14 +162,17 @@ trimmed off whether or not the take passed.
 
 ## Chunk size is a correctness property
 
-120–700 characters, and both ends were paid for:
+The current bounds are 120–400 characters. The original measurements established
+120–700, then listener review and an archive-wide sweep lowered the ceiling to
+400 because shorter pieces kept the same voice more consistently without creating
+sub-floor fragments:
 
 - **Whole articles in one generation**: seven articles, one usable file. 86 % failure.
 - **Two-word inputs**: nine characters produced eleven seconds of noise. Hence the
   floor, and hence headings are glued to their first sentence rather than spoken
   alone.
 
-Sentences are packed into pieces of *even* length — `ceil(total / 700)` of them —
+Sentences are packed into pieces of *even* length — `ceil(total / 400)` of them —
 rather than filled to the ceiling one after another. Greedy filling plus a pass that
 glued short leftovers on produced `[717, 773, 6]` on a real article: over the ceiling
 twice, and a six-character piece sent to the model on its own, which is the exact

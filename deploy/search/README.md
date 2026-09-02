@@ -1,75 +1,79 @@
 # Archive search (Elasticsearch)
 
-The site's search page queries `/api/search?q=…` on the digest domain. Caddy
-proxies that path to a tiny read-only API, which is the only client of
-Elasticsearch. The browser can never reach index administration.
+The site's search page queries `/api/search?q=…` on the digest domain. The
+public reverse proxy forwards only that read-only operation to `search-api`;
+the browser never reaches Elasticsearch administration.
 
+```text
+browser ── /api/search ── ingress ── search-api (:8788)
+                                             │
+pipeline (macOS) ── local SSH forward ── Elasticsearch (loopback :9200)
 ```
-browser ── /api/search ── Caddy (LXC 210) ── search-api (:8788, Mac LAN IP)
-                                                    │
-pipeline (Mac) ── 127.0.0.1:9200 ── Elasticsearch ──┘  (same compose network)
-```
 
-## Topology
+## Current production topology
 
-- Host: the Mac mini that already runs the pipeline (Docker Desktop, 16 GB).
-  Elasticsearch is bound to `127.0.0.1:9200` only; the pipeline indexes over
-  localhost.
-- `search-api` (stdlib Python in `python:3.12-slim`) is the one LAN-facing
-  port (`8788`). It serves exactly `/search` and `/api/search`; everything
-  else 404s.
-- Caddy on the ingress adds to `conf.d/digest.ninitux.com.caddy`:
+Production separates the scheduled macOS pipeline from archive search:
 
-  ```
-  handle /api/search* {
-      reverse_proxy <MAC_LAN_IP>:8788
-  }
-  handle {
-      root * /srv/digest.ninitux.com
-      file_server
-  }
-  ```
+- A dedicated Debian/Linux guest runs Elasticsearch 8.15.3 and the stdlib
+  Python 3.11 proxy as native systemd services:
+  `horizon-elasticsearch.service` and `horizon-search-api.service`.
+- Elasticsearch HTTP (`9200`) and transport (`9300`) bind to loopback on the
+  search host. The macOS pipeline reaches the HTTP port through a persistent
+  local SSH forward and points `search.url` at that deployment-specific local
+  endpoint.
+- `search-api` binds `0.0.0.0:8788` behind ingress and serves only
+  `GET /search` and `GET /api/search`; unknown GET paths return 404.
+- The committed API artifact is deployed as
+  `/opt/horizon/search/search_api.py`. Its systemd unit uses `DynamicUser=yes`,
+  `Restart=on-failure`, `NoNewPrivileges=yes`, a strict filesystem/kernel
+  sandbox, and `MemoryMax=128M`.
+- The systemd unit files and SSH-forward LaunchAgent are operator-managed
+  infrastructure; this repository ships the API artifact and a reference
+  Compose topology, not those host-specific definitions.
 
-  Validate before reload: `caddy validate --config /etc/caddy/Caddyfile
-  --adapter caddyfile`, then `systemctl reload caddy`, then curl the
-  neighbours to prove nothing broke.
-
-  **Pin `<MAC_LAN_IP>` with a DHCP reservation.** It is written into the proxy
-  by hand, so a lease change silently breaks search and nothing reports it:
-  the site keeps serving, the search page keeps loading, and only
-  `/api/search` answers 502. This has happened once — a reboot moved the Mac
-  by one address while the proxy kept pointing at the old one.
-
-Two failure modes worth knowing, both from the same reboot:
-
-- **Docker Desktop does not start at login by default.** Nothing brings
-  `es`/`search-api` back after a restart until someone opens it. Enable
-  "Start Docker Desktop when you sign in" in its settings.
-- The pipeline degrades rather than fails when the backend is unreachable, by
-  design — so a dead index costs nothing at run time and stays invisible.
-  `curl -s -o /dev/null -w '%{http_code}' https://<digest-domain>/api/search?q=test`
-  is the one-line check; anything but 200 means the chain is broken.
-
-## Run
+On the search host, safe status checks are:
 
 ```bash
-cd deploy/search && docker compose up -d     # first start downloads service images
-docker compose ps                            # es healthy + search-api up
+systemctl status horizon-elasticsearch.service horizon-search-api.service
+journalctl -u horizon-search-api.service --since today
+curl -fsS 'http://127.0.0.1:8788/api/search?q=test'
 ```
 
-Heap is pinned to 512 MB (`ES_JAVA_OPTS`); the archive is a few hundred small
-documents. Measured footprint: report after the first real deployment in the
-CHANGELOG, not before.
+Deploy the exact committed `deploy/search/search_api.py`, compile it before the
+swap, retain the previous artifact for rollback, and restart only
+`horizon-search-api.service`. A proxy-only update does not require restarting
+Elasticsearch or running the paid Horizon pipeline.
 
-The proxy also bounds its own resources:
+## Reference Docker Compose topology
+
+`docker-compose.yml` remains a supported local/reference deployment where
+Elasticsearch and `search-api` share one Compose network. It is not the current
+production topology.
+
+```bash
+cd deploy/search
+docker compose up -d
+docker compose ps
+```
+
+The reference stack pins the Elasticsearch JVM heap to 512 MB and uses
+`python:3.12-slim` for the proxy. These Compose choices are independent of the
+Python 3.11 systemd production host.
+
+`search_api.py` defaults `ES_URL` to the Compose service name
+`http://es:9200`. A standalone/systemd unit must override it with
+`ES_URL=http://127.0.0.1:9200`; otherwise Docker DNS is unavailable.
+
+## Proxy resource controls
 
 | Variable | Default | Effect |
 |---|---:|---|
 | `SEARCH_MAX_CONCURRENCY` | `8` | Maximum active request-handler threads; saturation back-pressures new connections through the finite listen backlog. |
 | `SEARCH_REQUEST_TIMEOUT` | `15` | Client socket inactivity timeout and Elasticsearch request timeout, in seconds. |
 
-Values must be positive; invalid values fail startup rather than silently disabling
-the guard.
+Values must be positive; invalid values fail startup rather than silently
+disabling the guard. Production currently uses these code defaults unless its
+unit explicitly overrides them.
 
 ## HTTP contract
 
@@ -81,52 +85,70 @@ the guard.
 - Backend failures return HTTP 502 with
   `{"total": 0, "hits": [], "error": "Search backend unavailable", "error_code": "backend_unavailable"}`
   and `Cache-Control: no-store`. Internal exception text stays in server logs.
-- Unknown GET paths remain 404; unsupported methods remain 501. All non-2xx
-  responses carry `Cache-Control: no-store`.
+- Unknown GET paths remain 404; unsupported methods remain 501. Every non-2xx
+  response carries `Cache-Control: no-store`.
+
+The offline contract/resource suite is:
+
+```bash
+.venv/bin/pytest tests/test_search_api.py -q
+python3 -m py_compile deploy/search/search_api.py
+```
 
 ## Indexing
 
-- Live runs index themselves: `search.enabled: true` in `data/config.json`
-  makes the orchestrator upsert that run's articles after the site publish.
-  A dead backend degrades the run (warning), never fails it.
-- Backfill the history once:
+- With `search.enabled: true`, each language pass upserts its rendered articles
+  after writing local site pages. A dead backend logs a warning and does not fail
+  digest generation or delivery.
+- In the separated production topology, keep Elasticsearch loopback-only and
+  set `search.url` to the pipeline host's local SSH-forward endpoint. Do not
+  expose port `9200` to the LAN merely to simplify ingestion.
+- Backfill historical summaries only after a dry run:
 
   ```bash
-  uv run python scripts/dev_reindex_archive.py --dry-run   # look first
+  uv run python scripts/dev_reindex_archive.py --dry-run
   uv run python scripts/dev_reindex_archive.py
   ```
 
-  Document ids are the issue-scoped page slugs, so reindexing is idempotent.
+  Document IDs are issue-scoped page slugs, so reindexing is idempotent.
 
-## Access control
+Current indexing limitations are intentionally visible: the stored `profile` is
+the requested item route rather than the resolved classification; Elasticsearch
+bulk partial failures are logged but the returned count still reflects attempted
+documents; and upserts do not prune documents for pages later removed from the
+archive.
 
-- Elasticsearch: localhost-only port, security off is acceptable because
-  nothing outside the Mac can reach it.
-- search-api: read-only by construction (two aliases for the same GET operation,
-  no ES admin passthrough), LAN-facing on a trusted home network.
-- Public: Caddy exposes only `/api/search*`; the operation is unauthenticated, but
-  handler concurrency and request duration are bounded in the proxy. Ingress rate
-  limiting remains useful defense in depth.
+## Ingress
 
-## Ingress: two headers and an error page
+The public proxy needs only the read-only API route plus the static site:
 
-Set on the digest site block in `conf.d/`, all three found by looking at the
-live site rather than in review:
+```caddyfile
+handle /api/search* {
+    reverse_proxy <search-host>:8788
+}
+handle {
+    root * /srv/<digest-domain>
+    file_server
+}
+```
 
-- **`Cache-Control`.** Caddy sent none, so browsers cached the pages and our
-  two unhashed assets heuristically: a freshly opened tab still got the
-  previous stylesheet after a deploy. Theme assets carry a content hash and
-  stay `immutable`; everything else is `no-cache`, which with the existing
-  ETag is a cheap 304 rather than a re-download. `/api/search*` is excluded so
-  successful results keep the service's `max-age=300`; 4xx/5xx responses use
-  `no-store`.
-- **`handle_errors`.** A dead link returned an *empty body* — zero bytes, no
-  way back. It now serves `/not-found/`, with the 404 status preserved.
-  That page is `docs/not-found.md`, not `404.md`: Material ships its own
-  `404.html` template which wins, and customising it the documented way means
-  `theme.custom_dir` — an override this project does without.
+Keep the search host address stable through the local network's normal address
+management. Validate the complete Caddy configuration before reload, then test
+the API and neighbouring virtual hosts.
 
-Change either the same way as the search upstream: copy the file to `/root`
-first (**not** into `conf.d/`, where the `*.caddy` glob would load the copy as
-a second block for the same domain), `caddy validate`, `systemctl reload`,
-then curl the neighbouring domains.
+`/api/search*` must be excluded from static-site cache rules so successful
+results retain the service's five-minute cache while 4xx/5xx responses remain
+`no-store`.
+
+## Access and failure boundaries
+
+- Elasticsearch is unauthenticated only because both of its ports are
+  loopback-only on the search host.
+- `search-api` is unauthenticated and LAN-facing, but it exposes no index
+  administration, bounds concurrency, and times out idle/backend operations.
+  Ingress rate limiting remains useful defense in depth.
+- If either systemd service or the SSH forwarding path is unavailable, static
+  pages continue serving; search and/or indexing degrade independently.
+- A public health check should query
+  `https://<digest-domain>/api/search?q=test` and require HTTP 200 without
+  printing result content or internal error details.

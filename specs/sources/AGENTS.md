@@ -4,8 +4,8 @@ This directory governs external source ingestion scrapers, content extraction la
 
 ## 1. Document Trio Authority & Status
 
-- **`spec.md`**: Defines this fork's YouTube and 4PDA source additions, their extraction ladders, cleaning rules, and shared ingestion constraints; it is not a complete registry of every implemented source.
-- **`plan.md`**: Architecture for `BaseScraper` inheritance, shared `httpx.AsyncClient`, unified `ContentItem` schema, and `FetchReport` error isolation.
+- **`spec.md`**: Defines this fork's YouTube and 4PDA additions, their extraction/cleaning rules, shared ingestion constraints, and a concise current source registry. `SourceType` / `SOURCE_REGISTRY` in `src/models.py` remain the machine-authoritative registry.
+- **`plan.md`**: Architecture for `BaseScraper` inheritance, shared `httpx.AsyncClient` where applicable, specialized browser/SDK lifecycles, the unified `ContentItem` schema, and `FetchReport` error isolation.
 - **`tasks.md`**: Scraper implementation checklist. Changes must stay in sync with `src/scrapers/`, `src/models.py`, and `data/config.example.json`.
 - **Hierarchy & Traceability**: `spec.md` > `plan.md` > `tasks.md`. Scraper extraction contracts map directly to scraper implementations under `src/scrapers/` and offline tests in `tests/`.
 

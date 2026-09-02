@@ -122,7 +122,9 @@ A minimal configuration:
 `api_key_env` is the *name* of an environment variable, never the key itself —
 the real secret belongs in `.env`. Any string in the config can reference the
 environment as `${VAR_NAME}`, which is how private feed URLs and webhook
-endpoints stay out of the file.
+endpoints stay out of the file. For a custom OpenAI-compatible gateway, keep
+`provider: "openai"` and set `ai.base_url`; the model must accept JSON-object
+chat completions. See the [configuration guide](docs/configuration.md#ai-providers).
 
 A source's `profile` may name one profile, be omitted or set to `"auto"` to let
 the model match it against all of them, or list several to restrict the match.

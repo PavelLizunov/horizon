@@ -67,7 +67,7 @@ docker compose build --build-arg EXTRAS=trafilatura horizon
 
 `favor_precision` and `favor_recall` are mutually exclusive. Setting both has undefined behavior (trafilatura's own default applies).
 
-**Timeout and retry**: the extractor reuses the shared `httpx.AsyncClient` and inherits whatever timeout and connection settings are configured on it.
+**Timeout, Security, and Graceful Degradation**: The extractor reuses the shared `httpx.AsyncClient` via `safe_request()` to enforce public address security (SSRF prevention). On HTTP errors, SSRF blocks, or extraction failures, it logs a warning and returns `None` so the scraper safely falls back to the feed-provided content.
 
 ## Adding a new extractor type
 

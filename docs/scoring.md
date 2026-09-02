@@ -14,9 +14,7 @@ configuration may filter them at a user-selected threshold.
 1. **Profile resolution** — An explicit source profile is used directly. A
    missing profile or `"auto"` is matched by AI using the loaded `match.md`
    prompts.
-2. **Content preparation** — Content is truncated to 800 characters when
-   comments are present and 1000 otherwise. Available comments and engagement
-   metadata are added separately.
+2. **Content preparation** — Content is selected up to `analysis_max_chars` (1000 characters by default, configured per profile) using the profile's sampling strategy (`prefix` or `head-middle-tail`). Available community comments (up to `analysis_comments_max_chars`, 1500 characters by default) and engagement metadata are added separately.
 3. **Profile analysis** — The selected profile's `analysis.md` prompt evaluates
    the item and returns a score, reason, one-sentence summary, and tags.
 4. **Validation and retry** — Responses are parsed as JSON. Failed AI calls are

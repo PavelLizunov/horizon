@@ -97,6 +97,11 @@ Fetches any Atom/RSS feed using the `feedparser` library. Tries multiple date fi
 
 **Extracted data**: title, URL, author, content (from `summary`/`description`/`content` fields, or full article text if an extractor is configured), feed name, category, and entry tags.
 
+**Known hardening gaps**: the configured feed URL currently uses the shared
+client directly instead of `safe_request()`, and a string-date fallback can
+produce a naive timestamp that aborts the remainder of that feed. Treat feed
+URLs as trusted operator configuration until those paths are hardened.
+
 ## Reddit
 
 **File**: `src/scrapers/reddit.py`
@@ -192,11 +197,13 @@ Behavior:
 
 ## Twitter
 
-**File**: `src/scrapers/twitter.py`
+**File**: `src/scrapers/twitter.py` (Apify mode) and `src/scrapers/twitter_playwright.py` (Playwright mode)
 
-Uses the [Apify](https://apify.com) platform to bypass Twitter's anti-scraping measures. The actor `altimis~scweet` is called via the Apify REST API.
+Supports two scraping modes (`mode` field):
+- **`apify`** (default) — Uses the [Apify](https://apify.com) platform via the `altimis~scweet` actor.
+- **`playwright`** — Uses headless Playwright with exported browser cookies (see [Twitter Cookies](twitter-cookies.md)).
 
-Flow:
+Apify Flow:
 1. POST to `/v2/acts/{actor_id}/runs` to trigger a run
 2. Poll `/v2/actor-runs/{run_id}` until status is `SUCCEEDED` or a terminal failure
 3. GET `/v2/datasets/{dataset_id}/items` to retrieve results
@@ -206,28 +213,33 @@ Flow:
 ```json
 {
   "enabled": true,
-  "users": ["karpathy", "ylecun"],
+  "mode": "apify",
+  "users": ["example_user", "another_example"],
   "fetch_limit": 10,
   "fetch_reply_text": false,
   "max_replies_per_tweet": 3,
   "max_tweets_to_expand": 10,
-  "reply_min_likes": 5,
+  "reply_min_likes": 0,
   "actor_id": "altimis~scweet",
-  "apify_token_env": "APIFY_TOKEN"
+  "apify_token_env": "APIFY_TOKEN",
+  "cookie_dir": "data",
+  "cookie_file_pattern": "x_cookies_*.json"
 }
 ```
 
+- `mode` — `"apify"` or `"playwright"`
 - `users` — Twitter screen names to monitor, without the `@` prefix
 - `fetch_limit` — maximum tweets to fetch per run
 - `category` — optional tag for balanced digest grouping (applies to all tweets from this source)
-- `fetch_reply_text` — when `true`, a second Apify run fetches reply bodies for each important tweet and appends them under `--- Top Comments ---` for AI analysis
+- `fetch_reply_text` — when `true`, a second Apify run fetches reply bodies for each important tweet and appends them under `--- Top Comments ---` for AI analysis; this post-selection expansion uses Apify even when initial collection uses `playwright`, so it still requires `apify_token_env`
 - `max_replies_per_tweet` — maximum reply lines per tweet (sorted by engagement score)
 - `max_tweets_to_expand` — cap on reply expansion runs per pipeline cycle, to control Apify credit usage
-- `reply_min_likes` — minimum likes required for a reply to be included
+- `reply_min_likes` — minimum likes required for a reply to be included (default: `0`)
 - `actor_id` — Apify actor ID (default: `altimis~scweet`)
 - `apify_token_env` — environment variable name containing the Apify API token
+- `cookie_dir` / `cookie_file_pattern` — cookie directory and file glob pattern for `playwright` mode
 
-**Authentication**: Set `APIFY_TOKEN` in your `.env`. Get a token at [console.apify.com](https://console.apify.com/account/integrations).
+**Authentication**: For Apify mode, set `APIFY_TOKEN` in your `.env`. For Playwright mode, export cookies as described in [Twitter Cookies](twitter-cookies.md).
 
 **Extracted data**: tweet text, URL, author, publish time, likes, retweets, replies, views, category, and (optionally) reply-thread text appended under `--- Top Comments ---`.
 
@@ -255,6 +267,9 @@ becomes the item content.
 ```json
 {
   "enabled": true,
+  "mode": "inline",
+  "inbox_file": "data/video-inbox.json",
+  "inbox_max_age_hours": 48,
   "channels": [
     {
       "name": "Fireship",
@@ -274,6 +289,8 @@ becomes the item content.
 }
 ```
 
+- `mode` — `"inline"` (extract during digest run) or `"sidecar"` (read pre-processed items from `horizon-video` sidecar inbox)
+- `inbox_file` / `inbox_max_age_hours` — inbox location and staleness warning threshold for sidecar mode
 - `channel` — `UC...` channel id (preferred: skips the yt-dlp channel lookup),
   `@handle`, or channel URL
 - `max_videos` — per-channel, per-run cap
@@ -320,4 +337,126 @@ Ingests user discussion posts from specific 4PDA forum topics (such as ISP netwo
 - `profile` — profile routing (default: `"censorship-watch"`)
 
 **Extracted data**: title, URL (direct post link), author, publication timestamp (UTC), cleaned post body, and topic metadata.
+
+## Telegram
+
+**File**: `src/scrapers/telegram.py`
+
+Ingests public channel posts through Telegram's web-preview fallbacks (`https://telegram.me/s/{channel}`, then `telegram.dog/s` and `t.me/s`). Requires no API tokens or Telegram bot credentials.
+
+**Config** (`sources.telegram`):
+
+```json
+{
+  "enabled": true,
+  "channels": [
+    {
+      "channel": "example_channel",
+      "enabled": true,
+      "fetch_limit": 20,
+      "category": "news",
+      "profile": "tech-news"
+    }
+  ]
+}
+```
+
+- `channel` — Telegram channel username
+- `fetch_limit` — maximum messages to fetch per channel per run
+- `category` — optional category tag
+- `profile` — profile routing
+
+**Extracted data**: title, post text, channel/author, publish timestamp (UTC), and category. The item URL is the first external link in the post when present, otherwise the generated `https://telegram.me/{channel}/{id}` deep link; that deep link is always retained as `metadata.msg_url`.
+
+## OSS Insight
+
+**File**: `src/scrapers/ossinsight.py`
+
+Queries the OSS Insight public API for top trending repositories by star gain.
+
+**Config** (`sources.ossinsight`):
+
+```json
+{
+  "enabled": true,
+  "period": "past_24_hours",
+  "languages": ["All", "Python", "TypeScript"],
+  "keywords": [],
+  "min_stars": 5,
+  "max_items": 30,
+  "category": "oss",
+  "profile": "tech-news"
+}
+```
+
+- `period` — `"past_24_hours"` or `"past_28_days"`
+- `languages` — target language list
+- `keywords` — optional substring filters on repository name, description, or collection
+- `min_stars` — minimum star gain threshold (default: `5`)
+- `max_items` — maximum repositories returned (default: `30`)
+
+**Extracted data**: repository name, URL, description, star gain count, language, and category.
+
+## GDELT
+
+**File**: `src/scrapers/gdelt.py`
+
+Queries the key-less GDELT 2.0 DOC API (`https://api.gdeltproject.org/api/v2/doc/doc`) for recent global news matching search queries. Accepts a list of query objects (a single object is normalized to a one-item list).
+
+**Config** (`sources.gdelt`):
+
+```json
+[
+  {
+    "enabled": true,
+    "query": "(\"VPN blocking\" OR \"deep packet inspection\")",
+    "mode": "ArtList",
+    "max_records": 75,
+    "timespan": "24h",
+    "language": "english",
+    "country": null,
+    "category": "global-censorship",
+    "profile": "censorship-watch"
+  }
+]
+```
+
+- `query` — GDELT search query string
+- `mode` — GDELT API mode (default: `"ArtList"`)
+- `max_records` — maximum records requested (default: `75`; GDELT caps requests at 250)
+- `timespan` — optional query timespan (e.g., `"24h"`)
+- `language` / `country` — optional source language and country filters
+
+**Extracted data**: article title, URL, domain/source name, publish timestamp (UTC), and category.
+
+## Google News
+
+**File**: `src/scrapers/google_news.py`
+
+Fetches Google News RSS search feeds (`https://news.google.com/rss/search`) for search queries via `feedparser`. No API key required. Accepts a list of query objects (a single object is normalized to a one-item list).
+
+**Config** (`sources.google_news`):
+
+```json
+[
+  {
+    "enabled": true,
+    "query": "(VPN OR DPI) (blocking OR shutdown)",
+    "language": "ru",
+    "country": "RU",
+    "ceid": "RU:ru",
+    "max_results": 100,
+    "category": "ru-censorship",
+    "profile": "censorship-watch"
+  }
+]
+```
+
+- `query` — search query string
+- `language` — search language (`hl`, default `"en"`)
+- `country` — search country (`gl`, default `"US"`)
+- `ceid` — optional Google News CEID (auto-derived as `"{country}:{language}"` when omitted)
+- `max_results` — maximum feed entries retained (default: `100`)
+
+**Extracted data**: article title, URL, news publisher, feed publication timestamp, and category. Parsed feed tuples become aware UTC timestamps; a direct string fallback can still remain naive, and the scraper currently relies on the query time operator rather than applying a second local `since` filter (known hardening gaps).
 

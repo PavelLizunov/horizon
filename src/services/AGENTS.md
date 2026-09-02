@@ -20,7 +20,7 @@
 - **Search Indexing (`search.py`)**:
   - `SearchIndexer`: Minimal Elasticsearch writer over `httpx.AsyncClient`. Bulk-indexes (`_bulk`) delivered articles with 1 shard, 0 replicas, and a `russian` stemmer analyzer (`INDEX_BODY`).
   - Document IDs are derived as `{date}-{language}-{slug}` matching MkDocs published site URLs.
-  - `build_search_query()` defines the application-side query shape. `deploy/search/search_api.py` currently carries a separate standard-library implementation; keep both response/query contracts synchronized until that duplication is removed.
+  - `build_search_query()` is a test/reference helper and is not called by the deployed proxy. `deploy/search/search_api.py` owns the live read path and additionally uses title highlighting plus safe highlight sentinels; do not assume the two query bodies are identical. Any consolidation is a public search-contract change.
 
 - **Video Sidecar CLI (`video_cli.py`)**:
   - `horizon-video` (`video_cli.py:main`): Runs YouTube extraction ladder (subtitles, ASR, vision fallback) out-of-band to prevent `yt-dlp` or Whisper delays from stalling the main digest pipeline.
@@ -46,10 +46,10 @@
 4. **Search Index & API Coupling**:
    - Index documents (`build_search_documents`) align with published site URL slugs (`{date}-{language}-{slug}`).
    - Schema mapping (`INDEX_BODY`) pins property types (`keyword`, `text`, `float`) and `russian` stemmer behavior.
-   - Known gaps: documents store the requested `item.profile` rather than the resolved classification profile, and `_bulk` partial failures are logged while `index_documents()` still reports every attempted document as written.
+   - Known gaps: documents store the requested `item.profile` rather than the resolved classification profile; `_bulk` partial failures are logged while `index_documents()` still reports every attempted document as written; and upserts do not prune stale documents for removed pages.
 
 5. **CLI & Environment Compatibility**:
    - Both CLIs use `src/_cli.py` argument helpers and load `.env`. `horizon-webhook` maps `KeyboardInterrupt` to exit 0; `horizon-video` exits 1 for handled configuration/structural errors and otherwise leaves Ctrl-C to normal interpreter semantics.
 
 6. **Offline Testing & Mocks**:
-   - All tests in `tests/test_webhook.py`, `tests/test_webhook_cli.py`, `tests/test_email.py`, `tests/test_search.py`, and `tests/test_video.py` must run offline using `httpx.MockTransport`, `unittest.mock`, or mocked socket/SMTP/IMAP connections.
+   - All tests in `tests/test_webhook.py`, `tests/test_webhook_cli.py`, `tests/test_email.py`, `tests/test_search.py`, `tests/test_search_api.py`, and `tests/test_video.py` must run offline using `httpx.MockTransport`, `unittest.mock`, or mocked socket/SMTP/IMAP connections.

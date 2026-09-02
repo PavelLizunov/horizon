@@ -1,7 +1,7 @@
-# Archive search for digest.ninitux.com: Elasticsearch + a read-only shaping
-# API. Elasticsearch is bound to localhost only; the Mac's pipeline indexes
-# through 127.0.0.1:9200, and the public path goes Caddy -> search-api -> ES,
-# so the browser can never reach index administration.
+# Reference/local archive-search topology: Elasticsearch plus a read-only
+# shaping API. Elasticsearch is host-loopback-only; a pipeline on the same host
+# can index through 127.0.0.1:9200 while ingress reaches only search-api.
+# Current production uses separate systemd services; see README.md.
 #
 #   docker compose up -d          # first start
 #   docker compose ps             # health

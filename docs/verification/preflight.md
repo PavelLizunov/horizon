@@ -92,6 +92,8 @@ before `DailySummarizer`, not introduce a second summary generator.
 The shadow MVP adds one optional verification stage in
 `HorizonOrchestrator.run()` after enrichment and before rendering. It consumes
 the selected items, fetched and post-selection input snapshots, dedup
-membership, and final `ContentArtifact` objects under a five-call-per-item
-default ceiling. With verification disabled, existing output is unchanged;
+membership, and final `ContentArtifact` objects under the original
+five-call-per-item design ceiling. This dated preflight records the initial
+proposal; the implemented `VerificationConfig.max_model_calls_per_item` default
+is now `10`. With verification disabled, existing output is unchanged;
 shadow auditing does not mutate artifacts or citations.

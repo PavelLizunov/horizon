@@ -24,7 +24,7 @@ The `docs/` tree serves two distinct purposes governed by `mkdocs.yml`:
 ## 3. Link, Path, and Structure Safety
 
 - **Link Validation**: All relative Markdown links must resolve to existing files within `docs/` or the root repository.
-- **Anchor Handling**: `mkdocs.yml` sets `validation.anchors: ignore` because deep links use raw `<a id="item-...">` HTML anchors contractually tied to Telegram notifications. Do not alter or break anchor target formats in generated markdown.
+- **Anchor and Slug Handling**: Generated aggregate digests retain raw `<a id="item-...">` anchors, so `mkdocs.yml` sets `validation.anchors: ignore`. Telegram links to the per-article `{slug}/` page, where `slug` is the same stable anchor ID without `item-`; do not alter that derivation without updating renderer, delivery tests, and publishing docs together.
 - **Nav Sync**: When adding or renaming public site pages, update the `nav` section in `mkdocs.yml` and verify `exclude_docs` / `not_in_nav` rules.
 
 ## 4. Measurement & Content Rules

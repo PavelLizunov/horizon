@@ -55,3 +55,6 @@ Provider token counts are shown exactly when the gateway reports them. Dollar
 figures are estimates using the configured base DeepSeek API prices, including
 the configured cached-input rate. They are not an OpenCode invoice or a claim
 about the exact amount deducted from a subscription quota.
+
+This public usage output remains part of the unresolved split recorded in
+[`specs/verification-ledger/spec.md` §3](../../specs/verification-ledger/spec.md#3-open-usage-publication-decision).

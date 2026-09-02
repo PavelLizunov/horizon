@@ -8,7 +8,7 @@ The `deploy/` directory contains host orchestration tools:
 - `run-daily.sh`: Master daily execution script invoked by launchd (`com.horizon.digest.plist`).
 - `horizon.launchd.example.plist` & `horizon-video.launchd.example.plist`: macOS launchd service templates.
 - `audio-server.caddy.example`: Caddy virtual host configuration for static voice asset delivery.
-- `search/`: Subdirectory housing the Elasticsearch archive search stack (see `deploy/search/AGENTS.md`).
+- `search/`: Search API artifact plus a reference Docker Compose stack. Current production runs the artifact and Elasticsearch as separate systemd services on a dedicated Linux guest; see `deploy/search/AGENTS.md`.
 
 ## Pipeline & Publishing Execution Order
 
@@ -26,6 +26,7 @@ The `deploy/` directory contains host orchestration tools:
 - **Metadata Failure**: Failures in index or status page generation log warnings (`index: FAILED`, `verification page: FAILED`) but continue execution to allow site publishing.
 - **Site Build / Transfer Failure**: A local `mkdocs build` failure leaves the live site untouched. The current remote command deletes destination contents before extraction, so a stream/extract failure can leave the live tree partial or empty; treat atomic remote publishing as unresolved.
 - **Narration Failure**: Narration is non-fatal. If TTS interpreter is missing (`$narrator`), issue directory is absent, or article verification fails during speech synthesis, the script logs a warning and proceeds. The published text site remains available without audio.
+- **Search Separation**: The macOS checkout does not own the production search process. Search API-only changes deploy the exact committed artifact to the Linux guest and restart only `horizon-search-api.service`; Elasticsearch and the paid pipeline remain untouched.
 
 ## Portability & Security Policy
 

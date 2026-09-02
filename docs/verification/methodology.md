@@ -112,10 +112,13 @@ and the last completed evidence run:
 ```
 
 Add `--json` for machine-readable output. The owner has enabled the public
-transparency canary. With `verification.publish_to_site`, the site shows
-type-aware source coverage, freshness, source links, and per-article usage. The
-missing human review is recorded in the publication decision and absolute
-`true`/`false` labels remain forbidden.
+transparency canary. With `verification.publish_to_site`, article pages show
+type-aware source coverage, freshness, and source links without usage details;
+the public checks page adds per-article usage. This split remains unresolved;
+see
+[`specs/verification-ledger/spec.md` §3](../../specs/verification-ledger/spec.md#3-open-usage-publication-decision).
+The missing human review is recorded in the publication
+decision and absolute `true`/`false` labels remain forbidden.
 
 ## Privacy and retention
 

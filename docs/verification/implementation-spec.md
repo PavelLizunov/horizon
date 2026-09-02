@@ -144,6 +144,10 @@ status, source URL/stance/class, `checked_at`, source age, optional
 `next_check_at`, and token usage. It never publishes stored document text,
 excerpts, prompts, search queries, cookies, or headers.
 
+The checks-page renderer currently includes those usage fields while article
+banners omit them. Preserve the unresolved split recorded in
+[`specs/verification-ledger/spec.md` §3](../../specs/verification-ledger/spec.md#3-open-usage-publication-decision).
+
 Fresh unresolved `event` and `other` claims are `provisional`. Their next review
 points are 24 and 72 hours after publication. Older insufficient events become
 `insufficient` rather than staying permanently "fresh". Official announcements

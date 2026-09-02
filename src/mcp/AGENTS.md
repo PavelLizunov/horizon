@@ -62,7 +62,7 @@ Stage names and file mappings inside `data/mcp-runs/<run_id>/` are public contra
    - Known gaps: metadata updates and stage invalidation are multi-step read/modify/write operations without inter-process locking, and `list_runs(limit)` reads/sorts every run's metadata before applying the limit. Atomic replacement prevents torn files but not lost concurrent updates.
 
 4. **Error Translation & Handling**:
-   - Application errors must raise or translate into `HorizonMcpError` carrying structured codes (e.g. `HZ_RUN_NOT_FOUND`, `HZ_STAGE_NOT_FOUND`, `HZ_CONFIG_NOT_FOUND`, `HZ_INVALID_INPUT`, `HZ_INVALID_STAGE`).
+   - Application errors must raise or translate into `HorizonMcpError` carrying structured codes (e.g. `HZ_RUN_NOT_FOUND`, `HZ_STAGE_NOT_FOUND`, `HZ_SUMMARY_NOT_FOUND`, `HZ_CONFIG_NOT_FOUND`, `HZ_INVALID_INPUT`, `HZ_INVALID_STAGE`, `HZ_EMPTY_INPUT`).
    - `server.py` wraps tool execution in standard envelopes (`_ok` / `_err`) and records call duration and error telemetry.
 
 5. **Secret Sanitization**:

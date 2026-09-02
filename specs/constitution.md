@@ -5,7 +5,7 @@
 1. **Spec-Driven Development (SDD)**: Specifications, technical plans, and granular task lists under `specs/` are the executable source of truth. Features are designed and verified against specifications before implementation.
 2. **Measurement Over Assertion**: Performance, memory, token usage, and model accuracy must be measured with concrete tools (`mx.get_active_memory()`, token usage snapshots, diff evaluations), never asserted or assumed.
 3. **Graceful Degradation**: External failures (network blocks, API timeouts, missing subtitles, search rate limits) must reduce data volume or detail, never crash the pipeline or produce a 500/broken run.
-4. **Honest Public Presentation**: Publicly published artifacts and web pages must present only verified, clean facts. Internal error states (`verification_error`, `check_error`, `not_checked`) and raw financial token estimations are stripped from public readers.
+4. **Honest Public Presentation**: Publicly published artifacts and web pages must present only verified, clean facts. Internal error states (`verification_error`, `check_error`, `not_checked`) and raw financial token estimations are stripped from article pages. The public checks page is a tested exception pending the explicit policy decision recorded in [`verification-ledger/spec.md` §3](verification-ledger/spec.md#3-open-usage-publication-decision).
 5. **Strict Secret Isolation**: No API keys, credentials, or cookies are ever committed, logged, or exposed in public pages. Configuration stores only variable names (`api_key_env`), loaded via `.env`.
 
 ---
@@ -39,7 +39,8 @@
 * `src/scrapers/`: Isolated data acquisition modules inheriting from `BaseScraper`.
 * `src/ai/`: Pure LLM clients, prompt formatters, scoring, enrichment, and narration text preparation.
 * `src/processing/`: Profile routing, cross-source deduplication, web search tools, category thresholds.
-* `src/services/`: Delivery channels, Evidence Ledger verification, and fact-checking evaluators.
+* `src/services/`: External delivery services (webhook, email), search indexing, and CLI utilities.
+* `src/verification/`: Evidence Ledger fact-checking engine, claim extraction, document fetching, persistence, and evaluation harness.
 * `src/models.py`: Authoritative Pydantic schemas for runtime configuration and internal data representations.
 * `src/orchestrator.py`: Stage coordinator wiring the end-to-end pipeline.
 * `specs/`: Spec-Driven Development documents (`spec.md`, `plan.md`, `tasks.md`).

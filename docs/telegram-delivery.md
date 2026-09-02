@@ -48,7 +48,7 @@ instead of twelve.
 |-------|-----|
 | `platform: "generic"` | Telegram needs no platform of its own — `generic` already recognises its `{"ok": false}` error shape. |
 | `delivery: "headlines"` | The axis that controls how many messages and what is in each. |
-| `link_base` | Base of the published site. Links become `{link_base}/{date}-{lang}/#{anchor}`. **Unset**, links fall back to each item's source URL, so this works before the site exists. |
+| `link_base` | Base of the published digest pages. Links become `{link_base}/{date}-{lang}/{slug}/`, where `slug` is the stable item anchor without its `item-` prefix. **Unset**, links fall back to each item's source URL, so this works before the site exists. |
 | `disable_web_page_preview` | Not optional. Without it Telegram renders a preview card for the first link and the message becomes a wall. |
 | `request_body` as an **object** | Must be a JSON object, not a JSON string. Substitution into raw JSON text breaks on newlines. |
 
@@ -91,8 +91,8 @@ merely filtered:
 
 ```html
 <b>Технологии</b>
-1. <a href="https://digest.example.com/2026-08-06-ru/#item-tech-news-1">Заголовок</a> 8.0/10
-2. <a href="https://digest.example.com/2026-08-06-ru/#item-tech-news-2">Другой</a> 7.0/10
+1. <a href="https://digest.example.com/2026-08-06-ru/tech-news-1/">Заголовок</a> 8.0/10
+2. <a href="https://digest.example.com/2026-08-06-ru/tech-news-2/">Другой</a> 7.0/10
 ```
 
 Only `<b>` and `<a href>`. A test asserts the tag set of a built payload is a

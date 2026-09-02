@@ -9,7 +9,7 @@ Horizon is configured through a `.env` file for secrets, a JSON file for runtime
 
 ## Configuration Paths
 
-`horizon`, `horizon-wizard`, and `horizon-webhook` all resolve configuration and state paths the same way:
+`horizon`, `horizon-wizard`, `horizon-webhook`, and `horizon-video` all resolve configuration and state paths the same way:
 
 | Option | Effect |
 | --- | --- |
@@ -326,19 +326,26 @@ By default, AI scoring and enrichment run one item at a time. If your API endpoi
 - Result ordering is preserved regardless of concurrency.
 - If you also use `throttle_sec`, each concurrent task sleeps independently after finishing an item.
 
-**Custom Base URL** (for proxies):
+**Custom OpenAI-compatible Base URL** (for gateways/proxies):
 
 ```json
 {
   "ai": {
-    "provider": "anthropic",
-    "base_url": "https://your-proxy.com/v1",
-    ...
+    "provider": "openai",
+    "model": "gateway-model-id",
+    "api_key_env": "CUSTOM_API_KEY",
+    "base_url": "https://gateway.example.com/v1"
   }
 }
 ```
 
-For OpenAI-compatible gateways, Horizon sends `temperature` by default. If a newer reasoning-style model rejects that parameter with an error such as `temperature is deprecated for this model`, Horizon retries once without it and remembers that capability for later requests.
+The OpenAI-compatible client requests JSON-object responses. The gateway/model
+must accept `response_format: {"type": "json_object"}` and return chat-completion
+`choices` and message content in the usual shape; usage fields are optional but
+recorded when supplied. Horizon sends
+`temperature` by default; if a newer reasoning-style model rejects it with an
+error such as `temperature is deprecated for this model`, Horizon retries once
+without it and remembers that capability for later requests.
 
 ## Information Sources
 
@@ -459,7 +466,7 @@ Reddit scraping is free and does not require API keys. Subreddit posts and comme
       ],
       "users": [
         {
-          "username": "spez",
+          "username": "example_user",
           "sort": "new",
           "fetch_limit": 10,
           "category": "social"
@@ -472,7 +479,7 @@ Reddit scraping is free and does not require API keys. Subreddit posts and comme
 
 ### Telegram
 
-Telegram scraping uses the public web preview at `https://t.me/s/<channel>`, so no API key is required. Only public channels are supported.
+Telegram scraping uses public web previews through the `telegram.me`, `telegram.dog`, and `t.me` fallback hosts, so no API key is required. Only public channels are supported.
 
 ```json
 {
@@ -481,7 +488,7 @@ Telegram scraping uses the public web preview at `https://t.me/s/<channel>`, so 
       "enabled": true,
       "channels": [
         {
-          "channel": "zaihuapd",
+          "channel": "example_channel",
           "enabled": true,
           "fetch_limit": 20,
           "category": "ai-news"
@@ -507,27 +514,33 @@ The default `apify` mode requires an [Apify](https://apify.com) account. Set `AP
   "sources": {
     "twitter": {
       "enabled": true,
-      "users": ["karpathy", "ylecun"],
+      "mode": "apify",
+      "users": ["example_user", "another_example"],
       "fetch_limit": 10,
       "category": "social",
       "fetch_reply_text": false,
       "max_replies_per_tweet": 3,
       "max_tweets_to_expand": 10,
-      "reply_min_likes": 5
+      "reply_min_likes": 0,
+      "actor_id": "altimis~scweet",
+      "apify_token_env": "APIFY_TOKEN",
+      "cookie_dir": "data",
+      "cookie_file_pattern": "x_cookies_*.json"
     }
   }
 }
 ```
 
+- `mode` — `"apify"` (default) or `"playwright"`; Playwright uses exported browser cookies and the optional `twitter` dependency
 - `users` — Twitter screen names to monitor, without the `@` prefix
-- `fetch_limit` — maximum tweets to fetch per run (across all users combined; minimum 100 due to actor constraint)
+- `fetch_limit` — maximum items Horizon retains per run (default: `10`); Apify collection requests at least 100 raw results because of the actor contract
 - `category` — optional tag for balanced digest grouping (applies to all tweets from this source)
-- `fetch_reply_text` — when `true`, fetch actual reply bodies for important tweets and append them under `--- Top Comments ---` so the AI can factor in community discussion. Disabled by default.
-- `max_replies_per_tweet` — maximum reply lines to append per tweet (default: 3)
-- `max_tweets_to_expand` — cap on how many tweets get reply expansion per run, to control Apify credit usage (default: 10)
-- `reply_min_likes` — only include replies with at least this many likes (default: 0)
-
-The scraper uses the `altimis/scweet` actor by default. You can override it with `actor_id` if needed.
+- `fetch_reply_text` — when `true`, fetch actual reply bodies for important tweets and append them under `--- Top Comments ---` so the AI can factor in community discussion. This expansion uses Apify even after Playwright collection, so `apify_token_env` is still required. Disabled by default.
+- `max_replies_per_tweet` — maximum reply lines to append per tweet (default: `3`)
+- `max_tweets_to_expand` — cap on how many tweets get reply expansion per run, to control Apify credit usage (default: `10`)
+- `reply_min_likes` — only include replies with at least this many likes (default: `0`)
+- `actor_id` / `apify_token_env` — Apify actor ID (`"altimis~scweet"` by default) and the environment-variable name containing its token
+- `cookie_dir` / `cookie_file_pattern` — browser-cookie directory and glob used in Playwright mode
 
 ### OpenBB Financial News
 
@@ -587,7 +600,7 @@ Pulls top star-gain repositories from the [OSS Insight](https://ossinsight.io) p
       "period": "past_24_hours",
       "languages": ["All", "Python", "TypeScript"],
       "keywords": [],
-      "min_stars": 10,
+      "min_stars": 5,
       "max_items": 30,
       "category": "oss-trending"
     }
@@ -598,8 +611,8 @@ Pulls top star-gain repositories from the [OSS Insight](https://ossinsight.io) p
 - `period` — time window for star-gain ranking. Supported: `past_24_hours`, `past_28_days`. (`past_7_days` is currently broken upstream.)
 - `languages` — primary language buckets to query. Use `"All"` for the full ranking, or any GitHub language label such as `"Python"`, `"TypeScript"`, `"Rust"`, `"Jupyter Notebook"`. The scraper fans out one request per language and merges results.
 - `keywords` — optional case-insensitive substrings matched against `description`, `collection_names`, and `repo_name`. Only repos containing at least one keyword pass through. Leave empty to ingest everything trending.
-- `min_stars` — drop repos with fewer than this many stars gained in the period.
-- `max_items` — final cap after merging and sorting by `stars_gained` descending.
+- `min_stars` — drop repos with fewer than this many stars gained in the period (default: `5`).
+- `max_items` — final cap after merging and sorting by `stars_gained` descending (default: `30`).
 - `category` — optional tag for balanced digest grouping (e.g., `"oss-trending"`)
 
 No API key is required.
@@ -860,6 +873,7 @@ Webhook notification is optional and disabled unless `webhook.enabled` is `true`
     "enabled": true,
     "url_env": "HORIZON_WEBHOOK_URL",
     "delivery": "summary",
+    "link_base": "https://digest.example.com/digest",
     "overview_position": "first",
     "platform": "generic",
     "layout": "markdown",
@@ -875,9 +889,10 @@ Webhook notification is optional and disabled unless `webhook.enabled` is `true`
 
 - `enabled`: Turns webhook delivery on or off. The default is `false`.
 - `url_env`: Environment variable that contains the webhook URL. For example, set `HORIZON_WEBHOOK_URL=https://...` in `.env`.
-- `delivery`: Controls how messages are sent. Use `summary` for one full message, or `summary_and_items` for one overview message followed by one message per selected item.
+- `delivery`: Controls how messages are sent. Use `summary` for one full message, `summary_and_items` for one overview message followed by one message per selected item, or `headlines` for concise linked headline delivery.
+- `link_base`: Optional base URL of the published digest site (for example `"https://digest.example.com/digest"`). In `headlines` delivery mode, article links point to `{link_base}/{date}-{lang}/{slug}/`. When unset, links fall back to each item's original source URL.
 - `overview_position`: Controls where the overview is sent in `summary_and_items` mode. Use `first` for the traditional order, or `last` to send item details in reverse and keep the overview as the newest chat message.
-- `platform`: Optional webhook platform hint. Use `generic` by default, or `feishu` / `lark` to enable platform-specific card rendering.
+- `platform`: Optional webhook platform hint: `generic` (default), `feishu`, `lark`, `dingtalk`, `slack`, or `discord`. Feishu/Lark additionally support card rendering; the other named hints enable their response-error conventions while using the configured request body.
 - `layout`: Controls the message layout. Use `markdown` for templated Markdown delivery, or `collapsible` with `platform: "feishu"` / `"lark"` for a single Feishu Card JSON 2.0 message with each item in a collapsed panel.
 - `fallback_layout`: Reserved fallback layout for unsupported platform/layout combinations. The current safe fallback is `markdown`.
 - `languages`: Optional webhook-only language filter. Use `["zh"]` or `["en"]` to send only selected languages; use `null` or omit it to send all configured `ai.languages`.
@@ -892,6 +907,7 @@ When `request_body` is a JSON object or array, Horizon renders placeholders and 
 
 - `summary`: Sends one message containing the full daily summary. This is simple, but some chat platforms may reject long messages.
 - `summary_and_items`: Sends one overview message plus one message per selected item. In each item message, `#{summary}` contains only that item's Markdown body. This is useful for platforms that reject or truncate long messages.
+- `headlines`: Sends concise headline links deep-linking into published site pages (or original source URLs if `link_base` is unset).
 
 `layout` controls how each message is rendered:
 
@@ -1046,6 +1062,26 @@ uv run horizon-webhook --dry-run
 | `-c`, `--config PATH` | `<data-dir>/config.json` | Path to config file |
 | `-l`, `--log-level LEVEL` | `WARNING` | Logging level (DEBUG/INFO/WARNING/ERROR/CRITICAL) |
 
+
+## Archive Search
+
+Configure archive search indexing backed by Elasticsearch under the top-level `search` key:
+
+```json
+{
+  "search": {
+    "enabled": true,
+    "url": "http://127.0.0.1:9200",
+    "index": "horizon-articles",
+    "site_base": "https://digest.example.com/digest"
+  }
+}
+```
+
+- `enabled`: Enables or disables indexing delivered articles into Elasticsearch during pipeline runs. Default is `false`.
+- `url`: Elasticsearch endpoint URL. Default is `http://127.0.0.1:9200`. In the separated production topology this points at an operator-managed local SSH-forward endpoint on the pipeline host; Elasticsearch itself remains loopback-only on the search host.
+- `index`: Name of the Elasticsearch index used for delivered articles. Default is `"horizon-articles"`.
+- `site_base`: Base URL where the site serves article pages. Search result titles link here while original source URLs remain secondary links. The model retains the repository's existing deployment URL as a compatibility default; set this field explicitly for every other deployment.
 
 ## Static Site
 

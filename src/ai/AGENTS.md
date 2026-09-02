@@ -13,6 +13,7 @@ Key modules:
 - `narration.py`: Pure text preparation for speech synthesis (stripping references/URLs/headings, expanding Russian numbers with `num2words` and grammatical case agreement).
 - `tokens.py`: Centralized in-memory token usage tracking (`record_usage`, `get_usage_snapshot`, `reset_usage`).
 - `localization.py`: Script normalization (`normalize_language`) and CJK character leak detection (`has_cjk_leak`).
+- `markdown_utils.py`: App-generated Markdown sanitization and HTML details block flattening (`clean_app_summary_markdown`).
 - `utils.py`: Multi-strategy JSON response extraction (`parse_json_response`).
 - `prompting/`: System and user prompt builders (see nested `src/ai/prompting/AGENTS.md`).
 

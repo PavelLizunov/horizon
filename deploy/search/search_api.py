@@ -1,12 +1,13 @@
 """Read-only search API in front of Elasticsearch.
 
-The browser never talks to Elasticsearch directly: Caddy proxies
+The browser never talks to Elasticsearch directly: ingress proxies
 /api/search on the digest domain here, and this service is the only
-thing allowed to shape a query. It exposes exactly one endpoint;
-everything else 404s, so the proxy path cannot be abused to reach
-index administration.
+thing allowed to shape a query. It exposes one read-only operation through
+two aliases; everything else 404s, so the proxy path cannot be abused to
+reach index administration.
 
-Stdlib only; runs in a python:slim container next to Elasticsearch.
+Stdlib only; runs as a standalone systemd service in current production or in
+the reference python:slim Compose container.
 """
 
 import json

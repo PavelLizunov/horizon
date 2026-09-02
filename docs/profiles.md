@@ -205,7 +205,7 @@ Set `profile` to an array to restrict automatic matching to a candidate subset:
 
 ```json
 {
-  "channel": "zaihuapd",
+  "channel": "example_channel",
   "profile": ["tech-news", "finance-news"]
 }
 ```
