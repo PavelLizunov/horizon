@@ -808,3 +808,63 @@ def test_comparison_operators_are_said_and_never_left_in():
     for source in ("llm>=0.32", "a < b", "5 <= 6", "&lt;script&gt;"):
         spoken = speakable(source)
         assert "<" not in spoken and ">" not in spoken, spoken
+
+
+def test_teratts_server_synthesis_mock(monkeypatch, tmp_path):
+    """Test HTTP synthesis via teratts-server client logic."""
+    from scripts import dev_narrate_article as driver
+
+    wav_out = tmp_path / "test.wav"
+    monkeypatch.setenv("TERATTS_URL", "http://127.0.0.1:8088")
+    monkeypatch.setenv("TERATTS_TOKEN", "mock_token")
+
+    class MockResponse:
+        status = 200
+        def read(self):
+            return b"RIFF....WAVEfmt "
+        def __enter__(self):
+            return self
+        def __exit__(self, *args):
+            pass
+
+    class MockOpener:
+        def open(self, req, timeout=None):
+            assert req.full_url == "http://127.0.0.1:8088/tts"
+            assert req.headers.get("Authorization") == "Bearer mock_token"
+            assert b"test text" in req.data
+            return MockResponse()
+
+    monkeypatch.setattr(driver.urllib.request, "build_opener", lambda *args: MockOpener())
+    ok = driver._synthesize_tera("test text", "ru_f1", None, wav_out)
+    assert ok is True
+    assert wav_out.exists()
+    assert wav_out.read_bytes() == b"RIFF....WAVEfmt "
+
+
+def test_transcribe_grader_faster_whisper(monkeypatch, tmp_path):
+    """Test grader transcription logic using faster-whisper mock."""
+    from scripts import dev_narrate_article as driver
+    import sys
+
+    audio_file = tmp_path / "probe.wav"
+    audio_file.write_bytes(b"dummy")
+
+    class DummySegment:
+        text = "Тестовый транскрипт"
+        start = 0.0
+        end = 3.5
+
+    class MockWhisperModel:
+        def __init__(self, *args, **kwargs):
+            pass
+        def transcribe(self, path, language="ru"):
+            return [DummySegment()], None
+
+    mock_fw = type(sys)("faster_whisper")
+    mock_fw.WhisperModel = MockWhisperModel
+    monkeypatch.setitem(sys.modules, "faster_whisper", mock_fw)
+
+    res = driver._transcribe(audio_file, "tiny")
+    assert "Тестовый транскрипт" in res["text"]
+    assert res["speech_end"] == 3.5
+

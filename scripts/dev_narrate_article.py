@@ -41,6 +41,7 @@ import re
 import subprocess
 import sys
 import time
+import urllib.request
 import wave
 from collections import Counter
 from pathlib import Path
@@ -505,23 +506,90 @@ def _attach(issue: str, slug: str, url: str, seconds: float) -> None:
     page.write_text(updated, encoding="utf-8")
 
 
-def _listen(audio: Path, out: Path, checker) -> dict:
-    """Transcribe a finished file, and say where its speech actually stops."""
-    import mlx_whisper
-
+def _transcribe(audio: Path, checker: str) -> dict:
+    """Transcribe an audio file using either faster-whisper (Linux/CPU) or mlx_whisper (macOS)."""
     from src.ai.narration import speech_ends_at
 
+    # 1. Prefer faster-whisper if available (Linux-native, ONNX/CPU)
+    try:
+        from faster_whisper import WhisperModel
+
+        # If a full repo or path is passed (like mlx-community/...), map or default to tiny/base
+        model_size = os.getenv("WHISPER_MODEL", "tiny")
+        if isinstance(checker, str) and "/" not in checker:
+            model_size = checker
+
+        model = WhisperModel(model_size, device="cpu", compute_type="int8")
+        segments, info = model.transcribe(str(audio), language="ru")
+        seg_list = list(segments)
+        text = " ".join(s.text for s in seg_list)
+        return {
+            "text": text,
+            "speech_end": speech_ends_at([{"text": getattr(s, "text", ""), "start": getattr(s, "start", 0.0), "end": getattr(s, "end", 0.0)} for s in seg_list]),
+        }
+    except ImportError:
+        pass
+
+    # 2. Fallback to mlx_whisper on macOS / Apple Silicon
+    try:
+        import mlx_whisper
+
+        result = mlx_whisper.transcribe(
+            str(audio), path_or_hf_repo=checker, language="ru", verbose=False
+        )
+        return {
+            "text": result.get("text", ""),
+            "speech_end": speech_ends_at(result.get("segments", [])),
+        }
+    except ImportError as exc:
+        raise RuntimeError("Neither faster-whisper nor mlx-whisper is installed") from exc
+
+
+def _synthesize_tera(text: str, voice: str, model, wav_path: Path) -> bool:
+    """Synthesize speech using teratts-server HTTP API or local AutoModel."""
+    teratts_url = os.getenv("TERATTS_URL")
+    if teratts_url:
+        import json
+        import urllib.request
+
+        token = os.getenv("TERATTS_TOKEN")
+        req_body = json.dumps({"text": text, "voice": voice}).encode("utf-8")
+        url = teratts_url.rstrip("/") + "/tts"
+        headers = {"Content-Type": "application/json"}
+        if token:
+            headers["Authorization"] = f"Bearer {token}"
+
+        req = urllib.request.Request(url, data=req_body, headers=headers)
+        # Avoid proxying local LAN connections (192.168.0.x / 127.0.0.1)
+        opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+        try:
+            with opener.open(req, timeout=60) as resp:
+                if resp.status != 200:
+                    return False
+                wav_path.write_bytes(resp.read())
+                return wav_path.exists()
+        except Exception as err:
+            print(f"    teratts-server request failed: {err}", file=sys.stderr)
+            return False
+
+    # Fallback to local AutoModel if provided
+    if model is not None and hasattr(model, "generate_speech"):
+        model.save_wav(
+            str(wav_path),
+            model.generate_speech(f"<ru>{text}</ru>", voice=voice, duration_scale=1),
+        )
+        return wav_path.exists()
+
+    return False
+
+
+def _listen(audio: Path, out: Path, checker) -> dict:
+    """Transcribe a finished file, and say where its speech actually stops."""
     probe = out / "listen-probe.wav"
     _ffmpeg("-i", str(audio), "-ac", "1", "-ar", "16000", str(probe))
-    result = mlx_whisper.transcribe(
-        str(probe), path_or_hf_repo=checker, language="ru", verbose=False
-    )
+    result = _transcribe(probe, checker)
     probe.unlink(missing_ok=True)
-
-    return {
-        "text": result.get("text", ""),
-        "speech_end": speech_ends_at(result.get("segments", [])),
-    }
+    return result
 
 
 def _speak_chunk_tera(text: str, out: Path, name: str, voice: str, model,
@@ -529,43 +597,15 @@ def _speak_chunk_tera(text: str, out: Path, name: str, voice: str, model,
     """One chunk through TeraTTS, checked on its own.
 
     Checked piece by piece rather than once over the finished article, because
-    the transcriber is not reliable on a long file of this voice. It dropped a
-    whole thirty-second window and reported the reading as broken; measuring the
-    signal with astats showed speech-level energy right through the stretch it
-    called empty, 7 dB louder than a version it had transcribed happily. Raising
-    the bitrate made its verdict worse and lowering the loudness made it worse
-    again — results that cannot describe the audio, only the listener.
-
-    On the same pieces one at a time it made no mistakes at all. So the check
-    stays, and it runs where it works.
-
-    Adjacent `<en>` spans were tried and destroyed the reading outright:
-    coverage 0.73 to 0.05, transcript returned as gibberish. A measured,
-    Tera-only pronunciation pass handles the small set it actually misreads.
+    the transcriber is not reliable on a long file of this voice.
     """
-    import mlx_whisper
-
     from src.ai.narration import reached_the_end, tera_text
 
     wav = out / f"{name}.wav"
     spoken_text = tera_text(text)
-    model.save_wav(str(wav), model.generate_speech(f"<ru>{spoken_text}</ru>", voice=voice,
-                                                   duration_scale=1))
-    if not wav.exists():
+    if not _synthesize_tera(spoken_text, voice, model, wav):
         return None
 
-    # A piece can come back as silence, and silence joins into an article
-    # without complaint: one had twenty-four seconds of nothing in the middle
-    # and still ended on real speech, so the trailing-noise check saw a clean
-    # tail and passed it. Loudness settles it without asking a model — this is
-    # arithmetic on samples. -70 LUFS is far below any speech; the level step
-    # already used that number to decide there was nothing to level, and said
-    # nothing about it.
-    # Integrated loudness is too coarse to catch this: a piece of fifteen silent
-    # seconds and three spoken ones still measures well above any silence
-    # threshold. What separates them is how much text the piece got through per
-    # second. A reading runs 14 to 17 characters a second, measured across an
-    # issue; the article this was written for had a piece at 3.
     seconds = _duration(wav)
     density = len(spoken_text) / max(seconds, 0.01)
     if density < QUIET_CHARS_PER_SECOND:
@@ -576,9 +616,7 @@ def _speak_chunk_tera(text: str, out: Path, name: str, voice: str, model,
 
     probe = out / f"{name}-probe.wav"
     _ffmpeg("-i", str(wav), "-ac", "1", "-ar", "16000", str(probe))
-    heard = mlx_whisper.transcribe(
-        str(probe), path_or_hf_repo=checker, language="ru", verbose=False
-    ).get("text", "")
+    heard = _transcribe(probe, checker).get("text", "")
     probe.unlink(missing_ok=True)
 
     score = reached_the_end(spoken_text, heard)
@@ -804,14 +842,18 @@ def _speak_many(directory: Path, args) -> int:
         return 1
 
     engine = getattr(args, "engine", "tera")
+    model = None
     if engine == "tera":
-        from transformers import AutoModel
+        if not os.getenv("TERATTS_URL"):
+            from transformers import AutoModel
 
-        print(f"loading {TERA_MODEL.split('/')[-1]} …", flush=True)
-        model = AutoModel.from_pretrained(
-            getattr(args, "model", None) or TERA_MODEL, trust_remote_code=True,
-            provider="CPUExecutionProvider", threads=8,
-        )
+            print(f"loading {TERA_MODEL.split('/')[-1]} …", flush=True)
+            model = AutoModel.from_pretrained(
+                getattr(args, "model", None) or TERA_MODEL, trust_remote_code=True,
+                provider="CPUExecutionProvider", threads=8,
+            )
+        else:
+            print(f"using teratts-server at {os.getenv('TERATTS_URL')} …", flush=True)
     else:
         from mlx_audio.tts.utils import load_model
 
