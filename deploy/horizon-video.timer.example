@@ -1,0 +1,12 @@
+[Unit]
+Description=Run Horizon video collection daily before digest
+Documentation=https://github.com/PavelLizunov/horizon
+
+[Timer]
+OnCalendar=*-*-* 16:00:00
+Persistent=true
+AccuracySec=1min
+Unit=horizon-video.service
+
+[Install]
+WantedBy=timers.target

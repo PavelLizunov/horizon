@@ -1,155 +1,185 @@
 # Runbook — Operating the Production Hosts
 
-For agents and humans driving the deployed pipeline and search hosts remotely.
-Deployment *setup* lives in `README.md` next to this file; this page is about
-working on an installation that already runs.
+This runbook covers an installed Horizon pipeline guest. Setup details are in
+[README.md](README.md); the architecture contract is in
+[`specs/linux-production`](../specs/linux-production/spec.md).
 
-> **No real hostnames, IPs or account names in this file.** It is tracked and
-> the repo is public (`AGENTS.md` §10). Every command below goes through an SSH
-> alias, so the actual address lives only in your local `~/.ssh/config`.
+> Keep real hostnames, guest IDs, addresses, accounts, key fingerprints, proxy
+> endpoints, and credentials in operator configuration—not this public file.
 
-## Reaching the Pipeline Box
+## Access and layout
 
-Define the alias once on the workstation — this is the only place the real
-address exists:
-
-```
-# ~/.ssh/config
-Host prod-mac
-    HostName <tailscale-ip-or-magicdns-name>
-    User <account>
-    IdentityFile ~/.ssh/id_ed25519
-```
-
-The workstation's public key must already be in the box's `authorized_keys`;
-this runbook assumes passwordless login. After that every command is
-`ssh prod-mac '<command>'`.
-
-## Two Traps That Waste an Agent's First Ten Minutes
-
-**1. The login shell is zsh, and non-interactive SSH gets almost no PATH.**
-`brew`, `uv` and `node` will all be "not found" unless the command runs through
-a login shell:
+Define a trusted SSH alias for the Proxmox node and keep the guest ID in your
+local shell. The pipeline guest does not need an inbound SSH server:
 
 ```bash
-ssh prod-mac 'zsh -lc "which node ffmpeg"'
+export HORIZON_CTID='operator-owned-value'
+ssh prod-node "pct exec $HORIZON_CTID -- systemctl is-system-running"
 ```
 
-Even then `uv` may not resolve — call it by absolute path (`~/bin/uv`) if the
-install is not under Homebrew.
+| Component | Production location |
+|---|---|
+| Exact Git checkout and gitignored state | `/opt/horizon` |
+| Python entry points | `/opt/horizon/.venv/bin/` |
+| Service home and outbound SSH identities | `/var/lib/horizon` |
+| Installation cache | `/var/cache/horizon/uv` |
+| Non-secret digest environment | `/etc/horizon/runtime.env` |
+| Optional video-only proxy environment | `/etc/horizon/video-egress.env` |
+| Logs | systemd journal |
+| Shared execution lock | `/run/lock/horizon-production.lock` |
 
-**2. Nested quoting breaks.** `ssh host 'python -c "..."'` mangles anything
-non-trivial, and zsh additionally globs `?` in bare URLs — a YouTube
-`watch?v=` URL fails with `no matches found` before it ever reaches yt-dlp. Use
-`https://youtu.be/<id>` for one-off probes, and for anything longer than one
-line write a script locally, `scp` it over, then run it:
+Elasticsearch and the public Search API run on a separate guest. The pipeline
+gets only a restricted SSH forward to Elasticsearch loopback. Site publishing
+uses a different forced-command identity.
+
+## Routine status
 
 ```bash
-scp probe.py prod-mac:/tmp/probe.py
+ssh prod-node "pct exec $HORIZON_CTID -- systemctl status \
+  horizon-search-tunnel.service horizon-video.timer horizon-digest.timer"
+ssh prod-node "pct exec $HORIZON_CTID -- systemctl list-timers 'horizon-*'"
+ssh prod-node "pct exec $HORIZON_CTID -- journalctl \
+  -u horizon-digest.service -n 100 --no-pager"
 ```
 
-## Layout
+A healthy installation has an active Search tunnel, inactive/exited one-shot
+services between runs, and both timers waiting for their next daily slot.
 
-| What | Where |
-|------|-------|
-| Checkout | `~/horizon` (git clone of this repo; update with `git pull`) |
-| Interpreter | `~/horizon/.venv/bin/python` |
-| Toolchain | `~/bin/uv` |
-| node, ffmpeg | Homebrew (`/opt/homebrew/bin`) |
-| Logs | `~/horizon/logs/horizon.log`, `~/horizon/logs/horizon-video.log` |
-| Runtime state | `~/horizon/data/` — config, cookies, `seen.json`, summaries |
+## Manual acceptance or recovery run
 
-The box is configured not to sleep, so scheduled runs are not skipped.
-
-## Production Search Is a Separate Host
-
-The current archive-search backend does not run in Docker Desktop on the Mac.
-A dedicated Debian/Linux guest runs `horizon-elasticsearch.service` and
-`horizon-search-api.service`; Elasticsearch stays loopback-only there. An
-operator-managed launchd SSH tunnel exposes a local forwarded port on the Mac,
-and `search.url` points at that local endpoint.
-
-Use a separate pinned SSH alias such as `search-host` for read-only checks:
+`horizon` is a paid LLM workload. Obtain operator approval before starting the
+digest service. The systemd unit supplies the same sandbox, environment, limits,
+and lock used by the timer:
 
 ```bash
-ssh search-host 'systemctl status horizon-elasticsearch.service horizon-search-api.service'
-ssh search-host "curl -fsS 'http://127.0.0.1:8788/api/search?q=test' >/dev/null"
+ssh prod-node "pct exec $HORIZON_CTID -- systemctl start horizon-video.service"
+ssh prod-node "pct exec $HORIZON_CTID -- systemctl start horizon-digest.service"
 ```
 
-The unit files, host alias, tunnel label, forwarded port, and guest address are
-private operator configuration and must not be copied into this repository.
-See `search/README.md` for the generic topology and API deployment checklist.
+Do not invoke the underlying Python command concurrently. Video refuses an
+occupied shared lock; digest waits up to one hour for video to finish.
 
-## Safe vs Unsafe Commands
-
-Read-only, run freely:
+Watch progress without exposing secret files or full response bodies:
 
 ```bash
-ssh prod-mac 'tail -50 ~/horizon/logs/horizon.log'
+ssh prod-node "pct exec $HORIZON_CTID -- journalctl \
+  -u horizon-video.service -f"
+ssh prod-node "pct exec $HORIZON_CTID -- journalctl \
+  -u horizon-digest.service -f"
 ```
 
-Also safe: `git log`, `git status`, `ls`, `uv pip list`, and
-`scripts/dev_check_video_fetch.py` (hits YouTube, spends **no** LLM tokens —
-it builds the scraper without an AI config, so the vision rung stays off).
+Acceptance requires:
 
-**Never run without asking the owner:**
+- service result `success` and exit status 0;
+- a video summary showing zero ASR on Linux and at least one subtitles/vision
+  extraction when videos are present;
+- successful collection and AI analysis when new items exist;
+- Search indexing and webhook delivery without fatal errors;
+- both the site root and new issue returning HTTP 200;
+- no model-gateway request errors;
+- guest disk and memory below their limits.
 
-- `horizon` — a full pipeline run costs real LLM tokens (~260k on the reference
-  deployment, i.e. a real bill).
-- Anything writing `data/config.json`, `data/youtube-cookies*.txt`, or
-  `data/seen.json` (if present) — config, credentials and dedup state.
-- `launchctl load/unload`, `pmset` — scheduling and power behaviour.
+## Linux-specific behavior
 
-## Health Check
+- `sources.video.asr` is `"off"`; extraction is subtitles then the configured
+  vision model.
+- Direct YouTube may be unavailable from the guest. Only the video service may
+  load an explicitly approved HTTP CONNECT environment. Do not add proxy values
+  to the digest, tunnel, SSH config, shell profile, or global system files.
+- Narration is intentionally skipped through `HORIZON_TTS_PYTHON=/nonexistent`.
+  The text site remains complete; audio returns only after an independent Linux
+  grader is approved.
+- `.env`, `data/config.json`, cookie jars, config backups, and private SSH keys
+  are mode `0600` and never printed or committed.
+
+## Site-only publication
+
+`HORIZON_SHIP_ONLY=1 deploy/run-daily.sh` skips collection, AI work, and
+narration, but **does replace the live site**. Use it only as an approved
+production action. The destination identity is forced to a static publisher
+that rejects unsafe tar members and normalizes directories to `0755` and files
+to `0644`.
+
+After any publish, verify the root and current issue through the live ingress.
+A local `mkdocs build` alone does not prove publication.
+
+## Video diagnostics
+
+The source degrades rather than aborting. Inspect these lines first:
 
 ```bash
-ssh prod-mac 'grep -E "Video preflight:|Video run" ~/horizon/logs/horizon.log | tail -20'
+ssh prod-node "pct exec $HORIZON_CTID -- journalctl \
+  -u horizon-video.service --since today --no-pager" \
+  | grep -E 'Video preflight:|Video run'
 ```
 
-`Video run degraded` is the line that matters. Triage table:
-`docs/video-source.md`.
-
-## Known Failure: Expired YouTube Cookies
-
-The most common outage, and it is silent by default — the pipeline keeps
-succeeding while every video degrades to description-only.
-
-Confirm it in one command (note the `youtu.be` form, see trap 2):
+`Video run degraded`, bot-gate warnings, or repeated subtitle failures require
+checking cookies and the approved video egress. A bounded parser/fetch check is
+networked even when it does not call the vision model:
 
 ```bash
-ssh prod-mac 'cd ~/horizon && zsh -lc "PATH=/opt/homebrew/bin:\$PATH .venv/bin/yt-dlp --cookies data/youtube-cookies.txt --skip-download --list-subs https://youtu.be/<video-id> 2>&1 | tail -3"'
+ssh prod-node "pct exec $HORIZON_CTID -- runuser -u horizon -- \
+  sh -lc 'cd /opt/horizon && .venv/bin/python scripts/dev_check_video_fetch.py'"
 ```
 
-`Sign in to confirm you're not a bot` means the jar is dead — re-export it
-(`docs/video-source.md` §Cookies). Since the scraper now counts these, the same
-diagnosis appears in the log as `N bot-gated` plus a `re-export the YouTube
-cookies` warning.
+`yt-dlp` may rewrite its cookie jar. Preserve an operator-side source export and
+keep every deployed cookie file mode `0600`.
 
-Two things worth knowing when re-exporting:
+## Cutover from Mac
 
-- **yt-dlp rewrites the cookie file in place** (`# This file is generated by
-  yt-dlp. Do not edit.`). Your pristine browser export is overwritten on first
-  use, so keep a copy outside `data/` if you want to re-seed without going back
-  to the browser.
-- Cookie files should be `chmod 600`. Check with `ls -l ~/horizon/data`.
+1. Persistently disable and unload both Mac launchd labels, verify no Horizon
+   cron entry exists, and confirm no pipeline process is active.
+2. Copy `.env`, gitignored `data/`, generated digest pages, checks, and collection
+   pages over an SSH tar stream. Do not copy virtual environments, `site/`, logs,
+   or model caches.
+3. Restore service ownership and secret/public file modes.
+4. Reapply Linux-only ASR and Search settings.
+5. Pass pytest, strict MkDocs build, config validation, Search probe, bounded
+   gateway smoke, video acceptance, and manual digest acceptance.
+6. If today's timer slots have passed, seed their persistent timestamps before
+   first start to prevent an immediate duplicate catch-up run:
 
-## Deploying a Change
+   ```bash
+   ssh prod-node "pct exec $HORIZON_CTID -- touch \
+     /var/lib/systemd/timers/stamp-horizon-video.timer \
+     /var/lib/systemd/timers/stamp-horizon-digest.timer"
+   ```
 
-The macOS pipeline box tracks the GitHub repo. Check its branch and working tree
-first because generated site files may be modified; preserve them rather than
-resetting blindly. Once the intended pull is confirmed:
+7. Enable both timers and verify the reported next trigger.
+
+## Rollback to Mac
+
+1. Disable **both** Linux timers before touching Mac scheduling.
+2. Stop or wait for any active Linux one-shot.
+3. Copy only newer summaries, verification state, generated pages, and other
+   mutable runtime state back to the preserved Mac checkout.
+4. Keep/reapply the Mac-specific `asr: "local"` setting if local ASR is desired.
+5. Run manually or reinstall the tracked digest/video launchd templates.
+6. Verify exactly one scheduler is active.
+
+Do not delete the Mac checkout, credentials, TTS environment, or caches until
+seven consecutive automated Linux runs have succeeded and the operator approves
+cleanup.
+
+## Deploying a code change
+
+Production runs an exact tested SHA, not an opportunistic `git pull`. Test the
+candidate revision offline first, disable both timers, confirm no active run,
+preserve generated tracked pages, then check out the approved SHA and run
+`uv sync --frozen`. Regenerate status/index pages before publishing. Never reset
+a dirty production tree blindly.
+
+Search API releases are independent: deploy only the exact committed Search API
+artifact and restart only its proxy service. Do not restart Elasticsearch or run
+the paid digest for an API-only change.
+
+## Minimal verification commands
 
 ```bash
-ssh prod-mac 'cd ~/horizon && git status --short --branch'
-ssh prod-mac 'cd ~/horizon && git pull && ~/bin/uv sync --extra asr'
+zsh -n deploy/run-daily.sh
+uv run --frozen --extra dev pytest -q
+uv sync --frozen  # restore the runtime-only environment
+mkdocs build --strict
+systemd-analyze verify /etc/systemd/system/horizon-*.service \
+  /etc/systemd/system/horizon-*.timer
 ```
-
-Drop `--extra asr` on non-Apple-Silicon hosts. Verify with the offline suite
-before pulling anything: `pytest` on the workstation, not on the box.
-
-That pull does **not** update production search. For a Search API-only change,
-copy the exact committed `deploy/search/search_api.py` to the search host's
-`/opt/horizon/search/search_api.py`, retain a rollback copy, and restart only
-`horizon-search-api.service`. Verify the artifact hash, both local endpoint
-aliases, and the public `/api/search` contract; do not restart Elasticsearch or
-run the paid pipeline.

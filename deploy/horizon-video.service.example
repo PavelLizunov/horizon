@@ -1,0 +1,32 @@
+[Unit]
+Description=Horizon video source sidecar
+Documentation=https://github.com/PavelLizunov/horizon
+Wants=network-online.target
+After=network-online.target
+ConditionPathExists=/opt/horizon/.env
+ConditionPathExists=/opt/horizon/data/config.json
+
+[Service]
+Type=oneshot
+User=horizon
+Group=horizon
+WorkingDirectory=/opt/horizon
+Environment=HOME=/var/lib/horizon
+Environment=LANG=C.UTF-8
+Environment=LC_ALL=C.UTF-8
+Environment=PATH=/var/lib/horizon/bin:/opt/horizon/.venv/bin:/usr/local/bin:/usr/bin:/bin
+Environment=UV_CACHE_DIR=/var/cache/horizon/uv
+# Optional, operator-approved public egress for YouTube only.
+EnvironmentFile=-/etc/horizon/video-egress.env
+UMask=0022
+ExecStart=/usr/bin/flock -n -E 75 /run/lock/horizon-production.lock /opt/horizon/.venv/bin/horizon-video --hours 24
+TimeoutStartSec=2h
+Nice=5
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=full
+ReadWritePaths=/opt/horizon/data /var/lib/horizon /var/cache/horizon
+MemoryHigh=1G
+MemoryMax=1536M
+CPUQuota=200%

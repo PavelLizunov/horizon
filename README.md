@@ -9,8 +9,8 @@ A maintained fork of [Thysrael/Horizon](https://github.com/Thysrael/Horizon) (MI
 Its five major additions are:
 
 - **YouTube as a source.** Channel videos become timestamped transcripts —
-  subtitles first, on-device Whisper if there are none, a vision model reading
-  storyboard frames if there is no audio worth transcribing. Nothing is scored
+  subtitles first, on-device Whisper on the macOS reference runtime, then the
+  configured vision fallback with ASR off on Linux production. Nothing is scored
   from a title. See [docs/video-source.md](docs/video-source.md).
 - **4PDA as a source.** Selected forum topics become quote-stripped, time-normalized
   field reports with deep links to their original posts.
@@ -18,8 +18,9 @@ Its five major additions are:
   an ingress; chat delivery carries headlines that deep-link into it, because a
   full digest does not fit in a message and is rejected rather than truncated.
 - **Narration.** The deployment attempts a Russian voice track for each published
-  article, generates it locally, and has a second model transcribe it back; only
-  tracks that pass grading are linked from the page player. See [docs/narration.md](docs/narration.md).
+  article on supported runtimes, generates it locally, and has a second model transcribe it back;
+  only tracks that pass grading are linked from the page player (skipped on Linux production until
+  independent Linux grading exists; macOS retained as cold reference). See [docs/narration.md](docs/narration.md).
 - **Evidence Ledger verification.** Core factual claims are captured with replayable
   lineage, checked against source documents, and published through a bounded
   reader-facing schema. See [docs/verification/](docs/verification/).
@@ -149,9 +150,10 @@ uv run horizon --hours 24        # or: docker compose run --rm horizon --hours 2
 | `-l`, `--log-level LEVEL` | `WARNING` | DEBUG / INFO / WARNING / ERROR / CRITICAL |
 
 The briefing lands in `data/summaries/`. To schedule it, see
-[deploy/README.md](deploy/README.md) — on the deployed box launchd calls
-`deploy/run-daily.sh`, which runs the pipeline, immediately publishes the text
-pages, then narrates them and republishes the pages with audio players.
+[deploy/README.md](deploy/README.md) — current production runs on a dedicated Debian
+LXC using systemd (macOS launchd retained as supported cold rollback/reference).
+On Linux production `run-daily.sh` publishes text pages and skips narration until
+independent Linux grading exists.
 
 ## Sources
 
@@ -209,9 +211,10 @@ README/spec updates; see [AGENTS.md](AGENTS.md).
 
 The maintained feature set covers multi-source collection, profile-driven analysis and
 enrichment, deduplication, comment summaries, Evidence Ledger verification,
-localized generation, narration, site publication, search indexing, webhooks,
-and email delivery. The deployment scripts support scheduled daily runs. Tests are
-offline and CI runs them on pushes to `main` and on pull requests.
+localized generation, narration (on supported reference runtime), site publication, search indexing,
+webhooks, and email delivery. Production runs on Linux (Debian LXC / systemd), with macOS
+retained as a supported cold rollback/reference. Tests are offline and CI runs them on
+pushes to `main` and on pull requests.
 
 ## Contributing
 

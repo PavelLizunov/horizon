@@ -70,8 +70,8 @@ data/
   youtube-cookies*.txt # GITIGNORED session cookies — TOP-SECRET, never commit
 tests/               # pytest suite (offline; network code is mocked)
 scripts/             # dev/debug utilities (dev_check_*.py, dev_collection_status.py, etc.)
-deploy/              # launchd templates + RUNBOOK.md for driving the deployed box
-                     #   run-daily.sh is what launchd calls: pipeline, index,
+deploy/              # systemd/launchd templates + RUNBOOK.md for driving the deployed box
+                     #   run-daily.sh is what systemd (or launchd) calls: pipeline, index,
                      #   build/ship, narration, build/ship — text goes live
                      #   first so speech cannot hold Telegram links on a 404
 docs/                # long-form docs:
@@ -168,8 +168,8 @@ The short version:
 
 - New videos are discovered via the **channel RSS feed** (cheap, no auth).
 - Content extraction ladder: **subtitles (yt-dlp)** → **local ASR** (`mlx-whisper`,
-  Apple Silicon) → **vision fallback** (storyboard frames summarized by the
-  configured vision model). First rung that produces text wins.
+  macOS reference) → **vision fallback** (storyboard frames summarized by the
+  configured vision model, with ASR off on Linux production). First rung that produces text wins.
 - YouTube actively blocks non-residential IPs. Workarounds are documented in `video.py`.
 - `yt-dlp` is imported lazily inside methods, so tests run offline without touching the network.
 
@@ -197,13 +197,15 @@ Read `src/scrapers/fourpda.py` before modifying forum ingestion.
 
 ## 6.5 Narration
 
-The deployment attempts a Russian voice track for each published article and links only
-tracks that pass grading. Read `docs/narration.md` before touching it.
+The deployment attempts a Russian voice track for each published article on supported runtimes
+and links only tracks that pass grading. On Linux production, narration is skipped until
+independent Linux grading exists; macOS is retained as a supported cold rollback/reference.
+Read `docs/narration.md` before touching it.
 
 Shape: `src/ai/narration.py` prepares the text (pure, tested, offline).
 `scripts/dev_narrate_article.py` runs on the host in a **separate venv** (`~/tts/.venv`)
-with TeraTTSv2 / `ru_f1` and Whisper grading.
-`deploy/run-daily.sh` publishes text pages first, runs synthesis, then ships again.
+with TeraTTSv2 / `ru_f1` and Whisper grading (macOS reference).
+`deploy/run-daily.sh` publishes text pages first, runs synthesis (when enabled), then ships again.
 
 ### Invariants for Narration
 1. **The grader is a different model from the generator.** Whisper grades TeraTTSv2.
@@ -238,14 +240,13 @@ Read `docs/verification/` and `src/verification/AGENTS.md` before touching verif
 
 ## 8. Deployment
 
-The scheduled pipeline runs on a macOS (Apple Silicon) box via launchd. Archive
-search runs separately on a dedicated Debian/Linux guest as
-`horizon-elasticsearch.service` plus `horizon-search-api.service`; the Mac indexes
-through an operator-managed local SSH forward. See `deploy/README.md`,
-`deploy/RUNBOOK.md`, and `deploy/search/README.md`.
+The current production pipeline runs on a dedicated Debian LXC using systemd, with macOS
+(Apple Silicon via launchd) retained as a supported cold rollback/reference platform.
+Archive search remains separate as `horizon-elasticsearch.service` plus
+`horizon-search-api.service`. See `deploy/README.md`, `deploy/RUNBOOK.md`, and `deploy/search/README.md`.
 
 - Pipeline runtime deps: `node` (yt-dlp JS solver) and `ffmpeg`.
-- Narration venv: `~/tts/.venv`.
+- Narration venv: `~/tts/.venv` (macOS reference runtime; skipped on Linux production).
 - The Compose search stack is reference/local only, not current production.
 - Site, search, SSH, and audio destinations are deployment-specific. Do not copy concrete
   endpoints into new code or docs; changing existing operational defaults requires owner review.

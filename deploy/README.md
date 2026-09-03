@@ -4,26 +4,66 @@ The Horizon pipeline is a periodic batch job: run it on a schedule, read the dig
 writes to `data/summaries/` (and/or receive it via webhook/email). The core job has no
 daemon or listening port; the optional archive-search stack under `deploy/search/` is separate.
 
-The current operator deployment keeps the scheduled pipeline on macOS and runs
-archive search in a dedicated Debian/Linux guest under
-`horizon-elasticsearch.service` and `horizon-search-api.service`. The pipeline
-reaches the guest's loopback-only Elasticsearch through a persistent local SSH
-forward. Docker Compose under `deploy/search/` remains a supported reference/local
-alternative, not the current production topology.
+The current production topology runs the scheduled pipeline in a dedicated Debian
+LXC under `horizon-video.timer` and `horizon-digest.timer`. Elasticsearch and its
+read-only Search API remain on a separate Linux guest; the pipeline reaches the
+loopback-only writer endpoint through `horizon-search-tunnel.service`. The macOS
+launchd setup is preserved as a cold rollback/reference. See
+[`specs/linux-production`](../specs/linux-production/spec.md) for the contract.
 
 ## Choosing a Host
 
 | Host | Notes |
 |------|-------|
-| **macOS (Apple Silicon)** | Best fit: local ASR via mlx-whisper works. launchd template below. |
-| **Linux box / VM** | Fine for everything except local ASR — set `sources.video.asr: "off"` and rely on subtitles + vision fallback. Use cron/systemd timer. |
+| **Debian LXC / Linux box (Current Production)** | Primary production setup using systemd timer/service. Set `sources.video.asr: "off"` and rely on subtitles + vision fallback. Narration is skipped gracefully when the TTS environment is absent. Reaches search via loopback/tunnel and publishes static site over a restricted SSH key. Uses a shared `flock` lockfile to prevent overlapping runs. |
+| **macOS (Apple Silicon) (Rollback / Reference)** | Supported rollback/reference setup using launchd. Supports local ASR via `mlx-whisper` (`uv sync --extra asr`) and local narration TTS (`~/tts/.venv`). |
 | **GitHub Actions cron** | Can run the pipeline (the tracked `daily-summary.yml.disabled` is only a disabled template), but YouTube cookie handling and local ASR are impractical there. |
 
 YouTube access note: if the host egresses through a datacenter/VPN IP, expect
 bot-gate pressure — you will need the `cookies_file` setup described in
-`docs/video-source.md`.
+[`docs/video-source.md`](../docs/video-source.md).
 
-## macOS via launchd (reference setup)
+## Debian LXC via systemd (current production)
+
+1. Create an unprivileged Debian 12 guest and a non-login `horizon` service
+   account. The reference layout is `/opt/horizon` for the exact tested checkout,
+   `/var/lib/horizon` for its home/SSH identities, and `/var/cache/horizon` for
+   the installation cache.
+2. Install Python 3.11+, `uv`, Node.js, ffmpeg, Git, zsh, rsync, and the OpenSSH
+   client. Run `uv sync --frozen`; do not install the Apple-only `asr` extra.
+3. Copy `.env`, gitignored `data/`, generated digest pages, `docs/checks.md`, and
+   `docs/collection.md` from the stopped source host. Keep `.env`, live config,
+   cookies, and config backups mode `0600`.
+4. In `data/config.json`, set `sources.video.asr` to `"off"` and point Search at
+   the local tunnel. Video extraction is subtitles first, then configured vision.
+5. Install the five systemd unit examples in this directory under their names
+   without `.example`. Copy `horizon-runtime.env.example` to
+   `/etc/horizon/runtime.env` and replace its placeholders with operator-owned
+   values. The timers run video at 16:00 and digest at 17:00 local time with
+   `Persistent=true`.
+6. Provision two independent SSH identities: a port-restricted Search tunnel and
+   a source-restricted, forced-command static publisher. Pin both host keys.
+7. If direct YouTube HTTPS is unavailable, an operator may add a mode-`0600`
+   `/etc/horizon/video-egress.env` containing standard `HTTP_PROXY`,
+   `HTTPS_PROXY`, and loopback-only `NO_PROXY` values. Only
+   `horizon-video.service` loads it; do not proxy Search or publishing.
+8. Keep narration disabled by setting `HORIZON_TTS_PYTHON=/nonexistent` in the
+   runtime environment. Linux has no approved independent Whisper grader yet,
+   so text publishes normally without audio.
+
+The video and digest units share `/run/lock/horizon-production.lock`; video
+refuses overlap and digest waits for the current video run. Install timers only
+after offline tests and one manual production acceptance:
+
+```bash
+sudo systemd-analyze verify /etc/systemd/system/horizon-*.service \
+  /etc/systemd/system/horizon-*.timer
+sudo systemctl enable --now horizon-search-tunnel.service
+sudo systemctl enable --now horizon-video.timer horizon-digest.timer
+systemctl list-timers 'horizon-*'
+```
+
+## macOS via launchd (Rollback / Reference Setup)
 
 1. Install the project once:
 
@@ -83,8 +123,7 @@ bot-gate pressure — you will need the `cookies_file` setup described in
 
 With `sources.video.mode: "sidecar"` the YouTube work moves into its own
 process and its own schedule, so yt-dlp breakage or a slow ASR pass cannot
-delay or destabilise the digest run. Install the second job *before* the digest
-job's slot:
+delay or destabilise the digest run. On systemd, enable `horizon-video.timer` (`deploy/horizon-video.timer.example`). On macOS launchd, install the second job *before* the digest job's slot:
 
 ```bash
 sed 's/YOURUSER/yourusername/g' deploy/horizon-video.launchd.example.plist \
@@ -92,9 +131,10 @@ sed 's/YOURUSER/yourusername/g' deploy/horizon-video.launchd.example.plist \
 launchctl load ~/Library/LaunchAgents/com.horizon.video.plist
 ```
 
-The template runs at 16:00, an hour ahead of the 17:00 digest. Only this job
-needs `node`, `ffmpeg` and `mlx-whisper` — the digest host just reads
-`data/video-inbox.json`. Details and failure behaviour: `docs/video-source.md`.
+The template runs at 16:00, an hour ahead of the 17:00 digest. This job needs
+`node` and `ffmpeg`; only the macOS reference runtime additionally uses
+`mlx-whisper`. The digest service reads `data/video-inbox.json`. Details and
+failure behaviour: [`docs/video-source.md`](../docs/video-source.md).
 
 ## Publishing the digest site
 
@@ -175,25 +215,39 @@ narration, then ships again with the audio players. Do not move narration ahead
 of the first ship: on 2026-08-10 it stretched this window from seconds to nine
 minutes (including a cold model download).
 
-## Linux via cron (sketch)
+## Systemd timer cutover and rollback
 
-```cron
-0 17 * * * cd $HOME/horizon && .venv/bin/horizon --hours 24 >> logs/horizon.log 2>&1
-```
+1. Persistently disable and unload any Mac digest/video launchd jobs, check
+   cron, and confirm that no Horizon process is running.
+2. Stream the final gitignored state and generated site pages to `/opt/horizon`;
+   do not copy `.venv`, `site/`, logs, or model caches.
+3. Reapply Linux-only settings (`sources.video.asr: "off"` and the loopback
+   Search URL), ownership, and file modes.
+4. Pass pytest, strict MkDocs build, config validation, Search-tunnel probe,
+   video acceptance, and one manual digest acceptance.
+5. If today's persistent timer slots have already passed, seed their timer stamp
+   before first start so enabling them cannot launch a duplicate catch-up run;
+   use the exact command in the [cutover runbook](RUNBOOK.md#cutover-from-mac).
+6. Enable both timers and confirm each next trigger is the intended upcoming slot
+   (today when it is still ahead, otherwise tomorrow after seeding the stamps).
 
-Set `sources.video.asr` to `"off"` unless you wire up a different ASR backend.
+For rollback, disable **both** Linux timers first and stop any active one-shot.
+Copy only newer runtime state back to the preserved Mac checkout, keep the
+Mac-specific ASR setting, then run manually or restore both launchd plists.
+Never leave Mac and Linux schedulers active together. Keep the Mac intact until
+seven consecutive automated Linux runs have succeeded.
 
 ## Operations
 
-- **Log file**: `logs/horizon.log` — token usage summary at the end of each run.
+- **Logs**: Linux production writes the token summary to `journalctl -u horizon-digest.service`; the macOS reference keeps `logs/horizon.log`.
 - **Output**: `data/summaries/YYYY-MM-DD-*.md` (gitignored state).
 - **Cookies expiry**: when subtitle fetches start failing, re-export
-  `data/youtube-cookies*.txt` (see `docs/video-source.md`).
-- **Pipeline updates**: inspect the checkout for generated/local changes before
-  `git pull && uv sync`; never reset them blindly. No pipeline service restart is
-  needed—the next scheduled run picks up code. Re-run with `--extra asr` if you
-  use local ASR. Production Search API updates are separate artifact deployments
-  described in `search/README.md`.
+  `data/youtube-cookies*.txt` (see [`docs/video-source.md`](../docs/video-source.md)).
+- **Pipeline updates**: deploy an explicitly tested SHA during a disabled-timer
+  window. Preserve generated tracked pages before checkout and regenerate them
+  before publishing; never run a blind `git pull` or reset on production. One-shot
+  services need no restart. Search API updates remain separate artifact deployments
+  described in [`search/README.md`](search/README.md).
 - **Secrets on the host**: `.env` and cookie files should be readable only by the
   service account (`chmod 600`). Never commit them.
 
@@ -204,11 +258,11 @@ change produce items with descriptions but no transcripts, which looks like a
 quiet week rather than an outage. Two log lines make that visible:
 
 ```bash
-grep 'Video preflight:'   ~/horizon/logs/horizon.log   # missing node/ffmpeg/cookies/mlx
-grep 'Video run'          ~/horizon/logs/horizon.log   # per-run extraction breakdown
+journalctl -u horizon-video.service --since today | grep 'Video preflight:'
+journalctl -u horizon-video.service --since today | grep 'Video run'
 ```
 
-A healthy run logs `Video run: 9 videos: 7 subtitles, 1 ASR, 0 vision, 0
+A healthy run logs `Video run: 9 videos: 7 subtitles, 0 ASR, 1 vision, 0
 description-only, 1 skipped, 0 failed`. When the share of videos yielding text
 falls below `sources.video.min_transcript_rate` (default 0.5, needs ≥3 graded videos),
 the line is promoted to a WARNING containing `Video run degraded` — that is the
@@ -218,34 +272,32 @@ alert to act on. Set up whatever notifier you like on that string; the
 ### Weekly check
 
 ```bash
-cd ~/horizon
-uv run python scripts/dev_check_video_fetch.py   # real fetch + extraction summary
-uv sync --upgrade-package yt-dlp                 # YouTube changes often; yt-dlp tracks it
+cd /opt/horizon
+.venv/bin/python scripts/dev_check_video_fetch.py   # real fetch, no vision model
 ```
 
-### The mac stays awake, or it misses days
+The command still uses live YouTube/network access. Run it under the same
+video-only egress environment when production requires that route. Update
+`yt-dlp` only through a reviewed lockfile and exact-SHA deployment, never as an
+ad-hoc production upgrade.
 
-`StartCalendarInterval` does **not** replay missed runs: if the machine is
-asleep at the scheduled time, that day is simply skipped. For an always-on Mac
-mini the simplest fix is to stop it sleeping:
+### Host uptime and log rotation
+
+Linux LXC production uses systemd timers and journal retention. For an always-on
+macOS rollback host, either disable sleep or configure a scheduled wake before
+the jobs:
 
 ```bash
 sudo pmset -a sleep 0 disksleep 0
+# Alternative when sleep is desired:
+sudo pmset repeat wakeorpoweron MTWRFSU 15:55:00
 ```
 
-Or, to let it sleep and still wake for the job:
-
-```bash
-sudo pmset repeat wakeorpoweron MTWRFSU 16:55:00
-```
-
-### Log rotation
-
-`logs/horizon.log` is append-only and never rotated. Add a `newsyslog` rule:
+The macOS `logs/horizon.log` file is append-only. Add a `newsyslog` rule such as:
 
 ```bash
 echo '/Users/YOURUSER/horizon/logs/horizon.log 644 7 5000 * J' \
   | sudo tee /etc/newsyslog.d/horizon.conf
 ```
 
-(7 generations, rotate past ~5 MB, bzip2-compressed.)
+That retains seven generations, rotates near 5 MB, and compresses old logs.

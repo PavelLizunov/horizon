@@ -1,0 +1,12 @@
+[Unit]
+Description=Run Horizon production digest daily
+Documentation=https://github.com/PavelLizunov/horizon
+
+[Timer]
+OnCalendar=*-*-* 17:00:00
+Persistent=true
+AccuracySec=1min
+Unit=horizon-digest.service
+
+[Install]
+WantedBy=timers.target

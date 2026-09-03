@@ -1,0 +1,23 @@
+[Unit]
+Description=Horizon loopback tunnel to production Elasticsearch
+Documentation=https://github.com/PavelLizunov/horizon
+Wants=network-online.target
+After=network-online.target
+Before=horizon-video.service horizon-digest.service
+
+[Service]
+Type=simple
+User=horizon
+Group=horizon
+Environment=HOME=/var/lib/horizon
+ExecStart=/usr/bin/ssh -NT -F /var/lib/horizon/.ssh/config -o ExitOnForwardFailure=yes -o ServerAliveInterval=30 -o ServerAliveCountMax=3 -L 127.0.0.1:9200:127.0.0.1:9200 horizon-search
+Restart=always
+RestartSec=5s
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+MemoryHigh=96M
+MemoryMax=128M
+
+[Install]
+WantedBy=multi-user.target

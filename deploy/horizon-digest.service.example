@@ -1,0 +1,32 @@
+[Unit]
+Description=Horizon daily production digest and site publish
+Documentation=https://github.com/PavelLizunov/horizon
+Wants=network-online.target
+After=network-online.target horizon-search-tunnel.service
+Requires=horizon-search-tunnel.service
+ConditionPathExists=/opt/horizon/.env
+ConditionPathExists=/opt/horizon/data/config.json
+
+[Service]
+Type=oneshot
+User=horizon
+Group=horizon
+WorkingDirectory=/opt/horizon
+Environment=HOME=/var/lib/horizon
+Environment=LANG=C.UTF-8
+Environment=LC_ALL=C.UTF-8
+Environment=PATH=/var/lib/horizon/bin:/opt/horizon/.venv/bin:/usr/local/bin:/usr/bin:/bin
+Environment=UV_CACHE_DIR=/var/cache/horizon/uv
+EnvironmentFile=/etc/horizon/runtime.env
+UMask=0022
+ExecStart=/usr/bin/flock -w 3600 -E 75 /run/lock/horizon-production.lock /usr/bin/zsh /opt/horizon/deploy/run-daily.sh
+TimeoutStartSec=4h
+Nice=5
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=full
+ReadWritePaths=/opt/horizon/data /opt/horizon/docs/digest /opt/horizon/docs/checks.md /opt/horizon/docs/collection.md -/opt/horizon/site /var/lib/horizon /var/cache/horizon
+MemoryHigh=2500M
+MemoryMax=3G
+CPUQuota=200%

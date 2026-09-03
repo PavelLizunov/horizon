@@ -12,6 +12,10 @@ recoverable by reading the code.
 
 ## Unreleased
 
+### Linux production deployment contract updated
+
+Updated repository-level contracts to establish a dedicated Debian LXC using systemd as the current production pipeline, retaining macOS as a supported cold rollback/reference. On Linux production, video ingestion uses subtitles then the configured vision fallback with local ASR off, narration is skipped until independent Linux grading exists, and archive search remains separate.
+
 ### Spec-Driven Development (SDD) architecture adopted
 
 The repository transitions to structured Spec-Driven Development (SDD, GitHub Spec-Kit format).
