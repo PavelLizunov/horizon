@@ -843,8 +843,9 @@ def _speak_many(directory: Path, args) -> int:
 
     engine = getattr(args, "engine", "tera")
     model = None
+    teratts_url = os.getenv("TERATTS_URL")
     if engine == "tera":
-        if not os.getenv("TERATTS_URL"):
+        if not teratts_url:
             from transformers import AutoModel
 
             print(f"loading {TERA_MODEL.split('/')[-1]} …", flush=True)
@@ -853,7 +854,7 @@ def _speak_many(directory: Path, args) -> int:
                 provider="CPUExecutionProvider", threads=8,
             )
         else:
-            print(f"using teratts-server at {os.getenv('TERATTS_URL')} …", flush=True)
+            print(f"using teratts-server at {teratts_url} …", flush=True)
     else:
         from mlx_audio.tts.utils import load_model
 
@@ -917,6 +918,10 @@ def main() -> int:
     parser.add_argument("--seed", type=int, help=f"random seed (default {SEED})")
     parser.add_argument("--model", default=None, help="model repo id, for comparing takes")
     args = parser.parse_args()
+
+    from dotenv import load_dotenv
+
+    load_dotenv(REPO / ".env")
 
     if args.seed is not None:
         SEED = args.seed
