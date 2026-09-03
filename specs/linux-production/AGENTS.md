@@ -16,7 +16,7 @@ This directory owns the production-host contract for the dedicated Debian LXC.
 - Static publishing uses a separate forced-command identity.
 - Linux video uses subtitles then configured vision fallback with ASR off.
 - Any proxy is operator-approved, untracked, and scoped to the video service.
-- Linux narration remains disabled until an independent grader exists.
+- Linux narration uses homelab `teratts-server` (LXC 221) and `faster-whisper`.
 - The Mac remains a cold rollback for seven successful automated Linux runs.
 
 Update all three SDD documents together when any of these contracts changes.

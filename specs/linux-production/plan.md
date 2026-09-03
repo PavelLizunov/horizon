@@ -37,6 +37,8 @@ while video refuses a concurrent run.
 - A second key reaches the ingress publisher account. The forced command accepts
   a gzip tar stream, rejects absolute/traversal/link/device members, requires a
   non-empty site index, and writes only the static document root.
+- Speech synthesis calls the internal `teratts-server` (LXC 221) and grades audio
+  via `faster-whisper`.
 - Direct and proxy egress are measured separately. An optional mode-0600
   `video-egress.env` is loaded only by `horizon-video.service`; internal paths
   are never sent through it.

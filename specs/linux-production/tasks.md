@@ -18,7 +18,8 @@ post-cutover gate rather than a blocker for the first accepted deployment.
 - [x] **REQ-07:** Publish through the restricted identity and verify live HTTP 200.
 - [x] **REQ-08:** Set Linux video ASR off.
 - [x] **REQ-09:** Scope the approved HTTP proxy to the video service only.
-- [x] **REQ-10:** Disable optional Linux narration without blocking text publishing.
+- [x] **REQ-10:** Enable Linux-native narration via `teratts-server` (LXC 221)
+      and `faster-whisper` without blocking text publishing if audio fails.
 
 ## Acceptance and handoff
 

@@ -68,11 +68,13 @@ an operator-approved HTTP CONNECT environment. Digest, SSH publication, and the
 loopback search path remain direct; proxy configuration and endpoints stay
 operator-local and untracked.
 
-### REQ-10 — Narration deferral
+### REQ-10 — Linux-native narration via teratts-server
 
-Linux explicitly points the optional narration interpreter at a non-existent
-path. Text is published normally; audio remains disabled until Linux synthesis
-has an independent, verified Whisper-compatible grader.
+Linux production performs speech synthesis via the local homelab `teratts-server`
+HTTP API (`http://192.168.0.221:8088` on LXC 221) and grades audio quality using
+an independent CPU-optimized `faster-whisper` model (`tiny`). Validated tracks are
+uploaded directly from Linux to Caddy over SSH and linked in published articles.
+If synthesis or grading fails for an article, text publishing proceeds normally.
 
 ### REQ-11 — Cold rollback window
 
