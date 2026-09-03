@@ -898,7 +898,7 @@ def main() -> int:
 
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--issue", default="2026-08-07-ru")
-    parser.add_argument("--slug", default="tech-news-1")
+    parser.add_argument("--slug", default=None)
     parser.add_argument("--engine", choices=("tera", "qwen"), default="tera")
     # Default belongs to the engine, so --engine qwen keeps its own voice.
     parser.add_argument("--voice", default=None)
@@ -956,7 +956,7 @@ def main() -> int:
     candidates: Counter[str] = Counter()
     for document in documents:
         slug = document["id"].removeprefix(f"{date}-{language}-")
-        if not args.write_all and slug != args.slug:
+        if args.slug and slug != args.slug:
             continue
         text = narration_text(
             document["title"], document["lead"], document["blocks"], date=date
