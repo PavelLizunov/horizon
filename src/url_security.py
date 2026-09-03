@@ -114,6 +114,14 @@ def _is_https_upgrade(url: httpx.URL, location: httpx.URL) -> bool:
     )
 
 
+def _is_proxied_transport(transport) -> bool:
+    """Check if the transport routes traffic through an HTTP/HTTPS proxy."""
+    if hasattr(transport, "_pool"):
+        pool = transport._pool
+        return hasattr(pool, "_proxy_url") and pool._proxy_url is not None
+    return False
+
+
 async def safe_request(
     client: httpx.AsyncClient,
     method: str,
@@ -126,7 +134,9 @@ async def safe_request(
 
     Resolves destination addresses once and connects directly to a validated
     public IP address while preserving the original Host header and TLS SNI,
-    closing DNS-rebinding TOCTOU windows.
+    closing DNS-rebinding TOCTOU windows. When a proxy transport is configured,
+    validates the destination URL hostname/IP and lets the proxy perform the egress
+    connection with the original target URL.
     """
     current_method = method.upper()
     current_url = url
@@ -137,6 +147,7 @@ async def safe_request(
     for redirect_count in range(max_redirects + 1):
         addresses = await resolve_public_http_url(current_url)
         original_url = httpx.URL(current_url)
+        transport = client._transport_for_url(original_url)
 
         req_headers = httpx.Headers(current_kwargs.get("headers"))
         req_headers["host"] = original_url.netloc.decode("ascii")
@@ -154,11 +165,11 @@ async def safe_request(
 
         response: httpx.Response | None = None
         last_exc: Exception | None = None
-        for address in addresses:
-            target_url = original_url.copy_with(host=address)
+
+        if _is_proxied_transport(transport):
             request = client.build_request(
                 current_method,
-                target_url,
+                original_url,
                 headers=req_headers,
                 extensions=req_extensions,
                 **build_kwargs,
@@ -167,16 +178,35 @@ async def safe_request(
                 for header in ("authorization", "cookie", "proxy-authorization"):
                     request.headers.pop(header, None)
                 send_kwargs["auth"] = None
-            try:
-                response = await client.send(
-                    request,
-                    follow_redirects=False,
-                    **send_kwargs,
+            response = await client.send(
+                request,
+                follow_redirects=False,
+                **send_kwargs,
+            )
+        else:
+            for address in addresses:
+                target_url = original_url.copy_with(host=address)
+                request = client.build_request(
+                    current_method,
+                    target_url,
+                    headers=req_headers,
+                    extensions=req_extensions,
+                    **build_kwargs,
                 )
-                break
-            except (httpx.ConnectError, httpx.ConnectTimeout) as exc:
-                last_exc = exc
-                continue
+                if strip_sensitive_headers:
+                    for header in ("authorization", "cookie", "proxy-authorization"):
+                        request.headers.pop(header, None)
+                    send_kwargs["auth"] = None
+                try:
+                    response = await client.send(
+                        request,
+                        follow_redirects=False,
+                        **send_kwargs,
+                    )
+                    break
+                except (httpx.ConnectError, httpx.ConnectTimeout) as exc:
+                    last_exc = exc
+                    continue
 
         if response is None:
             if last_exc is not None:
