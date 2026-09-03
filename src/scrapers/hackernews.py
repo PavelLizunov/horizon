@@ -73,7 +73,7 @@ class HackerNewsScraper(BaseScraper):
 
         except httpx.HTTPError as e:
             logger.warning("Error fetching Hacker News stories: %s", e)
-            return []
+            raise
 
     async def _fetch_story(self, story_id: int) -> Optional[dict]:
         try:

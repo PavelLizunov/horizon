@@ -97,6 +97,7 @@ class TwitterPlaywrightScraper(BaseScraper):
         )
 
         all_items: List[ContentItem] = []
+        completed_users: set[str] = set()
         failed_users: list[tuple[str, int]] = []
         lock = asyncio.Lock()
 
@@ -160,6 +161,7 @@ class TwitterPlaywrightScraper(BaseScraper):
                         consecutive_failures = 0
                         parsed = [item for item in (self._parse_tweet(t, username) for t in tweets) if item]
                         async with lock:
+                            completed_users.add(username)
                             all_items.extend(parsed)
                     else:
                         consecutive_failures += 1
@@ -194,6 +196,8 @@ class TwitterPlaywrightScraper(BaseScraper):
                 await ctx.close()
             await browser.close()
 
+        if not completed_users:
+            raise RuntimeError("All Twitter users failed in Playwright mode")
         logger.info("Fetched %d tweets via Playwright.", len(all_items))
         return all_items
 

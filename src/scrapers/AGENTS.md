@@ -29,9 +29,11 @@ Adding or updating a source requires synchronized changes across 7 locations:
 7. `tests/`: Add offline unit/integration test suite under `tests/`.
 
 ### 2.2 Per-Source Graceful Degradation
-- External network failures, HTTP errors (4xx/5xx), or rate limits in one scraper **must never** crash the orchestrator run.
-- Scraper internal errors are caught per-scraper in `_fetch_with_progress`, logged as warnings/errors, and returned as a `SourceFetchOutcome(status="failure", error=...)`.
+- A healthy source with no matching items returns `[]`; disabled/config-empty sources and missing optional dependencies also skip cleanly.
+- Multi-endpoint scrapers retain results (including a healthy empty result) when only some endpoints fail, but raise when every attempted endpoint fails operationally.
+- `_fetch_with_progress` catches scraper-wide failures, logs them, and returns `SourceFetchOutcome(status="failure", error=...)`, so one failed scraper never crashes the orchestrator run.
 - Optional metadata parsing failures (e.g. missing video live status, author, or duration) fail open and retain valid content.
+- Video is the documented exception: it never raises and instead exposes degradation through `VideoRunStats`.
 
 ### 2.3 UTC & Time-Window Semantics
 - `fetch(since: datetime)` accepts a timezone-aware UTC datetime.
@@ -52,9 +54,7 @@ Adding or updating a source requires synchronized changes across 7 locations:
 - Heavy/platform dependencies must stay behind lazy import boundaries where implemented. `openbb`, `mlx-whisper`, and Playwright are optional extras; `yt-dlp` is a standard dependency but is still imported lazily so partial installations degrade cleanly.
 
 ### 2.6 Known Audit Gaps (Do Not Copy)
-- Configured RSS feed URLs currently call `client.get()` directly instead of `safe_request()`; their string-date fallback can also produce a naive datetime and abort the rest of that feed.
 - Google News uses its query time operator but does not locally enforce `published_at >= since`, and its string-date fallback is not normalized to UTC.
-- 4PDA stores `cfg.profile` in metadata but omits the top-level requested `ContentItem.profile`.
 - Reddit and Telegram assume `Retry-After` is an integer even though the header may legally be an HTTP date.
 
 ## 3. Special Scraper Invariants
@@ -80,7 +80,7 @@ All scraper tests run strictly offline. Network calls are mocked via `httpx.Mock
 |---|---|---|---|
 | `fourpda.py` | `FourPDAScraper` | `tests/test_fourpda.py` | Encoding, MSK date parsing, quote stripping, deep links |
 | `video.py` | `VideoScraper` | `tests/test_video.py` | RSS parsing, VTT cleanup, fallback ladder, offline stats |
-| `rss.py` | `RSSScraper` | `tests/test_rss.py` | Atom/RSS parsing, date fallbacks, extractor integration |
+| `rss.py` | `RSSScraper` | `tests/test_rss.py` | URL safety, Atom/RSS parsing, UTC date fallbacks, extractor integration, failure aggregation |
 | `reddit.py` | `RedditScraper` | `tests/test_reddit.py` | Subreddit/user fetching, old.reddit parsing, 429 retries |
 | `telegram.py` | `TelegramScraper` | `tests/test_telegram.py` | Web preview HTML parsing, channel message filtering |
 | `twitter.py` / `twitter_playwright.py` | `TwitterScraper`, `TwitterPlaywrightScraper` | `tests/test_twitter.py` | Apify polling, reply thread expansion, Playwright fallback |

@@ -8,12 +8,15 @@ configured languages flow through.
 """
 
 from datetime import datetime, timezone
+import logging
 from typing import List, Optional
 
 import httpx
 
 from ..models import ContentItem, OSSInsightConfig, SourceType
 from .base import BaseScraper
+
+logger = logging.getLogger(__name__)
 
 
 class OSSInsightScraper(BaseScraper):
@@ -39,9 +42,15 @@ class OSSInsightScraper(BaseScraper):
 
         items: List[ContentItem] = []
         seen_ids: set[str] = set()
+        failures = []
 
         for lang in self.cfg.languages:
-            rows = await self._fetch_period(self.cfg.period, lang)
+            try:
+                rows = await self._fetch_period(self.cfg.period, lang)
+            except (httpx.HTTPError, ValueError, TypeError, AttributeError) as exc:
+                logger.warning("OSS Insight failed for %s: %s", lang, exc)
+                failures.append(exc)
+                continue
             for row in rows:
                 item = self._row_to_item(row, lang)
                 if item is None:
@@ -55,23 +64,21 @@ class OSSInsightScraper(BaseScraper):
                 seen_ids.add(item.id)
                 items.append(item)
 
+        if failures and len(failures) == len(self.cfg.languages):
+            raise RuntimeError("All OSS Insight queries failed") from failures[0]
         items.sort(key=lambda x: x.metadata.get("stars_gained", 0), reverse=True)
         return items[: self.cfg.max_items]
 
     async def _fetch_period(self, period: str, language: str) -> List[dict]:
         """Call OSS Insight API for one (period, language) combo."""
         params = {"period": period, "language": language}
-        try:
-            response = await self.client.get(
-                self.BASE_URL,
-                params=params,
-                headers={"Accept": "application/json", "User-Agent": "Horizon/1.0"},
-                timeout=20.0,
-            )
-            response.raise_for_status()
-        except httpx.HTTPError:
-            return []
-
+        response = await self.client.get(
+            self.BASE_URL,
+            params=params,
+            headers={"Accept": "application/json", "User-Agent": "Horizon/1.0"},
+            timeout=20.0,
+        )
+        response.raise_for_status()
         payload = response.json()
         data = payload.get("data") or {}
         rows = data.get("rows") or []

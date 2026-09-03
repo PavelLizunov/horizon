@@ -39,6 +39,18 @@ _TEST_URL_ENV = "TEST_WEBHOOK_URL"
 _TEST_URL = "https://example.com/webhook"
 
 
+@pytest.fixture(autouse=True)
+def _mock_safe_request_transport():
+    async def request(client, method, url, **kwargs):
+        kwargs.pop("follow_redirects", None)
+        return await getattr(client, method.lower())(
+            url, follow_redirects=False, **kwargs
+        )
+
+    with patch("src.services.webhook.safe_request", side_effect=request):
+        yield
+
+
 # ── Template variable replacement ──
 
 

@@ -1,4 +1,4 @@
-﻿"""Offline tests for the Elasticsearch archive indexer."""
+"""Offline tests for the Elasticsearch archive indexer."""
 
 import asyncio
 import json
@@ -127,6 +127,20 @@ def _mock_transport(handler):
     return httpx.MockTransport(transport), requests
 
 
+def _replace_issue(transport, documents):
+    async def run():
+        async with httpx.AsyncClient(
+            transport=transport, base_url="http://es.test"
+        ) as client:
+            return await SearchIndexer(
+                SearchConfig(enabled=True, url="http://es.test"), client
+            ).replace_issue_documents(
+                documents, date="2026-08-06", language="ru"
+            )
+
+    return _run(run())
+
+
 def test_ensure_index_creates_only_when_missing():
     state = {"heads": 0}
 
@@ -182,33 +196,24 @@ def test_bulk_index_sends_ndjson_with_per_doc_ids():
     assert _run(run()) == 1
 
 
-def test_bulk_index_reports_partial_errors_as_warning(caplog):
-    def handler(request):
-        if request.method == "POST":
-            return httpx.Response(
-                200,
-                json={
-                    "errors": True,
-                    "items": [
-                        {"index": {"status": 400, "error": {"reason": "mapper parsing"}}}
-                    ],
-                },
-            )
-        return httpx.Response(200)
-
-    transport, _ = _mock_transport(handler)
-    config = SearchConfig(enabled=True, url="http://es.test")
+def test_issue_replacement_aborts_cleanup_on_partial_bulk_failure():
+    response = {
+        "errors": True,
+        "items": [{"index": {"error": {"reason": "mapper parsing"}}}],
+    }
+    transport, requests = _mock_transport(
+        lambda request: httpx.Response(200, json=response)
+    )
     documents = build_search_documents(
-        _view([_item(1)]), "2026-08-06", "ru", "https://digest.ninitux.com/digest"
+        _view([_item(1)]), "2026-08-06", "ru", "https://example.test"
     )
 
-    async def run():
-        async with SearchIndexer(config, client=httpx.AsyncClient(transport=transport, base_url="http://es.test")) as indexer:
-            return await indexer.index_documents(documents)
+    with pytest.raises(RuntimeError, match="mapper parsing"):
+        _replace_issue(transport, documents)
 
-    with caplog.at_level("WARNING"):
-        _run(run())
-    assert any("mapper parsing" in record.message for record in caplog.records)
+    assert [request.url.path for request in requests] == [
+        "/horizon-articles/_bulk"
+    ]
 
 
 def test_config_example_stays_valid_with_search_section():
@@ -261,4 +266,74 @@ def test_archive_parser_splits_the_old_combined_format():
     assert "rss ·" not in first["content"]
     # The hit opens our article page; the source is secondary.
     assert first["page"] == "https://digest.ninitux.com/digest/2026-08-06-ru/tech-news-1/"
+
+
+def test_documents_use_resolved_classification_profile():
+    item = _item(1)
+    # Requested profile is general, but resolved classification profile is resolved-tech
+    item.profile = "general"
+    item.processing.classification = ClassificationResult(
+        profile="resolved-tech", method="source_override"
+    )
+    docs = build_search_documents(
+        _view([item]), "2026-08-06", "ru", "https://digest.ninitux.com/digest"
+    )
+    assert docs[0]["profile"] == "resolved-tech"
+
+
+def test_issue_replacement_rejects_documents_from_another_issue():
+    async def run():
+        async with httpx.AsyncClient() as client:
+            indexer = SearchIndexer(SearchConfig(), client=client)
+            await indexer.replace_issue_documents(
+                [{"id": "other", "date": "2026-08-05", "language": "ru"}],
+                date="2026-08-06",
+                language="ru",
+            )
+
+    with pytest.raises(ValueError, match="must match"):
+        _run(run())
+
+
+def test_replace_issue_documents_deletes_only_stale_documents():
+    def handler(request):
+        if request.url.path.endswith("_bulk"):
+            return httpx.Response(200, json={"errors": False})
+        return httpx.Response(200, json={"failures": []})
+
+    transport, requests = _mock_transport(handler)
+    documents = build_search_documents(
+        _view([_item(1), _item(2)]), "2026-08-06", "ru", "https://example.test"
+    )
+
+    assert _replace_issue(transport, documents) == 2
+    assert [request.url.path for request in requests] == [
+        "/horizon-articles/_bulk",
+        "/horizon-articles/_delete_by_query",
+    ]
+    query = json.loads(requests[1].content)["query"]["bool"]
+    assert query["filter"] == [
+        {"term": {"date": "2026-08-06"}},
+        {"term": {"language": "ru"}},
+    ]
+    assert query["must_not"] == [
+        {"terms": {"id": [document["id"] for document in documents]}}
+    ]
+
+
+def test_replace_issue_documents_prunes_whole_issue_for_empty_current_set():
+    transport, requests = _mock_transport(
+        lambda request: httpx.Response(200, json={"failures": []})
+    )
+
+    assert _replace_issue(transport, []) == 0
+    assert [request.url.path for request in requests] == [
+        "/horizon-articles/_delete_by_query"
+    ]
+    query = json.loads(requests[0].content)["query"]["bool"]
+    assert query["filter"] == [
+        {"term": {"date": "2026-08-06"}},
+        {"term": {"language": "ru"}},
+    ]
+    assert "must_not" not in query
 

@@ -32,7 +32,7 @@ Shared top-level CLI & logging modules:
    - **Rule**: Scraper, AI, or verification interface changes directly couple with `orchestrator.py`. Ensure pipeline flow wiring matches module contracts.
 
 3. **Security & Utility Layer**:
-   - `src/url_security.py`: Public-address URL validation (`validate_public_http_url`, `resolve_public_http_url`) and per-redirect checks (`safe_request`). `safe_request` still lets the HTTP transport resolve the hostname again after validation, leaving a known DNS-rebinding TOCTOU gap; `verification/fetch.py` demonstrates address-pinned transport.
+   - `src/url_security.py`: Public-address URL validation (`validate_public_http_url`, `resolve_public_http_url`) and address-pinned requests (`safe_request`). Every initial/redirect destination is resolved once, connected by validated IP, and sent with the original Host header and TLS SNI.
    - `src/_file_utils.py`: Atomic file writing (`_atomic_write_text`, `_atomic_write_bytes`) via temporary file replacements.
 
 ## Child Packages
@@ -55,10 +55,10 @@ Defer package-specific implementation details to child guides or module document
    - Entry point callables and CLI arguments in `_cli.py` and `main.py` must maintain public interface stability.
 
 2. **URL Security**:
-   - Web queries and link fetches must route through `src/url_security.py` as the central SSRF policy; do not treat the current `safe_request` TOCTOU caveat as permission to bypass it.
+   - Web queries and link fetches must route through `src/url_security.py` as the central address-pinned SSRF policy; never validate a hostname and then issue an independently resolved request.
 
 3. **Graceful Degradation**:
-   - External fetch, scrape, or AI operations must fail gracefully (log warning / drop items) without aborting the entire orchestrator execution run.
+   - External fetch, scrape, or AI failures are isolated per source. One failed source must not abort the run; an all-sources fetch failure remains a fatal pipeline condition.
    - Verification gracefully handles search rate limits and errors without rendering scary internal error statuses to public outputs.
 
 4. **Offline Testing**:

@@ -5,6 +5,7 @@ from datetime import datetime, timedelta, timezone
 from unittest.mock import AsyncMock, MagicMock
 
 import httpx
+import pytest
 
 from src.models import GoogleNewsConfig
 from src.scrapers.google_news import GoogleNewsScraper
@@ -137,13 +138,13 @@ def test_empty_query_returns_empty() -> None:
     assert asyncio.run(scraper.fetch(_now())) == []
 
 
-def test_http_error_returns_empty() -> None:
+def test_http_error_is_reported() -> None:
     client = AsyncMock()
     client.get.side_effect = httpx.HTTPError("boom")
-    config = GoogleNewsConfig(enabled=True, query="ai")
-    scraper = GoogleNewsScraper(config, client)
+    scraper = GoogleNewsScraper(GoogleNewsConfig(enabled=True, query="ai"), client)
 
-    assert asyncio.run(scraper.fetch(_now())) == []
+    with pytest.raises(httpx.HTTPError, match="boom"):
+        asyncio.run(scraper.fetch(_now()))
 
 
 def test_empty_feed_returns_empty() -> None:

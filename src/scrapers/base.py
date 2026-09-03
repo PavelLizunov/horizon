@@ -29,7 +29,11 @@ class BaseScraper(ABC):
             since: Only fetch items published after this time
 
         Returns:
-            List[ContentItem]: Fetched content items
+            List[ContentItem]: Fetched items; empty when a healthy source has no matches.
+
+        Raises:
+            Exception: When every configured endpoint fails, unless the source has
+                a documented degradation report (for example, video statistics).
         """
         pass
 

@@ -93,6 +93,27 @@ async def validate_public_http_url(url: str) -> str:
     return url
 
 
+_REDIRECT_STATUSES = {301, 302, 303, 307, 308}
+
+
+def _same_origin(url: httpx.URL, other: httpx.URL) -> bool:
+    url_port = url.port or (443 if url.scheme == "https" else 80)
+    other_port = other.port or (443 if other.scheme == "https" else 80)
+    return url.scheme == other.scheme and url.host == other.host and url_port == other_port
+
+
+def _is_https_upgrade(url: httpx.URL, location: httpx.URL) -> bool:
+    url_port = url.port or 80
+    loc_port = location.port or 443
+    return (
+        url.host == location.host
+        and url.scheme == "http"
+        and url_port == 80
+        and location.scheme == "https"
+        and loc_port == 443
+    )
+
+
 async def safe_request(
     client: httpx.AsyncClient,
     method: str,
@@ -101,33 +122,108 @@ async def safe_request(
     max_redirects: int = 10,
     **kwargs,
 ) -> httpx.Response:
-    """Make a request after validating the initial URL and each redirect hop."""
+    """Make a request after validating the initial URL and each redirect hop.
+
+    Resolves destination addresses once and connects directly to a validated
+    public IP address while preserving the original Host header and TLS SNI,
+    closing DNS-rebinding TOCTOU windows.
+    """
     current_method = method.upper()
     current_url = url
-    current_kwargs = kwargs
+    current_kwargs = dict(kwargs)
+    current_kwargs.pop("follow_redirects", None)
+    strip_sensitive_headers = False
 
     for redirect_count in range(max_redirects + 1):
-        await validate_public_http_url(current_url)
-        request = getattr(client, current_method.lower())
-        response = await request(current_url, follow_redirects=False, **current_kwargs)
-        if response.status_code not in {301, 302, 303, 307, 308}:
+        addresses = await resolve_public_http_url(current_url)
+        original_url = httpx.URL(current_url)
+
+        req_headers = httpx.Headers(current_kwargs.get("headers"))
+        req_headers["host"] = original_url.netloc.decode("ascii")
+
+        req_extensions = dict(current_kwargs.get("extensions") or {})
+        req_extensions["sni_hostname"] = original_url.raw_host.decode("ascii")
+
+        send_keys = {"stream", "auth"}
+        build_kwargs = {
+            k: v
+            for k, v in current_kwargs.items()
+            if k not in send_keys and k not in {"headers", "extensions"}
+        }
+        send_kwargs = {k: v for k, v in current_kwargs.items() if k in send_keys}
+
+        response: httpx.Response | None = None
+        last_exc: Exception | None = None
+        for address in addresses:
+            target_url = original_url.copy_with(host=address)
+            request = client.build_request(
+                current_method,
+                target_url,
+                headers=req_headers,
+                extensions=req_extensions,
+                **build_kwargs,
+            )
+            if strip_sensitive_headers:
+                for header in ("authorization", "cookie", "proxy-authorization"):
+                    request.headers.pop(header, None)
+                send_kwargs["auth"] = None
+            try:
+                response = await client.send(
+                    request,
+                    follow_redirects=False,
+                    **send_kwargs,
+                )
+                break
+            except (httpx.ConnectError, httpx.ConnectTimeout) as exc:
+                last_exc = exc
+                continue
+
+        if response is None:
+            if last_exc is not None:
+                raise last_exc
+            raise URLResolutionError(f"Failed to connect to any resolved address for {current_url}")
+
+        if response.status_code not in _REDIRECT_STATUSES:
             return response
 
         location = response.headers.get("location")
         if not location:
             return response
+
         if redirect_count == max_redirects:
             raise UnsafeURLError("Too many redirects")
 
-        current_url = urljoin(current_url, location)
-        if response.status_code == 303 or (
-            response.status_code in {301, 302} and current_method == "POST"
-        ):
+        await response.aclose()
+
+        previous_url = original_url
+        next_url = httpx.URL(urljoin(current_url, location))
+
+        next_method = current_method
+        if response.status_code == 303 and current_method != "HEAD":
+            next_method = "GET"
+        elif response.status_code == 302 and current_method != "HEAD":
+            next_method = "GET"
+        elif response.status_code == 301 and current_method == "POST":
+            next_method = "GET"
+
+        if next_method != current_method and next_method == "GET":
             current_method = "GET"
             current_kwargs = {
-                key: value
-                for key, value in current_kwargs.items()
-                if key not in {"content", "data", "files", "json"}
+                k: v
+                for k, v in current_kwargs.items()
+                if k not in {"content", "data", "files", "json"}
             }
+            if "headers" in current_kwargs:
+                h = httpx.Headers(current_kwargs["headers"])
+                h.pop("content-length", None)
+                h.pop("transfer-encoding", None)
+                current_kwargs["headers"] = dict(h)
+
+        if not _same_origin(previous_url, next_url) and not _is_https_upgrade(previous_url, next_url):
+            strip_sensitive_headers = True
+            current_kwargs.pop("auth", None)
+
+        current_url = str(next_url)
+        current_kwargs.pop("params", None)
 
     raise UnsafeURLError("Too many redirects")

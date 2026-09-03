@@ -4,6 +4,7 @@ import asyncio
 from datetime import datetime, timezone
 from unittest.mock import AsyncMock, MagicMock
 
+import httpx
 import pytest
 from bs4 import BeautifulSoup
 
@@ -68,6 +69,14 @@ def test_hackernews_category_none_when_unset():
     assert item.metadata["category"] is None
 
 
+def test_hackernews_primary_failure_is_reported():
+    client = AsyncMock()
+    client.get.side_effect = httpx.ConnectError("down")
+
+    with pytest.raises(httpx.ConnectError):
+        asyncio.run(HackerNewsScraper(HackerNewsConfig(), client).fetch(_SINCE))
+
+
 # ---------------------------------------------------------------------------
 # GitHub
 # ---------------------------------------------------------------------------
@@ -128,6 +137,31 @@ def test_github_release_profile_propagates():
 
     assert len(items) == 1
     assert items[0].profile == "github-release-profile"
+
+
+def test_github_raises_only_when_every_source_fails():
+    sources = [
+        GitHubSourceConfig(type="user_events", username="alice"),
+        GitHubSourceConfig(type="repo_releases", owner="alice", repo="repo"),
+    ]
+    client = AsyncMock()
+    client.get.side_effect = [httpx.ConnectError("down"), httpx.ConnectError("down")]
+
+    with pytest.raises(RuntimeError, match="All GitHub"):
+        asyncio.run(GitHubScraper(sources, client).fetch(_SINCE))
+
+
+def test_github_partial_failure_with_healthy_empty_source_returns_empty():
+    response = MagicMock()
+    response.json.return_value = []
+    client = AsyncMock()
+    client.get.side_effect = [httpx.ConnectError("down"), response]
+    sources = [
+        GitHubSourceConfig(type="user_events", username="alice"),
+        GitHubSourceConfig(type="repo_releases", owner="alice", repo="repo"),
+    ]
+
+    assert asyncio.run(GitHubScraper(sources, client).fetch(_SINCE)) == []
 
 
 # ---------------------------------------------------------------------------
@@ -338,6 +372,29 @@ def test_ossinsight_row_to_item_category_none_when_unset():
     item = scraper._row_to_item(row, "Go")
     assert item is not None
     assert item.metadata["category"] is None
+
+
+def test_ossinsight_raises_only_when_every_language_fails():
+    client = AsyncMock()
+    client.get.side_effect = [httpx.ConnectError("down"), httpx.ConnectError("down")]
+    scraper = OSSInsightScraper(
+        OSSInsightConfig(enabled=True, languages=["Python", "Go"]), client
+    )
+
+    with pytest.raises(RuntimeError, match="All OSS Insight"):
+        asyncio.run(scraper.fetch(_SINCE))
+
+
+def test_ossinsight_partial_failure_with_healthy_empty_query_returns_empty():
+    response = MagicMock()
+    response.json.return_value = {"data": {"rows": []}}
+    client = AsyncMock()
+    client.get.side_effect = [httpx.ConnectError("down"), response]
+    scraper = OSSInsightScraper(
+        OSSInsightConfig(enabled=True, languages=["Python", "Go"]), client
+    )
+
+    assert asyncio.run(scraper.fetch(_SINCE)) == []
 
 
 # ---------------------------------------------------------------------------

@@ -175,6 +175,15 @@ class StorageManager:
             _atomic_write_text(filepath, _site_front_matter(page.title) + page.markdown)
             written.append(filepath)
 
+        current_names = {p.name for p in written}
+        for existing in issue_dir.glob("*.md"):
+            if (
+                existing.is_file()
+                and existing.name not in current_names
+                and existing.name != "index.md"
+            ):
+                existing.unlink()
+
         self.write_site_index()
         return issue_dir
 

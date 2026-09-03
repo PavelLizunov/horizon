@@ -116,6 +116,7 @@ def test_fourpda_scraper_fetch():
     assert item1.id == "fourpda:topic:1110469:144704711"
     assert "я.cdn" in item1.content
     assert "Старый пост" not in item1.content  # quote stripped
+    assert item1.profile == "censorship-watch"
     assert item1.metadata["category"] == "ru-field-report"
     assert item1.metadata["profile"] == "censorship-watch"
     assert "p=144704711" in str(item1.url)

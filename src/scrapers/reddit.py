@@ -57,28 +57,37 @@ class RedditScraper(BaseScraper):
             return []
 
         items = []
-        for sub_cfg in self.reddit_config.subreddits:
-            if sub_cfg.enabled:
-                try:
-                    items.extend(await self._fetch_subreddit(sub_cfg, since))
-                except Exception as e:
-                    logger.warning("Error fetching Reddit source: %s", e)
+        failures = []
+        sources = [
+            (cfg, self._fetch_subreddit)
+            for cfg in self.reddit_config.subreddits
+            if cfg.enabled
+        ] + [
+            (cfg, self._fetch_user)
+            for cfg in self.reddit_config.users
+            if cfg.enabled
+        ]
+        for config, fetch in sources:
+            try:
+                items.extend(await fetch(config, since))
+            except Exception as exc:
+                failures.append(exc)
+                logger.warning("Error fetching Reddit source: %s", exc)
 
-        for user_cfg in self.reddit_config.users:
-            if user_cfg.enabled:
-                try:
-                    items.extend(await self._fetch_user(user_cfg, since))
-                except Exception as e:
-                    logger.warning("Error fetching Reddit source: %s", e)
-
+        if failures and len(failures) == len(sources):
+            raise RuntimeError("All Reddit sources failed") from failures[0]
         return items
 
     async def _fetch_subreddit(
         self, cfg: RedditSubredditConfig, since: datetime
     ) -> List[ContentItem]:
-        html_items = await self._fetch_subreddit_html(cfg, since)
-        if html_items:
-            return html_items
+        html_failed = False
+        try:
+            html_items = await self._fetch_subreddit_html(cfg, since)
+            if html_items:
+                return html_items
+        except httpx.HTTPError:
+            html_failed = True
 
         logger.warning(
             "Reddit old HTML returned no posts for r/%s; falling back to JSON",
@@ -96,7 +105,16 @@ class RedditScraper(BaseScraper):
                 "Reddit blocked JSON listing for r/%s; falling back to RSS",
                 cfg.subreddit,
             )
-            return await self._fetch_subreddit_rss(cfg, since)
+            try:
+                return await self._fetch_subreddit_rss(cfg, since)
+            except httpx.HTTPError:
+                if html_failed:
+                    raise
+                return []
+        except httpx.HTTPError:
+            if html_failed:
+                raise
+            return []
         if not data:
             return []
 
@@ -132,7 +150,7 @@ class RedditScraper(BaseScraper):
             response.raise_for_status()
         except httpx.HTTPError as e:
             logger.warning("Reddit RSS fallback failed for r/%s: %s", cfg.subreddit, e)
-            return []
+            raise
 
         feed = feedparser.parse(response.text)
         items = []
@@ -196,7 +214,7 @@ class RedditScraper(BaseScraper):
             logger.warning(
                 "Reddit old HTML request failed for r/%s: %s", cfg.subreddit, e
             )
-            return []
+            raise
 
         posts = self._parse_old_reddit_posts(response.text, cfg)
         return await self._process_posts(
@@ -560,4 +578,4 @@ class RedditScraper(BaseScraper):
             raise
         except httpx.HTTPError as e:
             logger.warning("Reddit request failed for %s: %s", url, e)
-            return None
+            raise

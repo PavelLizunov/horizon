@@ -264,6 +264,32 @@ class TestResilience:
         assert len(result) == 1
         assert result[0].metadata["watchlist"] == "ok"
 
+    def test_all_watchlist_failures_are_reported(self):
+        obb = MagicMock()
+        obb.news.company.side_effect = RuntimeError("upstream down")
+        scraper = _make_scraper(_cfg(), obb=obb)
+
+        with pytest.raises(RuntimeError, match="All OpenBB"):
+            asyncio.run(scraper.fetch(datetime.now(timezone.utc)))
+
+    def test_failed_watchlist_and_healthy_empty_watchlist_return_empty(self):
+        cfg = OpenBBConfig(
+            enabled=True,
+            watchlists=[
+                OpenBBWatchlist(name="down", symbols=["AAPL"]),
+                OpenBBWatchlist(name="empty", symbols=["MSFT"]),
+            ],
+        )
+        obb = MagicMock()
+        obb.news.company.side_effect = [
+            RuntimeError("upstream down"),
+            SimpleNamespace(results=[]),
+        ]
+
+        assert asyncio.run(
+            _make_scraper(cfg, obb=obb).fetch(datetime.now(timezone.utc))
+        ) == []
+
 
 class TestStatic:
     @pytest.mark.parametrize("value,expected", [

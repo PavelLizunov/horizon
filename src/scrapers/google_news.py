@@ -105,7 +105,7 @@ class GoogleNewsScraper(BaseScraper):
 
         except httpx.HTTPError as exc:
             logger.warning("Error fetching Google News feed: %s", exc)
-            return []
+            raise
         except Exception as exc:
             logger.warning("Error parsing Google News feed: %s", exc)
             return []

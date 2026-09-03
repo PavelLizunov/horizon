@@ -125,7 +125,7 @@ class GDELTScraper(BaseScraper):
 
         except httpx.HTTPError as exc:
             logger.warning("Error fetching GDELT articles: %s", exc)
-            return []
+            raise
         except Exception as exc:
             logger.warning("Error parsing GDELT response: %s", exc)
             return []

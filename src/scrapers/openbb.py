@@ -91,10 +91,13 @@ class OpenBBScraper(BaseScraper):
         since_utc = self._ensure_utc(since)
         seen_urls: set[str] = set()
         items: List[ContentItem] = []
+        failures = []
+        attempted = 0
 
         for watchlist in self.openbb_config.watchlists:
             if not watchlist.enabled or not watchlist.symbols:
                 continue
+            attempted += 1
             try:
                 fetched = await self._fetch_watchlist(watchlist, since_utc)
             except Exception as exc:
@@ -103,6 +106,7 @@ class OpenBBScraper(BaseScraper):
                     watchlist.name,
                     exc,
                 )
+                failures.append(exc)
                 continue
             for item in fetched:
                 url_key = str(item.url)
@@ -111,6 +115,8 @@ class OpenBBScraper(BaseScraper):
                 seen_urls.add(url_key)
                 items.append(item)
 
+        if failures and len(failures) == attempted:
+            raise RuntimeError("All OpenBB watchlists failed") from failures[0]
         return items
 
     async def _fetch_watchlist(

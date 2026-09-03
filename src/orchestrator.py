@@ -649,7 +649,11 @@ class HorizonOrchestrator:
                                 lang,
                                 self.config.search.site_base,
                             )
-                            indexed = await indexer.index_documents(documents)
+                            indexed = await indexer.replace_issue_documents(
+                                documents,
+                                date=today,
+                                language=lang,
+                            )
                         self.console.print(
                             f"{self.icons['detail']} Indexed {indexed} "
                             f"{lang.upper()} articles for search\n"

@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import httpx
+import pytest
 
 from src.models import GDELTConfig
 from src.scrapers.gdelt import GDELTScraper
@@ -111,13 +112,13 @@ def test_disabled_config_returns_empty() -> None:
     assert asyncio.run(scraper.fetch(SINCE)) == []
 
 
-def test_http_error_returns_empty() -> None:
+def test_http_error_is_reported() -> None:
     client = AsyncMock()
     client.get.side_effect = httpx.HTTPError("boom")
-    config = GDELTConfig(enabled=True, query="ai")
-    scraper = GDELTScraper(config, client)
+    scraper = GDELTScraper(GDELTConfig(enabled=True, query="ai"), client)
 
-    assert asyncio.run(scraper.fetch(SINCE)) == []
+    with pytest.raises(httpx.HTTPError, match="boom"):
+        asyncio.run(scraper.fetch(SINCE))
 
 
 def test_rate_limit_retries_once_after_provider_window() -> None:

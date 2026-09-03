@@ -65,6 +65,9 @@ def build_search_documents(
             elif item.processing and item.processing.analysis:
                 parts.append(item.processing.analysis.summary)
             slug = view_item.anchor_id.removeprefix("item-")
+            resolved_profile = (
+                item.processing.classification.profile if item.processing else item.profile
+            )
             documents.append(
                 {
                     "id": f"{date}-{language}-{slug}",
@@ -74,7 +77,7 @@ def build_search_documents(
                     "page": f"{page_base}/{date}-{language}/{slug}/",
                     "date": date,
                     "language": language,
-                    "profile": item.profile or "unknown",
+                    "profile": resolved_profile or item.profile or "unknown",
                     "score": float(view_item.score)
                     if isinstance(view_item.score, (int, float))
                     else None,
@@ -138,7 +141,7 @@ class SearchIndexer:
             logger.info("Created search index %s", index)
 
     async def index_documents(self, documents: List[Dict[str, Any]]) -> int:
-        """Bulk-upsert documents; returns how many were written."""
+        """Bulk-upsert documents; raise if Elasticsearch rejects any document."""
         if not documents:
             return 0
         lines: List[str] = []
@@ -153,10 +156,48 @@ class SearchIndexer:
         response.raise_for_status()
         body = response.json()
         if body.get("errors"):
-            failed = [
-                item.get("index", {}).get("error", {}).get("reason", "?")
+            failures = [
+                item.get("index", {}).get("error", {}).get("reason", "unknown error")
                 for item in body.get("items", [])
                 if item.get("index", {}).get("error")
             ]
-            logger.warning("Search bulk had errors: %s", failed[:3])
+            raise RuntimeError(f"Search bulk indexing failed: {failures[:3]}")
         return len(documents)
+
+    async def replace_issue_documents(
+        self,
+        documents: List[Dict[str, Any]],
+        *,
+        date: str,
+        language: str,
+    ) -> int:
+        """Index the current issue and delete older documents no longer present."""
+        if not date or not language:
+            raise ValueError("date and language must be non-empty")
+        if any(
+            doc.get("date") != date or doc.get("language") != language
+            for doc in documents
+        ):
+            raise ValueError("all documents must match the issue date and language")
+
+        indexed = await self.index_documents(documents)
+        bool_clause: Dict[str, Any] = {
+            "filter": [
+                {"term": {"date": date}},
+                {"term": {"language": language}},
+            ]
+        }
+        if documents:
+            bool_clause["must_not"] = [
+                {"terms": {"id": [doc["id"] for doc in documents]}}
+            ]
+
+        response = await self.client.post(
+            f"/{self.config.index}/_delete_by_query",
+            json={"query": {"bool": bool_clause}},
+        )
+        response.raise_for_status()
+        failures = response.json().get("failures") or []
+        if failures:
+            raise RuntimeError(f"Search stale-document cleanup failed: {failures[:3]}")
+        return indexed

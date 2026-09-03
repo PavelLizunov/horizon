@@ -18,7 +18,7 @@ This package manages configuration loading, environment variable expansion, stat
 ## Site Output, Deep-Links & Digest Responsibilities
 
 - **Repository Site Root (`SITE_DIGEST_DIR`)**: Anchored to `_REPO_ROOT / "docs" / "digest"` (`Path(__file__).resolve().parents[2]`), ensuring launchd or cron runs write into the repository site tree regardless of working directory. The generated article pages are gitignored; only the placeholder index and local guide are tracked.
-- **Deep-Link Coupling (`publish_site_pages`)**: Publishes each article as an individual markdown page (`docs/digest/{date}-{language}/{page.slug}.md`). Granular URLs enable external delivery (e.g. Telegram) to deep-link to specific published articles.
+- **Deep-Link Coupling (`publish_site_pages`)**: Publishes each article as an individual markdown page (`docs/digest/{date}-{language}/{page.slug}.md`). After every current page is written successfully, it prunes stale `*.md` article pages from that issue directory while preserving `index.md`. Granular URLs enable external delivery (e.g. Telegram) to deep-link to specific published articles.
 - **Front Matter & Search Index Exclusion**: Prepends YAML front matter (`search:\n  exclude: true`) to exclude digest pages from `search_index.json` bloat, and injects explicit JSON-escaped titles (`title: ...`) so MkDocs renders proper browser tab and preview titles.
 - **Site Index Regeneration (`write_site_index`)**: Rebuilds `docs/digest/index.md` listing recent digest issues with date and article count (`hz-archive`). Needed because git operations on deployed boxes can restore the placeholder over the generated archive listing.
 

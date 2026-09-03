@@ -29,14 +29,14 @@
 ## Technical Invariants & Constraints
 
 1. **Side-Effect & Security Boundaries**:
-   - Webhook requests must route through `src/url_security.py` (`validate_http_url`, `safe_request`) to enforce the central SSRF policy; the parent guide records the current DNS-rebinding caveat.
+   - Webhook requests must route through `src/url_security.py` (`validate_http_url`, `safe_request`) to enforce address-pinned SSRF checks for initial and redirected destinations.
    - Sensitive credentials and secret paths (e.g. Telegram `/bot<token>/` path secrets, secret headers) must be masked using `redact_url()` and `redact_headers()` in log messages, console errors, and dry-run previews.
    - Secrets are loaded dynamically from environment variable names (`url_env`, `password_env`) via `os.getenv()`, never stored directly in configs or models.
 
 2. **Retries & Graceful Degradation**:
    - Webhook notifications catch transport/URL errors (`ConnectError`, `TimeoutException`, `InvalidURL`, `UnsafeURLError`) and return `WebhookDeliveryResult` statuses (`HTTP_FAILURE`, `PLATFORM_FAILURE`, `NETWORK_FAILURE`) rather than raising exceptions that break the orchestrator run.
    - 2xx responses are parsed for platform error payload codes (e.g., Feishu `code != 0`, DingTalk `errcode != 0`, Slack `ok: false`).
-   - Email IMAP/SMTP errors and Elasticsearch bulk errors are logged as warnings/errors without crashing pipeline execution.
+   - Email IMAP/SMTP errors and Elasticsearch indexing/reconciliation errors are logged as warnings/errors without crashing pipeline execution.
 
 3. **Webhook, HTML & URL Safety**:
    - Markdown summary outputs are cleaned with `clean_app_summary_markdown()`.
@@ -46,7 +46,7 @@
 4. **Search Index & API Coupling**:
    - Index documents (`build_search_documents`) align with published site URL slugs (`{date}-{language}-{slug}`).
    - Schema mapping (`INDEX_BODY`) pins property types (`keyword`, `text`, `float`) and `russian` stemmer behavior.
-   - Known gaps: documents store the requested `item.profile` rather than the resolved classification profile; `_bulk` partial failures are logged while `index_documents()` still reports every attempted document as written; and upserts do not prune stale documents for removed pages.
+   - Documents store the resolved classification profile. `replace_issue_documents()` validates exact issue scope, rejects partial bulk failures, and prunes stale documents only for the same date and language after successful indexing.
 
 5. **CLI & Environment Compatibility**:
    - Both CLIs use `src/_cli.py` argument helpers and load `.env`. `horizon-webhook` maps `KeyboardInterrupt` to exit 0; `horizon-video` exits 1 for handled configuration/structural errors and otherwise leaves Ctrl-C to normal interpreter semantics.

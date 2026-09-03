@@ -2,11 +2,15 @@
 
 import asyncio
 from datetime import datetime, timedelta, timezone
+from types import SimpleNamespace
+from unittest.mock import AsyncMock
 
 import httpx
+import pytest
 
 from src.models import TwitterConfig
 from src.scrapers.twitter import TwitterScraper
+from src.scrapers import twitter_playwright
 from src.scrapers.twitter_playwright import TwitterPlaywrightScraper
 
 
@@ -155,6 +159,58 @@ def test_playwright_parse_tweet_propagates_profile():
     assert item.profile == "playwright-profile"
 
 
+@pytest.mark.parametrize(("scrape_result", "should_fail"), [(None, True), ([], False)])
+def test_playwright_distinguishes_total_failure_from_healthy_empty(
+    tmp_path, monkeypatch, scrape_result, should_fail
+):
+    (tmp_path / "cookies.json").write_text("[]", encoding="utf-8")
+    page = SimpleNamespace(goto=AsyncMock(), close=AsyncMock())
+    context = SimpleNamespace(
+        new_page=AsyncMock(return_value=page),
+        add_cookies=AsyncMock(),
+        close=AsyncMock(),
+    )
+    browser = SimpleNamespace(
+        new_context=AsyncMock(return_value=context),
+        close=AsyncMock(),
+    )
+    runtime = SimpleNamespace(
+        chromium=SimpleNamespace(launch=AsyncMock(return_value=browser))
+    )
+
+    class RuntimeContext:
+        async def __aenter__(self):
+            return runtime
+
+        async def __aexit__(self, *args):
+            return None
+
+    class FakeStealth:
+        def use_async(self, runtime_factory):
+            return RuntimeContext()
+
+    monkeypatch.setattr(twitter_playwright, "PLAYWRIGHT_AVAILABLE", True)
+    monkeypatch.setattr(
+        twitter_playwright, "async_playwright", lambda: object(), raising=False
+    )
+    monkeypatch.setattr(twitter_playwright, "Stealth", FakeStealth)
+    monkeypatch.setattr(twitter_playwright.asyncio, "sleep", AsyncMock())
+    scraper = TwitterPlaywrightScraper(
+        _make_config(
+            mode="playwright", cookie_dir=str(tmp_path), cookie_file_pattern="*.json"
+        ),
+        None,
+    )
+    scraper._scrape_user = AsyncMock(return_value=scrape_result)
+
+    if should_fail:
+        with pytest.raises(RuntimeError, match="All Twitter users"):
+            asyncio.run(scraper.fetch(datetime.now(timezone.utc)))
+    else:
+        assert asyncio.run(scraper.fetch(datetime.now(timezone.utc))) == []
+    browser.close.assert_awaited_once()
+
+
 def test_metadata_keys_aligned_for_analyzer(monkeypatch):
     """Analyzer reads favorite_count/retweet_count/reply_count — verify they are set."""
     monkeypatch.setenv("APIFY_TOKEN", "test_token")
@@ -205,7 +261,7 @@ def test_filters_old_tweets(monkeypatch):
     assert result == []
 
 
-def test_run_failure_returns_empty(monkeypatch):
+def test_run_failure_is_reported(monkeypatch):
     monkeypatch.setenv("APIFY_TOKEN", "test_token")
 
     def handler(request: httpx.Request) -> httpx.Response:
@@ -215,28 +271,48 @@ def test_run_failure_returns_empty(monkeypatch):
             return httpx.Response(200, json=_status_resp("FAILED"))
         raise AssertionError(f"Unexpected: {request.url}")
 
-    transport = httpx.MockTransport(handler)
-    client = httpx.AsyncClient(transport=transport)
-    result = asyncio.run(
-        TwitterScraper(_make_config(), client).fetch(
-            datetime.now(timezone.utc) - timedelta(hours=1)
+    client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+    with pytest.raises(RuntimeError, match="failed or timed out"):
+        asyncio.run(
+            TwitterScraper(_make_config(), client).fetch(
+                datetime.now(timezone.utc) - timedelta(hours=1)
+            )
         )
-    )
     asyncio.run(client.aclose())
-    assert result == []
 
 
-def test_start_run_http_error_returns_empty(monkeypatch):
+def test_start_run_http_error_is_reported(monkeypatch):
     monkeypatch.setenv("APIFY_TOKEN", "test_token")
-    transport = httpx.MockTransport(lambda r: httpx.Response(500, text="error"))
-    client = httpx.AsyncClient(transport=transport)
-    result = asyncio.run(
-        TwitterScraper(_make_config(), client).fetch(
-            datetime.now(timezone.utc) - timedelta(hours=1)
-        )
+    client = httpx.AsyncClient(
+        transport=httpx.MockTransport(lambda request: httpx.Response(500))
     )
+    with pytest.raises(RuntimeError, match="Could not start"):
+        asyncio.run(
+            TwitterScraper(_make_config(), client).fetch(
+                datetime.now(timezone.utc) - timedelta(hours=1)
+            )
+        )
     asyncio.run(client.aclose())
-    assert result == []
+
+
+def test_dataset_failure_is_reported(monkeypatch):
+    monkeypatch.setenv("APIFY_TOKEN", "test_token")
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if "/runs" in request.url.path and request.method == "POST":
+            return httpx.Response(200, json=_run_resp())
+        if "/actor-runs/" in request.url.path:
+            return httpx.Response(200, json=_status_resp())
+        return httpx.Response(500)
+
+    client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+    with pytest.raises(RuntimeError, match="dataset"):
+        asyncio.run(
+            TwitterScraper(_make_config(), client).fetch(
+                datetime.now(timezone.utc) - timedelta(hours=1)
+            )
+        )
+    asyncio.run(client.aclose())
 
 
 def test_no_results_item_skipped(monkeypatch):

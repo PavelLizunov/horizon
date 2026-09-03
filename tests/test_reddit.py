@@ -3,6 +3,7 @@ from datetime import datetime, timedelta, timezone
 from unittest.mock import AsyncMock
 
 import httpx
+import pytest
 
 from src.models import RedditConfig, RedditSubredditConfig, RedditUserConfig
 from src.scrapers.reddit import REDDIT_HEADERS, RedditScraper
@@ -315,3 +316,29 @@ def test_reddit_subreddits_are_fetched_sequentially():
         "LocalLLaMA",
         "MachineLearning",
     ]
+
+
+def test_reddit_reports_total_listing_failure():
+    client = httpx.AsyncClient(
+        transport=httpx.MockTransport(lambda request: httpx.Response(500))
+    )
+    scraper = RedditScraper(_make_config(fetch_comments=0), client)
+
+    with pytest.raises(RuntimeError, match="All Reddit"):
+        asyncio.run(scraper.fetch(datetime.now(timezone.utc)))
+    asyncio.run(client.aclose())
+
+
+def test_reddit_partial_failure_with_healthy_empty_source_returns_empty():
+    def handler(request: httpx.Request) -> httpx.Response:
+        if "LocalLLaMA" in request.url.path:
+            return httpx.Response(500)
+        if request.url.path.endswith(".json"):
+            return httpx.Response(200, json={})
+        return httpx.Response(200, text="")
+
+    client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+    scraper = RedditScraper(_make_two_subreddit_config(), client)
+
+    assert asyncio.run(scraper.fetch(datetime.now(timezone.utc))) == []
+    asyncio.run(client.aclose())

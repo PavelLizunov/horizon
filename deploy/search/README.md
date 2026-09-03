@@ -112,11 +112,10 @@ python3 -m py_compile deploy/search/search_api.py
 
   Document IDs are issue-scoped page slugs, so reindexing is idempotent.
 
-Current indexing limitations are intentionally visible: the stored `profile` is
-the requested item route rather than the resolved classification; Elasticsearch
-bulk partial failures are logged but the returned count still reflects attempted
-documents; and upserts do not prune documents for pages later removed from the
-archive.
+Issue indexing stores the resolved classification profile and replaces the exact
+date/language slice: current documents are bulk-indexed first, then stale IDs in
+that same issue are deleted. Partial bulk failures abort cleanup, and failures
+remain non-fatal to digest publishing.
 
 ## Ingress
 

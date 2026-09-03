@@ -5,12 +5,24 @@ import sys
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import httpx
+import pytest
 
 from src.extractors import TrafilaturaExtractor
 from src.extractors.trafilatura import ARTICLE_HEADERS
 from src.models import TrafilaturaExtractorConfig
 
 URL = "https://example.com/article"
+
+
+@pytest.fixture(autouse=True)
+def _mock_safe_request_transport():
+    async def request(client, method, url, **kwargs):
+        return await getattr(client, method.lower())(
+            url, follow_redirects=False, **kwargs
+        )
+
+    with patch("src.extractors.trafilatura.safe_request", side_effect=request):
+        yield
 
 
 def _extractor() -> TrafilaturaExtractor:

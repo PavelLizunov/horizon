@@ -14,6 +14,7 @@ import feedparser
 from .base import BaseScraper
 from ..extractors import ExtractorRegistry
 from ..models import ContentItem, SourceType, RSSSourceConfig
+from ..url_security import UnsafeURLError, safe_request
 
 logger = logging.getLogger(__name__)
 
@@ -48,14 +49,22 @@ class RSSScraper(BaseScraper):
         """
         items = []
         sources = self.config["sources"]
+        attempted = 0
+        failures = []
 
         for source in sources:
             if not source.enabled:
                 continue
 
-            feed_items = await self._fetch_feed(source, since)
-            items.extend(feed_items)
+            attempted += 1
+            try:
+                items.extend(await self._fetch_feed(source, since))
+            except (httpx.HTTPError, UnsafeURLError) as exc:
+                logger.warning("Error fetching RSS feed %s: %s", source.name, exc)
+                failures.append(exc)
 
+        if failures and len(failures) == attempted:
+            raise RuntimeError("All RSS feeds failed") from failures[0]
         return items
 
     async def _fetch_feed(
@@ -70,73 +79,72 @@ class RSSScraper(BaseScraper):
         Returns:
             List[ContentItem]: Feed content items
         """
+        # Expand environment variables in URL (e.g. ${LWN_TOKEN})
+        feed_url = re.sub(
+            r"\$\{(\w+)\}",
+            lambda m: os.environ.get(m.group(1), m.group(0)).strip(),
+            str(source.url),
+        )
+
+        # Fetch feed content (operational errors like HTTP failures or UnsafeURLError propagate)
+        response = await safe_request(self.client, "GET", feed_url)
+        response.raise_for_status()
+
         items = []
-
         try:
-            # Expand environment variables in URL (e.g. ${LWN_TOKEN})
-            feed_url = re.sub(
-                r"\$\{(\w+)\}",
-                lambda m: os.environ.get(m.group(1), m.group(0)).strip(),
-                str(source.url),
-            )
-
-            # Fetch feed content
-            response = await self.client.get(feed_url, follow_redirects=True)
-            response.raise_for_status()
-
             # Parse feed
             feed = feedparser.parse(response.text)
 
             for entry in feed.entries:
-                # Parse published date
-                published_at = self._parse_date(entry)
-                if not published_at or published_at < since:
-                    continue
+                try:
+                    # Parse published date
+                    published_at = self._parse_date(entry)
+                    if not published_at or published_at < since:
+                        continue
 
-                # Generate unique ID from feed URL and entry ID
-                feed_id = str(source.url).split("//")[1].replace("/", "_")
-                entry_id = entry.get("id", entry.get("link", ""))
-                entry_hash = hashlib.sha256(str(entry_id).encode("utf-8")).hexdigest()[
-                    :16
-                ]
+                    # Generate unique ID from feed URL and entry ID
+                    feed_id = str(source.url).split("//")[1].replace("/", "_")
+                    entry_id = entry.get("id", entry.get("link", ""))
+                    entry_hash = hashlib.sha256(str(entry_id).encode("utf-8")).hexdigest()[
+                        :16
+                    ]
 
-                # Extract content
-                content = self._extract_content(entry)
+                    # Extract content
+                    content = self._extract_content(entry)
 
-                if source.content_extractor and self._extractors:
-                    extractor = self._extractors.get(source.content_extractor)
-                    if extractor:
-                        url = entry.get("link", "")
-                        if url:
-                            full = await extractor.extract(url, self.client)
-                            if full:
-                                content = full
+                    if source.content_extractor and self._extractors:
+                        extractor = self._extractors.get(source.content_extractor)
+                        if extractor:
+                            url = entry.get("link", "")
+                            if url:
+                                full = await extractor.extract(url, self.client)
+                                if full:
+                                    content = full
 
-                item = ContentItem(
-                    id=self._generate_id("rss", feed_id, entry_hash),
-                    source_type=SourceType.RSS,
-                    title=entry.get("title", "Untitled"),
-                    url=entry.get("link", str(source.url)),
-                    content=content,
-                    author=entry.get("author", source.name),
-                    published_at=published_at,
-                    profile=source.profile,
-                    metadata={
-                        "feed_name": source.name,
-                        "category": source.category,
-                        "tags": [tag.term for tag in entry.get("tags", [])],
-                    },
-                )
-                items.append(item)
-
-        except httpx.HTTPError as e:
-            logger.warning("Error fetching RSS feed %s: %s", source.name, e)
+                    item = ContentItem(
+                        id=self._generate_id("rss", feed_id, entry_hash),
+                        source_type=SourceType.RSS,
+                        title=entry.get("title", "Untitled"),
+                        url=entry.get("link", str(source.url)),
+                        content=content,
+                        author=entry.get("author", source.name),
+                        published_at=published_at,
+                        profile=source.profile,
+                        metadata={
+                            "feed_name": source.name,
+                            "category": source.category,
+                            "tags": [tag.term for tag in entry.get("tags", [])],
+                        },
+                    )
+                    items.append(item)
+                except Exception as e:
+                    logger.warning("Error parsing RSS entry in feed %s: %s", source.name, e)
         except Exception as e:
             logger.warning("Error parsing RSS feed %s: %s", source.name, e)
 
         return items
 
-    def _parse_date(self, entry: dict) -> datetime:
+    def _parse_date(self, entry: dict) -> Optional[datetime]:
         """Parse publication date from feed entry.
 
         Args:
@@ -156,7 +164,13 @@ class RSSScraper(BaseScraper):
                         )
                     # Fallback to string parsing
                     date_str = entry[field]
-                    return parsedate_to_datetime(date_str)
+                    try:
+                        parsed = parsedate_to_datetime(date_str)
+                    except (TypeError, ValueError, OverflowError):
+                        parsed = datetime.fromisoformat(date_str)
+                    if parsed.tzinfo is None:
+                        return parsed.replace(tzinfo=timezone.utc)
+                    return parsed.astimezone(timezone.utc)
                 except Exception:
                     continue
 

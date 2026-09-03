@@ -348,3 +348,49 @@ def test_article_pages_carry_an_explicit_title(tmp_path, monkeypatch):
 
     assert written.startswith("---\ntitle: ")
     assert "Смена руководства" in written.split("---")[1]
+
+
+def test_publish_site_pages_prunes_only_stale_pages_in_the_current_issue(
+    tmp_path, monkeypatch
+):
+    monkeypatch.setattr(manager, "SITE_DIGEST_DIR", tmp_path / "digest")
+    storage = StorageManager(data_dir=str(tmp_path / "data"))
+    issue_dir = storage.publish_site_pages(
+        "2026-08-06", _pages(("current", "# old"), ("stale", "# stale")), "ru"
+    )
+    (issue_dir / "index.md").write_text("# Index\n", encoding="utf-8")
+    other_date = storage.publish_site_pages(
+        "2026-08-05", _pages(("other", "# other")), "ru"
+    )
+    other_language = storage.publish_site_pages(
+        "2026-08-06", _pages(("other", "# other")), "en"
+    )
+
+    storage.publish_site_pages(
+        "2026-08-06", _pages(("current", "# updated")), "ru"
+    )
+
+    assert {path.name for path in issue_dir.glob("*.md")} == {"current.md", "index.md"}
+    assert "# updated" in (issue_dir / "current.md").read_text(encoding="utf-8")
+    assert (other_date / "other.md").exists()
+    assert (other_language / "other.md").exists()
+
+
+def test_publish_site_pages_does_not_prune_after_write_failure(tmp_path, monkeypatch):
+    monkeypatch.setattr(manager, "SITE_DIGEST_DIR", tmp_path / "digest")
+    storage = StorageManager(data_dir=str(tmp_path / "data"))
+    issue_dir = storage.publish_site_pages(
+        "2026-08-06", _pages(("current", "# old"), ("stale", "# stale")), "ru"
+    )
+
+    def fail_replace(source, target):
+        raise OSError("atomic write failure")
+
+    monkeypatch.setattr(file_utils.os, "replace", fail_replace)
+    with pytest.raises(OSError, match="atomic write failure"):
+        storage.publish_site_pages(
+            "2026-08-06", _pages(("current", "# new")), "ru"
+        )
+
+    assert (issue_dir / "stale.md").exists()
+    assert "# old" in (issue_dir / "current.md").read_text(encoding="utf-8")

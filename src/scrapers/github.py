@@ -50,19 +50,24 @@ class GitHubScraper(BaseScraper):
             List[ContentItem]: Fetched content items
         """
         items = []
-        sources = self.config["sources"]
-
-        for source in sources:
+        failures = []
+        attempted = 0
+        for source in self.config["sources"]:
             if not source.enabled:
                 continue
+            try:
+                if source.type == "user_events" and source.username:
+                    attempted += 1
+                    items.extend(await self._fetch_user_events(source, since))
+                elif source.type == "repo_releases" and source.owner and source.repo:
+                    attempted += 1
+                    items.extend(await self._fetch_repo_releases(source, since))
+            except Exception as exc:
+                failures.append(exc)
+                logger.warning("GitHub source failed: %s", exc)
 
-            if source.type == "user_events" and source.username:
-                user_items = await self._fetch_user_events(source, since)
-                items.extend(user_items)
-            elif source.type == "repo_releases" and source.owner and source.repo:
-                release_items = await self._fetch_repo_releases(source, since)
-                items.extend(release_items)
-
+        if failures and len(failures) == attempted:
+            raise RuntimeError("All GitHub sources failed") from failures[0]
         return items
 
     async def _fetch_user_events(
@@ -109,6 +114,7 @@ class GitHubScraper(BaseScraper):
 
         except httpx.HTTPError as e:
             logger.warning("Error fetching GitHub events for %s: %s", source.username, e)
+            raise
 
         return items
 
@@ -220,5 +226,6 @@ class GitHubScraper(BaseScraper):
 
         except httpx.HTTPError as e:
             logger.warning("Error fetching releases for %s/%s: %s", owner, repo, e)
+            raise
 
         return items

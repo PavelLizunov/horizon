@@ -37,8 +37,11 @@ optional shadow stage between enrichment and rendering.
 Stage 5 first applies `passes_profile_filter()`, then optional
 `merge_topic_duplicates()` and `apply_balanced_digest()`. Twitter discussion
 expansion can trigger targeted re-analysis, so eligibility and balancing are
-applied again afterward. Stage 2 fans out through `_fetch_with_progress()`, which
-records per-source failures so one dead source cannot end the run.
+applied again afterward. Scrapers return a healthy empty result only when an
+attempt succeeded (or no endpoint was configured); multi-endpoint scrapers raise
+only if every attempted endpoint failed. Stage 2 fans out through
+`_fetch_with_progress()`, which records those per-source failures so one dead
+source cannot end the run.
 
 ## Reporting Types
 

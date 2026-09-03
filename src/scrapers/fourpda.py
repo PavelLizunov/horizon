@@ -202,6 +202,7 @@ class FourPDAScraper(BaseScraper):
                 author=author,
                 content=text,
                 published_at=pub_date or datetime.now(timezone.utc),
+                profile=cfg.profile,
                 metadata={
                     "topic_id": str(cfg.topic_id),
                     "post_id": str(pid),

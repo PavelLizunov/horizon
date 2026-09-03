@@ -46,14 +46,14 @@ class TwitterScraper(BaseScraper):
         logger.info(f"Fetching Twitter (Apify) for users: {users}")
 
         run_id, dataset_id = await self._start_run(token, users)
-        if not run_id:
-            return []
-
-        succeeded = await self._wait_for_run(token, run_id)
-        if not succeeded:
-            return []
+        if not run_id or not dataset_id:
+            raise RuntimeError("Could not start the Apify Twitter run")
+        if not await self._wait_for_run(token, run_id):
+            raise RuntimeError("Apify Twitter run failed or timed out")
 
         raw_items = await self._fetch_dataset(token, dataset_id)
+        if raw_items is None:
+            raise RuntimeError("Could not fetch the Apify Twitter dataset")
         items = []
         for raw in raw_items:
             if isinstance(raw, dict) and raw.get("noResults"):
@@ -107,7 +107,7 @@ class TwitterScraper(BaseScraper):
         logger.warning(f"Apify run {run_id} timed out after {_MAX_WAIT}s.")
         return False
 
-    async def _fetch_dataset(self, token: str, dataset_id: str) -> list:
+    async def _fetch_dataset(self, token: str, dataset_id: str) -> Optional[list]:
         url = f"{_APIFY_BASE}/datasets/{dataset_id}/items?token={token}"
         try:
             resp = await self.client.get(url, timeout=30.0)
@@ -115,7 +115,7 @@ class TwitterScraper(BaseScraper):
             return resp.json()
         except Exception as exc:
             logger.error(f"Failed to fetch Apify dataset {dataset_id}: {exc}")
-            return []
+            return None
 
     async def fetch_replies_for_item(self, item: ContentItem) -> List[str]:
         """Fetch reply texts for one tweet using scweet search mode."""
@@ -157,7 +157,7 @@ class TwitterScraper(BaseScraper):
             return []
 
         rows = await self._fetch_dataset(token, dataset_id)
-        return self._extract_reply_lines(item, rows, max_replies)
+        return self._extract_reply_lines(item, rows or [], max_replies)
 
     def _extract_reply_lines(self, item: ContentItem, rows: list, max_replies: int) -> List[str]:
         """Convert scweet rows into compact reply lines."""
