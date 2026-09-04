@@ -1,6 +1,7 @@
 """Main orchestrator coordinating the entire workflow."""
 
 import asyncio
+import copy
 from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
@@ -937,28 +938,44 @@ class HorizonOrchestrator:
 
         merged = []
         for group in url_groups.values():
-            group_copies = [item.model_copy(deep=True) for item in group]
             if len(group) == 1:
-                merged.append(group_copies[0])
+                item = group[0]
+                copy_item = item.model_copy(
+                    update={
+                        "metadata": copy.deepcopy(item.metadata),
+                        "processing": item.processing.model_copy(deep=True)
+                        if item.processing is not None
+                        else None,
+                    }
+                )
+                merged.append(copy_item)
                 if member_map is not None:
-                    member_map[group_copies[0].id] = [group[0].id]
+                    member_map[copy_item.id] = [group[0].id]
                 continue
 
             # Pick the item with the richest content as primary
-            primary = max(group_copies, key=lambda x: len(x.content or ""))
+            raw_primary = max(group, key=lambda x: len(x.content or ""))
+            primary = raw_primary.model_copy(
+                update={
+                    "metadata": copy.deepcopy(raw_primary.metadata),
+                    "processing": raw_primary.processing.model_copy(deep=True)
+                    if raw_primary.processing is not None
+                    else None,
+                }
+            )
 
             # Merge metadata and source info from other items
             all_sources = []
-            for item in group_copies:
+            for item in group:
                 if item.source_type.value not in all_sources:
                     all_sources.append(item.source_type.value)
                 # Merge metadata (engagement, discussion, etc.)
                 for mk, mv in item.metadata.items():
                     if mk not in primary.metadata or not primary.metadata[mk]:
-                        primary.metadata[mk] = mv
+                        primary.metadata[mk] = copy.deepcopy(mv)
 
                 # Append content (e.g., comments from another source)
-                if item is not primary and item.content:
+                if item is not raw_primary and item.content:
                     if primary.content and item.content not in primary.content:
                         primary.content = (primary.content or "") + f"\n\n--- From {item.source_type.value} ---\n" + item.content
 
