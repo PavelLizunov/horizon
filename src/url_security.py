@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-from functools import lru_cache
 import ipaddress
 import socket
 from urllib.parse import urljoin, urlsplit
@@ -19,7 +18,6 @@ class URLResolutionError(UnsafeURLError):
     """Raised when a syntactically safe hostname cannot be resolved."""
 
 
-@lru_cache(maxsize=8192)
 def validate_http_url(url: str) -> str:
     """Validate the non-network portions of an HTTP(S) URL."""
     try:
