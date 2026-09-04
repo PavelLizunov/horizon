@@ -7,10 +7,18 @@ from typing import Literal
 COMMENTS_MARKER = "--- Top Comments ---"
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class ContentParts:
     main: str
     comments: str
+
+
+_MARKERS = (
+    "[Opening excerpt]\n",
+    "\n\n[Middle excerpt]\n",
+    "\n\n[Closing excerpt]\n",
+)
+_MARKERS_TOTAL_LEN = sum(len(marker) for marker in _MARKERS)
 
 
 def split_content(content: str | None) -> ContentParts:
@@ -35,12 +43,7 @@ def select_content(
     if sampling == "prefix":
         return text[:max_chars].rstrip()
 
-    markers = (
-        "[Opening excerpt]\n",
-        "\n\n[Middle excerpt]\n",
-        "\n\n[Closing excerpt]\n",
-    )
-    available = max_chars - sum(len(marker) for marker in markers)
+    available = max_chars - _MARKERS_TOTAL_LEN
     opening_size = int(available * 0.4)
     middle_size = int(available * 0.3)
     closing_size = available - opening_size - middle_size
@@ -50,11 +53,4 @@ def select_content(
     opening = text[:opening_size].rstrip()
     middle = text[middle_start : middle_start + middle_size].strip()
     closing = text[-closing_size:].lstrip()
-    return (
-        markers[0]
-        + opening
-        + markers[1]
-        + middle
-        + markers[2]
-        + closing
-    )
+    return f"{_MARKERS[0]}{opening}{_MARKERS[1]}{middle}{_MARKERS[2]}{closing}"
