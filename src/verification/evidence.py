@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections import Counter
 from dataclasses import dataclass, field, replace
 from datetime import datetime, timedelta, timezone
+from functools import lru_cache
 import hashlib
 import json
 import re
@@ -66,6 +67,7 @@ def _timestamp(value: datetime | None = None) -> str:
     return current.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
 
 
+@lru_cache(maxsize=8192)
 def canonical_url(url: str) -> str:
     parsed = urlsplit(url)
     scheme = parsed.scheme.lower()
