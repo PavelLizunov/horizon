@@ -15,7 +15,10 @@ post-cutover gate rather than a blocker for the first accepted deployment.
 - [x] **REQ-05:** Persistently disable/unload the Mac schedulers and confirm no
       active Horizon process.
 - [x] **REQ-06:** Establish and probe the port-restricted loopback search tunnel.
-- [x] **REQ-07:** Publish through the restricted identity and verify live HTTP 200.
+- [x] **REQ-07:** Publish the site through the restricted identity and verify live HTTP 200.
+- [x] **REQ-07:** Deploy the dual-mode forced command, stream a validated Opus
+      file, and verify the public audio URL and article player. On 2026-09-04 all
+      nine retained tracks returned HTTP 200 and all nine article players linked them.
 - [x] **REQ-08:** Set Linux video ASR off.
 - [x] **REQ-09:** Scope the approved HTTP proxy to the video service only.
 - [x] **REQ-10:** Enable Linux-native narration via `teratts-server` (LXC 221)

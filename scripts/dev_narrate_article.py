@@ -275,8 +275,25 @@ def _ffmpeg(*arguments: str) -> None:
 
 
 def _duration(path: Path) -> float:
-    with wave.open(str(path)) as handle:
-        return handle.getnframes() / handle.getframerate()
+    if path.suffix == ".wav":
+        with wave.open(str(path)) as handle:
+            return handle.getnframes() / handle.getframerate()
+    result = subprocess.run(
+        [
+            "ffprobe",
+            "-v",
+            "error",
+            "-show_entries",
+            "format=duration",
+            "-of",
+            "default=noprint_wrappers=1:nokey=1",
+            str(path),
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    return float(result.stdout.strip())
 
 
 # Where each piece is levelled to before the pieces are joined. Measured on a
@@ -424,37 +441,25 @@ def _upload_to_server(audio: Path, key: str, host: str, root: str) -> None:
     if limit < 1:
         raise ValueError("NARRATION_MAX_BYTES must be positive")
 
-    name = key.rsplit("/", 1)[-1]
-    temporary = f"/tmp/horizon-audio-{name}.uploading"
-    destination = f"{root}/{key}"
-    issue_dir = destination.rsplit("/", 1)[0]
-    subprocess.run(
-        ["scp", "-q", "-o", "BatchMode=yes", str(audio), f"{host}:{temporary}"],
-        check=True,
-    )
-    command = f"""set -eu
-root={root}
-dest={destination}
-mkdir -p -- {issue_dir}
-mv -- {temporary} $dest
-chmod 0644 $dest
-total=$(find $root -type f -name '*.opus' -printf '%s\\n' | awk '{{sum += $1}} END {{print sum + 0}}')
-if [ "$total" -gt {limit} ]; then
-  find $root -type f -name '*.opus' -printf '%T@ %s %p\\n' | sort -n | while read -r _ size file; do
-    [ "$total" -le {limit} ] && break
-    [ "$file" = "$dest" ] && continue
-    case "$file" in
-      "$root"/*) rm -f -- "$file" ;;
-      *) exit 1 ;;
-    esac
-    total=$((total - size))
-  done
-  find $root -mindepth 1 -type d -empty -delete
-fi"""
-    subprocess.run(
-        ["ssh", "-o", "BatchMode=yes", host, command],
-        check=True,
-    )
+    size = audio.stat().st_size
+    if size < 1:
+        raise ValueError("narration audio must not be empty")
+    with audio.open("rb") as stream:
+        subprocess.run(
+            [
+                "ssh",
+                "-o",
+                "BatchMode=yes",
+                host,
+                "put-opus",
+                root,
+                key,
+                str(size),
+                str(limit),
+            ],
+            stdin=stream,
+            check=True,
+        )
 
 
 def _wait_until_whole(url: str, expected: int, attempts: int = 5) -> None:
@@ -834,6 +839,34 @@ def _speak(text: str, issue: str, slug: str, args, model, checker) -> int:
     return 0
 
 
+def _publish_existing(audio: Path, issue: str, slug: str) -> int:
+    """Upload a previously graded track and attach its player without synthesis."""
+    url = _upload(audio, issue, slug)
+    _attach(issue, slug, url, max(_duration(audio) - PAD_SECONDS, 0))
+    print(f"  {url}", flush=True)
+    return 0
+
+
+def _publish_existing_many(directory: Path) -> int:
+    failures = []
+    tracks = sorted(directory.glob("*.opus"))
+    if not tracks:
+        print(f"no Opus tracks in {directory}", file=sys.stderr)
+        return 1
+    for track in tracks:
+        issue, _, slug = track.stem.partition("__")
+        if not slug:
+            print(f"  FAILED invalid existing track name: {track.name}", file=sys.stderr)
+            failures.append(track.name)
+            continue
+        try:
+            _publish_existing(track, issue, slug)
+        except Exception as error:  # noqa: BLE001 — one bad article must not end the run
+            print(f"  FAILED {type(error).__name__}: {error}", file=sys.stderr)
+            failures.append(f"{issue}/{slug}")
+    return 1 if failures else 0
+
+
 def _speak_many(directory: Path, args) -> int:
     """Every prepared text in a directory, one model load for the lot."""
     texts = sorted(directory.glob("*.txt"))
@@ -906,6 +939,10 @@ def main() -> int:
     parser.add_argument("--out", default=str(Path.home() / "tts" / "out"))
     parser.add_argument("--write-all", help="write every article of the issue here")
     parser.add_argument("--speak-dir", help="synthesise every prepared text here")
+    parser.add_argument(
+        "--publish-existing-dir",
+        help="upload existing ISSUE__SLUG.opus tracks and attach their players",
+    )
     parser.add_argument("--attach", action="store_true", help="upload and link it")
     # Both defaults live in the constants above; these exist because the two of
     # them are what you reach for when the delivery wanders, and comparing takes
@@ -936,6 +973,8 @@ def main() -> int:
 
     if args.speak_dir:
         return _speak_many(Path(args.speak_dir), args)
+    if args.publish_existing_dir:
+        return _publish_existing_many(Path(args.publish_existing_dir))
 
     # Imported here, not at module scope: the archive parser drags in the
     # project's dependencies, and synthesis runs from a venv without them.

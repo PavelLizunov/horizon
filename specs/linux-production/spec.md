@@ -48,12 +48,14 @@ Elasticsearch remains loopback-only; `horizon-search-tunnel.service` exposes it
 only as `127.0.0.1:9200` inside the pipeline guest through a port-restricted SSH
 identity with strict host-key checking.
 
-### REQ-07 — Restricted static publishing
+### REQ-07 — Restricted static and narration publishing
 
-`run-daily.sh` keeps its tar-over-SSH protocol but authenticates as a dedicated
-publisher. The ingress identity is source-restricted and forced to a static-site
-helper that rejects unsafe archive members, normalizes public file modes, and
-can replace only the digest document root.
+`run-daily.sh` keeps its tar-over-SSH site protocol and narration streams one
+validated Opus file per SSH connection. Both authenticate as the dedicated,
+source-restricted publisher whose forced command accepts only the legacy site
+archive or `put-opus` grammar, revalidates every path and size server-side,
+normalizes public file modes, writes audio atomically under its fixed root, and
+keeps audio storage within the configured cap.
 
 ### REQ-08 — Linux video ladder
 

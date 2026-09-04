@@ -42,14 +42,16 @@ bot-gate pressure — you will need the `cookies_file` setup described in
    values. The timers run video at 16:00 and digest at 17:00 local time with
    `Persistent=true`.
 6. Provision two independent SSH identities: a port-restricted Search tunnel and
-   a source-restricted, forced-command static publisher. Pin both host keys.
+   a source-restricted publisher forced to `deploy/horizon-static-publish`. Set
+   deployment-specific site/audio roots in its environment and pin both host keys.
 7. If direct YouTube HTTPS is unavailable, an operator may add a mode-`0600`
    `/etc/horizon/video-egress.env` containing standard `HTTP_PROXY`,
    `HTTPS_PROXY`, and loopback-only `NO_PROXY` values. Only
    `horizon-video.service` loads it; do not proxy Search or publishing.
-8. Keep narration disabled by setting `HORIZON_TTS_PYTHON=/nonexistent` in the
-   runtime environment. Linux has no approved independent Whisper grader yet,
-   so text publishes normally without audio.
+8. Set `HORIZON_TTS_PYTHON` to the Linux narration interpreter only after the
+   independent grader and internal TTS service pass acceptance. Audio is streamed
+   through the restricted publisher; any synthesis, grade, or upload failure stays
+   non-fatal and text publishes normally.
 
 The video and digest units share `/run/lock/horizon-production.lock`; video
 refuses overlap and digest waits for the current video run. Install timers only
@@ -171,9 +173,12 @@ pipeline run, because publishing is the only other thing that regenerates it.
 
 `tar` over ssh rather than `rsync`: a minimal ingress container often has no
 rsync, and installing packages on the edge proxy to copy static files is a poor
-trade. The current replace-all command is **not atomic**: it deletes the live tree
-before extraction, and a broken stream can leave the site partial or empty. Treat
-release-directory upload plus a final rename/symlink swap as an open hardening task.
+trade. Production forces this key to `deploy/horizon-static-publish`; its legacy
+site mode validates the archive, while `put-opus` accepts one bounded Ogg/Opus
+stream and writes it atomically under the fixed audio root. Site replacement is
+still **not atomic**: it deletes the live tree before copying the validated staging
+directory. Treat release-directory upload plus a final rename/symlink swap as an
+open hardening task.
 
 Without optional archive search, Caddy on the target only needs a file server:
 

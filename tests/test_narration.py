@@ -762,18 +762,20 @@ def test_incomplete_public_audio_is_never_attached(monkeypatch):
         driver._wait_until_whole("https://audio.example/a.opus", 100000, attempts=2)
 
 
-def test_server_upload_is_atomic_and_prunes_to_two_gib(monkeypatch, tmp_path):
+def test_server_upload_streams_one_file_through_the_restricted_publisher(
+    monkeypatch, tmp_path
+):
     from scripts import dev_narrate_article as driver
 
     audio = tmp_path / "article.opus"
-    audio.write_bytes(b"audio")
+    audio.write_bytes(b"OggSaudio")
     calls = []
     monkeypatch.delenv("NARRATION_MAX_BYTES", raising=False)
-    monkeypatch.setattr(
-        driver.subprocess,
-        "run",
-        lambda args, **kwargs: calls.append((args, kwargs)),
-    )
+
+    def capture(args, **kwargs):
+        calls.append((args, kwargs, kwargs["stdin"].read()))
+
+    monkeypatch.setattr(driver.subprocess, "run", capture)
 
     driver._upload_to_server(
         audio,
@@ -782,16 +784,67 @@ def test_server_upload_is_atomic_and_prunes_to_two_gib(monkeypatch, tmp_path):
         "/srv/audio.example.com",
     )
 
-    assert calls[0][0][:4] == ["scp", "-q", "-o", "BatchMode=yes"]
-    assert calls[1][0][:4] == ["ssh", "-o", "BatchMode=yes", "user@example.com"]
-    command = calls[1][0][4]
-    assert "mv -- /tmp/horizon-audio-tech-news-1-1234567890.opus.uploading" in command
-    assert "/srv/audio.example.com/2026-08-11-ru/tech-news-1-1234567890.opus" in command
-    assert "2147483648" in command
-    assert all(kwargs == {"check": True} for _, kwargs in calls)
+    assert len(calls) == 1
+    args, kwargs, uploaded = calls[0]
+    assert args == [
+        "ssh",
+        "-o",
+        "BatchMode=yes",
+        "user@example.com",
+        "put-opus",
+        "/srv/audio.example.com",
+        "2026-08-11-ru/tech-news-1-1234567890.opus",
+        "9",
+        "2147483648",
+    ]
+    assert kwargs["check"] is True
+    assert uploaded == b"OggSaudio"
 
     with pytest.raises(ValueError, match="unsafe narration server path"):
         driver._upload_to_server(audio, "../outside.opus", "user@example.com", "/srv/audio")
+
+    audio.write_bytes(b"")
+    with pytest.raises(ValueError, match="must not be empty"):
+        driver._upload_to_server(
+            audio,
+            "2026-08-11-ru/tech-news-1-1234567890.opus",
+            "user@example.com",
+            "/srv/audio.example.com",
+        )
+
+
+def test_opus_duration_uses_ffprobe(monkeypatch, tmp_path):
+    from scripts import dev_narrate_article as driver
+
+    track = tmp_path / "track.opus"
+    track.write_bytes(b"OggS")
+    calls = []
+
+    def probe(args, **kwargs):
+        calls.append((args, kwargs))
+        return type("Result", (), {"stdout": "12.5\n"})()
+
+    monkeypatch.setattr(driver.subprocess, "run", probe)
+
+    assert driver._duration(track) == 12.5
+    assert calls[0][0][0] == "ffprobe"
+    assert calls[0][1] == {"check": True, "capture_output": True, "text": True}
+
+
+def test_existing_tracks_can_be_published_without_resynthesis(monkeypatch, tmp_path):
+    from scripts import dev_narrate_article as driver
+
+    track = tmp_path / "2026-09-04-ru__tech-news-1.opus"
+    track.write_bytes(b"OggSaudio")
+    published = []
+    monkeypatch.setattr(
+        driver,
+        "_publish_existing",
+        lambda audio, issue, slug: published.append((audio, issue, slug)) or 0,
+    )
+
+    assert driver._publish_existing_many(tmp_path) == 0
+    assert published == [(track, "2026-09-04-ru", "tech-news-1")]
 
 
 def test_the_key_is_grouped_by_issue_and_named_for_the_article():

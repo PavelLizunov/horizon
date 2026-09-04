@@ -253,10 +253,14 @@ which the script prepends itself — `mlx_whisper` shells out to a bare `ffmpeg`
 
 An article whose verdict is not `ok` is **not uploaded and not linked**, and the run
 exits non-zero. The audio stays in `~/tts/out/` so you can listen to what the check
-objected to.
+objected to. Already graded tracks can be retried without synthesis by naming them
+`ISSUE__SLUG.opus` and passing their directory to `--publish-existing-dir`.
 
-Production audio is copied to the ingress host over SSH and served by Caddy. The
-Mac's `.env` contains only deployment-specific values, never the repository:
+Production audio is streamed to the ingress host over the same source-restricted
+SSH publisher used by the site and served by Caddy. Its forced command accepts
+only the legacy site archive or one validated `put-opus` upload; it never executes
+the requested shell command. The host's `.env` contains only deployment-specific
+values, never the repository:
 
 ```dotenv
 NARRATION_PUBLIC_BASE=https://audio.example.com
@@ -265,7 +269,10 @@ NARRATION_SSH_PATH=/srv/audio.example.com
 NARRATION_MAX_BYTES=2147483648
 ```
 
-The publisher writes under a content-hashed name, moves the upload into place
-atomically, and removes the oldest audio after the directory exceeds 2 GiB. The
-Caddy site is shown in `deploy/audio-server.caddy.example`. If the SSH settings
-are absent, the existing `R2_*` configuration remains available as a fallback.
+The publisher helper is `deploy/horizon-static-publish`; install it as the
+forced command with deployment-specific `HORIZON_SITE_ROOT` and
+`HORIZON_AUDIO_ROOT` values. It writes under a content-hashed name, moves the
+upload into place atomically, and removes the oldest audio after the configured
+cap. The Caddy site is shown in `deploy/audio-server.caddy.example`. If the SSH
+settings are absent, the existing `R2_*` configuration remains available as a
+fallback.

@@ -34,9 +34,11 @@ while video refuses a concurrent run.
 - A dedicated outbound key maintains a local forward to the separate,
   loopback-only Elasticsearch service. Its destination account permits only
   forwarding to that port.
-- A second key reaches the ingress publisher account. The forced command accepts
-  a gzip tar stream, rejects absolute/traversal/link/device members, requires a
-  non-empty site index, and writes only the static document root.
+- A second key reaches the ingress publisher account. Its tracked forced-command
+  helper keeps the legacy gzip-tar site path and adds only `put-opus` with fixed
+  roots, strict key/size validation, Ogg magic checking, an atomic rename, and
+  oldest-first pruning under the configured audio cap. No requested shell command
+  is executed.
 - Speech synthesis calls the internal `teratts-server` (LXC 221) and grades audio
   via `faster-whisper`.
 - Direct and proxy egress are measured separately. An optional mode-0600

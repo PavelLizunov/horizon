@@ -1,0 +1,124 @@
+#!/bin/sh
+# Forced command for the source-restricted Horizon publisher SSH key.
+set -efu
+umask 022
+
+config=${HORIZON_PUBLISH_CONFIG:-/etc/horizon-publisher.env}
+[ ! -r "$config" ] || . "$config"
+: "${HORIZON_SITE_ROOT:?missing HORIZON_SITE_ROOT}"
+: "${HORIZON_AUDIO_ROOT:?missing HORIZON_AUDIO_ROOT}"
+site_root=$HORIZON_SITE_ROOT
+audio_root=$HORIZON_AUDIO_ROOT
+audio_limit=${HORIZON_AUDIO_MAX_BYTES:-2147483648}
+max_opus_bytes=${HORIZON_MAX_OPUS_BYTES:-52428800}
+original_command=${SSH_ORIGINAL_COMMAND:-}
+
+publish_site() {
+  archive=$(mktemp)
+  staging=$(mktemp -d)
+  trap 'rm -f "$archive"; rm -rf "$staging"' EXIT HUP INT TERM
+  cat >"$archive"
+  python3 - "$archive" <<'PY'
+import sys
+import tarfile
+from pathlib import PurePosixPath
+
+with tarfile.open(sys.argv[1], "r:gz") as archive:
+    for member in archive:
+        path = PurePosixPath(member.name)
+        if (
+            path.is_absolute()
+            or ".." in path.parts
+            or member.issym()
+            or member.islnk()
+            or member.isdev()
+        ):
+            raise SystemExit("unsafe tar member")
+PY
+  tar xzf "$archive" -C "$staging"
+  test -s "$staging/index.html"
+  find "$staging" -type d -exec chmod 0755 {} +
+  find "$staging" -type f -exec chmod 0644 {} +
+  find "$site_root" -mindepth 1 -maxdepth 1 -exec rm -rf -- {} +
+  cp -a "$staging"/. "$site_root"/
+}
+
+publish_opus() {
+  set -- $original_command
+  [ "$#" -eq 5 ] && [ "$1" = put-opus ] || exit 1
+  requested_root=$2
+  key=$3
+  size=$4
+  requested_limit=$5
+
+  python3 - "$requested_root" "$audio_root" "$key" "$size" \
+    "$requested_limit" "$audio_limit" "$max_opus_bytes" <<'PY'
+import re
+import sys
+
+requested_root, audio_root, key = sys.argv[1:4]
+try:
+    size, requested_limit, audio_limit, max_opus_bytes = map(int, sys.argv[4:])
+except ValueError:
+    raise SystemExit("invalid numeric argument")
+if requested_root != audio_root:
+    raise SystemExit("unexpected audio root")
+if not re.fullmatch(
+    r"[0-9]{4}-[0-9]{2}-[0-9]{2}-[a-z]{2}/[a-z0-9-]+-[a-f0-9]{10}\.opus",
+    key,
+):
+    raise SystemExit("invalid audio key")
+if not 1 <= size <= max_opus_bytes:
+    raise SystemExit("invalid upload size")
+if not 1 <= requested_limit <= audio_limit:
+    raise SystemExit("invalid storage limit")
+PY
+
+  destination=$audio_root/$key
+  mkdir -p "${destination%/*}"
+  temporary=$(mktemp "$audio_root/.upload.XXXXXX")
+  trap 'rm -f "$temporary"' EXIT HUP INT TERM
+  head -c "$size" >"$temporary"
+  [ "$(wc -c <"$temporary")" -eq "$size" ] || exit 1
+  [ "$(dd bs=1 count=1 2>/dev/null | wc -c)" -eq 0 ] || exit 1
+  [ "$(od -An -tx1 -N4 "$temporary" | tr -d ' \n')" = 4f676753 ] || exit 1
+
+  chmod 0644 "$temporary"
+  mv -f "$temporary" "$destination"
+  trap - EXIT HUP INT TERM
+
+  python3 - "$audio_root" "$destination" "$requested_limit" <<'PY'
+import os
+import sys
+from pathlib import Path
+
+root = Path(sys.argv[1])
+keep = Path(sys.argv[2])
+limit = int(sys.argv[3])
+files = sorted(
+    (path for path in root.rglob("*.opus") if path.is_file()),
+    key=lambda path: path.stat().st_mtime,
+)
+total = sum(path.stat().st_size for path in files)
+for path in files:
+    if total <= limit:
+        break
+    if path == keep:
+        continue
+    size = path.stat().st_size
+    path.unlink()
+    total -= size
+for directory, _, _ in os.walk(root, topdown=False):
+    path = Path(directory)
+    if path != root:
+        try:
+            path.rmdir()
+        except OSError:
+            pass
+PY
+}
+
+case $original_command in
+  put-opus\ *) publish_opus ;;
+  *) publish_site ;;
+esac

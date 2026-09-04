@@ -29,8 +29,7 @@ ssh prod-node "pct exec $HORIZON_CTID -- systemctl is-system-running"
 | Shared execution lock | `/run/lock/horizon-production.lock` |
 
 Elasticsearch and the public Search API run on a separate guest. The pipeline
-gets only a restricted SSH forward to Elasticsearch loopback. Site publishing
-uses a different forced-command identity.
+gets only a restricted SSH forward to Elasticsearch loopback. Site and validated narration publishing use a different forced-command identity.
 
 ## Routine status
 
@@ -86,9 +85,10 @@ Acceptance requires:
 - Direct YouTube may be unavailable from the guest. Only the video service may
   load an explicitly approved HTTP CONNECT environment. Do not add proxy values
   to the digest, tunnel, SSH config, shell profile, or global system files.
-- Narration is intentionally skipped through `HORIZON_TTS_PYTHON=/nonexistent`.
-  The text site remains complete; audio returns only after an independent Linux
-  grader is approved.
+- Narration uses the internal TTS service and an independent Linux Whisper
+  grader when `HORIZON_TTS_PYTHON` points to the approved environment. Validated
+  audio streams through the restricted publisher; any audio failure remains
+  non-fatal and the text site stays complete.
 - `.env`, `data/config.json`, cookie jars, config backups, and private SSH keys
   are mode `0600` and never printed or committed.
 
