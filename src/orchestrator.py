@@ -4,7 +4,6 @@ import asyncio
 from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
-from functools import lru_cache
 from pathlib import Path
 from typing import Dict, List, Literal, Optional
 from urllib.parse import unquote_plus, urlsplit
@@ -65,7 +64,6 @@ _TRACKING_QUERY_PARAMETERS = {
 }
 
 
-@lru_cache(maxsize=16384)
 def _deduplication_url_key(url: str) -> tuple[str, str, str, str, Optional[int], str, str]:
     """Return a conservative URL identity key for cross-source deduplication."""
     parsed = urlsplit(url)
