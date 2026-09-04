@@ -89,3 +89,4 @@ data/ab-items.json
 
 # A/B results
 data/ab-results.json
+.dsh/performance-autoresearch/
