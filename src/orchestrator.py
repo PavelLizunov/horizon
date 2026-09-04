@@ -7,7 +7,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from functools import lru_cache
 from pathlib import Path
-from typing import Any, Dict, List, Literal, Optional
+from typing import Dict, List, Literal, Optional
 from urllib.parse import unquote_plus, urlsplit
 import httpx
 from rich.console import Console
@@ -180,16 +180,6 @@ class FetchReport:
             "item_count": sum(len(outcome.items) for outcome in self.outcomes),
             "sources": [outcome.to_dict() for outcome in self.outcomes],
         }
-
-
-def _copy_metadata_value(val: Any) -> Any:
-    if isinstance(val, (str, int, float, bool)) or val is None:
-        return val
-    return copy.deepcopy(val)
-
-
-def _copy_metadata(meta: Dict[str, Any]) -> Dict[str, Any]:
-    return {k: _copy_metadata_value(v) for k, v in meta.items()}
 
 
 class HorizonOrchestrator:
@@ -954,7 +944,7 @@ class HorizonOrchestrator:
                 itm = group[0]
                 copy_item = itm.model_copy(
                     update={
-                        "metadata": _copy_metadata(itm.metadata),
+                        "metadata": copy.deepcopy(itm.metadata),
                         "processing": itm.processing.model_copy(deep=True)
                         if itm.processing is not None
                         else None,
@@ -969,7 +959,7 @@ class HorizonOrchestrator:
             primary_orig = max(group, key=lambda x: len(x.content or ""))
             primary = primary_orig.model_copy(
                 update={
-                    "metadata": _copy_metadata(primary_orig.metadata),
+                    "metadata": copy.deepcopy(primary_orig.metadata),
                     "processing": primary_orig.processing.model_copy(deep=True)
                     if primary_orig.processing is not None
                     else None,
@@ -986,7 +976,7 @@ class HorizonOrchestrator:
                 # Merge metadata (engagement, discussion, etc.)
                 for mk, mv in item.metadata.items():
                     if mk not in primary.metadata or not primary.metadata[mk]:
-                        primary.metadata[mk] = _copy_metadata_value(mv)
+                        primary.metadata[mk] = copy.deepcopy(mv)
 
                 # Append content (e.g., comments from another source)
                 if item is not primary_orig and item.content:
