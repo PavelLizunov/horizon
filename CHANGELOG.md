@@ -12,6 +12,24 @@ recoverable by reading the code.
 
 ## Unreleased
 
+### Specialized AI, infrastructure and agentic processing profiles
+
+Added 6 dedicated processing profiles under `profiles/`:
+- `paid-ai-platforms`: commercial frontier AI, API token pricing shifts, prompt caching discounts, batch rates, subscription quotas (ChatGPT, Claude, Google Antigravity), and access gateway architectures.
+- `agentic-harnesses`: coding agents and harness runtimes (DSH, Claude Code CLI, OpenCode, Aider, Cline, OpenHands), execution sandboxing (bubblewrap, Docker), Model Context Protocol (MCP) standards, and SWE-bench evaluations.
+- `frontier-research`: scientific research preprints (arXiv cs.AI/CL/LG), test-time compute scaling, reasoning emergence (o1/o3/R1), GRPO/RL algorithms, MLA, MoE, and native multimodal architectures.
+- `token-frugality`: prompt caching architectures, KV-cache compression and quantization (FP8, INT4, Hadamard), Multi-Token Prediction (MTP), speculative decoding, context compaction, and serving engine optimizations (vLLM, ExLlamaV3, SGLang, MLX).
+- `speech-ai`: open-weights neural TTS (TeraTTS, Fish-Speech, Qwen3-TTS, Kokoro), streaming ASR (VibeVoice, Whisper), speaker diarization (pyannote, TitaNet), and speech front-end normalization (`speech-front`).
+- `homelab-infra`: Proxmox VE, LXC orchestration, GPU passthrough (RTX 5060 Ti / Blackwell), Tailscale mesh networking, Beszel telemetry, Caddy reverse proxy, and self-hosted AI gateways (CLIProxyAPI, KeyGuard).
+
+Each profile defines strictly validated `profile.json`, `match.md`, `analysis.md`, `enrichment.md`, and local `AGENTS.md`.
+
+### TeraTTS quality gate enforcement and Telegram delivery alignment
+
+- Fixed silent failure in `scripts/dev_narrate_article.py`: `_speak_chunk_tera` now enforces `MIN_TAIL_TERA` and returns `None` (unlinking scratch audio) on transcription tail gate failure, upholding the invariant that failed audio is never published. Covered by regression test in `tests/test_narration.py`.
+- Fixed Telegram headline delivery contract in `docs/telegram-delivery.md` to document the canonical `link_base: "https://digest.example.com/digest"` path, preventing 404 links on site deployments where MkDocs serves issues under the `/digest/` root.
+- Corrected repository source owner in runtime configuration to `turboderp-org/exllamav3`.
+
 ### Linux production deployment contract updated
 
 Updated repository-level contracts to establish a dedicated Debian LXC using systemd as the current production pipeline, retaining macOS as a supported cold rollback/reference. On Linux production, video ingestion uses subtitles then the configured vision fallback with local ASR off, narration is skipped until independent Linux grading exists, and archive search remains separate.

@@ -1,0 +1,39 @@
+{
+  "id": "frontier-research",
+  "name": "Frontier AI Research & Reasoning",
+  "display_names": {
+    "ru": "AI Исследования & Reasoning",
+    "zh": "前沿 AI 研究与推理"
+  },
+  "match": "match.md",
+  "analysis": "analysis.md",
+  "content": {
+    "analysis_max_chars": 6000,
+    "enrichment_max_chars": 16000,
+    "sampling": "head-middle-tail"
+  },
+  "enrichment": {
+    "prompt": "enrichment.md",
+    "blocks": [
+      {
+        "id": "summary",
+        "type": "section",
+        "tools": [],
+        "primary": true
+      },
+      {
+        "id": "core_mechanism",
+        "type": "section",
+        "tools": [
+          "web_search"
+        ]
+      },
+      {
+        "id": "practical_implications",
+        "type": "section",
+        "tools": [],
+        "optional": true
+      }
+    ]
+  }
+}

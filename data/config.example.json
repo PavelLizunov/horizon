@@ -44,6 +44,30 @@
       "censorship-watch": {
         "threshold": 7.0,
         "topic_dedup": true
+      },
+      "paid-ai-platforms": {
+        "threshold": 6.5,
+        "topic_dedup": true
+      },
+      "agentic-harnesses": {
+        "threshold": 6.5,
+        "topic_dedup": true
+      },
+      "frontier-research": {
+        "threshold": 7.0,
+        "topic_dedup": true
+      },
+      "token-frugality": {
+        "threshold": 6.0,
+        "topic_dedup": true
+      },
+      "speech-ai": {
+        "threshold": 6.5,
+        "topic_dedup": true
+      },
+      "homelab-infra": {
+        "threshold": 6.0,
+        "topic_dedup": true
       }
     }
   },

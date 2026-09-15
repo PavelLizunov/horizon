@@ -41,9 +41,18 @@ profiles/
 
 | Profile | Purpose | Output |
 | --- | --- | --- |
-| `finance-news` | Macroeconomics, markets, company finance, and economically material policy | Concise summary, necessary background, and optional direct impact |
+| `paid-ai-platforms` | Commercial frontier AI, API token pricing shifts, prompt caching discounts, subscription quotas, and access gateways | Summary, exact pricing and quotas equation, and infrastructure impact |
+| `agentic-harnesses` | Coding agents and execution harnesses (DSH, Claude Code, OpenCode, Aider, Cline), sandboxing, and MCP standards | Summary, runtime architecture and sandboxing, and developer workflow |
+| `frontier-research` | AI preprints and research papers (arXiv cs.AI/CL/LG), reasoning emergence, test-time compute, and novel architectures (MLA, GRPO) | Summary, core mathematical/algorithmic mechanism, and practical implications |
+| `token-frugality` | Token economy, prompt caching, KV-cache quantization (FP8, INT4), MTP, speculative decoding, and inference optimizations | Summary, optimization methodology, and measured efficiency gains |
+| `speech-ai` | Open-weights neural TTS (TeraTTS, Fish-Speech, Qwen3-TTS), streaming ASR (VibeVoice, Whisper), diarization, and speech front-ends | Summary, neural model architecture, and audio pipeline relevance |
+| `homelab-infra` | Proxmox VE, LXC orchestration, GPU passthrough (RTX 5060 Ti), Tailscale mesh networking, Beszel telemetry, and self-hosted services | Summary, infrastructure impact, and homelab relevance |
+| `vpn-engineering` | VPN protocols, circumvention cores (sing-box, Xray, AWG 3.1, zapret2), routing, and Anti-ECH/SVCB 65 filters | Summary, technical impact, and what to watch next |
+| `censorship-watch` | Internet blocking measurements, throttling, ISP allowlists, regional shutdowns, and DPI field reports | Summary, alternative explanations with web search, and impact |
+| `video` | YouTube video transcripts and visual summaries across monitored channels | Summary, background, impact, and deep dive |
 | `tech-news` | Timely releases, incidents, research results, and technology-industry developments | Compact summary and background with optional impact and community discussion |
 | `tech-blog` | Long-form engineering deep dives, tutorials, investigations, retrospectives, and technical arguments | Required background, solution, and takeaway sections |
+| `finance-news` | Macroeconomics, markets, company finance, and economically material policy | Concise summary, necessary background, and optional direct impact |
 
 The blog profile uses larger input budgets and head-middle-tail sampling. For RSS
 feeds, pair it with a full-text extractor so the profile receives the article

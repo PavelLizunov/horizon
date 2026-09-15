@@ -1,0 +1,39 @@
+{
+  "id": "speech-ai",
+  "name": "Speech & Audio AI",
+  "display_names": {
+    "ru": "Речь & Аудио AI",
+    "zh": "语音与音频 AI"
+  },
+  "match": "match.md",
+  "analysis": "analysis.md",
+  "content": {
+    "analysis_max_chars": 4000,
+    "enrichment_max_chars": 10000,
+    "sampling": "prefix"
+  },
+  "enrichment": {
+    "prompt": "enrichment.md",
+    "blocks": [
+      {
+        "id": "summary",
+        "type": "section",
+        "tools": [],
+        "primary": true
+      },
+      {
+        "id": "model_architecture",
+        "type": "section",
+        "tools": [
+          "web_search"
+        ]
+      },
+      {
+        "id": "audio_pipeline_relevance",
+        "type": "section",
+        "tools": [],
+        "optional": true
+      }
+    ]
+  }
+}

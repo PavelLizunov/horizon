@@ -1,0 +1,39 @@
+{
+  "id": "homelab-infra",
+  "name": "Homelab, Proxmox & AI Infrastructure",
+  "display_names": {
+    "ru": "Homelab & Proxmox",
+    "zh": "Homelab 与 AI 基础设施"
+  },
+  "match": "match.md",
+  "analysis": "analysis.md",
+  "content": {
+    "analysis_max_chars": 4000,
+    "enrichment_max_chars": 10000,
+    "sampling": "prefix"
+  },
+  "enrichment": {
+    "prompt": "enrichment.md",
+    "blocks": [
+      {
+        "id": "summary",
+        "type": "section",
+        "tools": [],
+        "primary": true
+      },
+      {
+        "id": "infrastructure_impact",
+        "type": "section",
+        "tools": [
+          "web_search"
+        ]
+      },
+      {
+        "id": "homelab_relevance",
+        "type": "section",
+        "tools": [],
+        "optional": true
+      }
+    ]
+  }
+}

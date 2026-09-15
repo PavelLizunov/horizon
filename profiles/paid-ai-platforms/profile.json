@@ -1,0 +1,41 @@
+{
+  "id": "paid-ai-platforms",
+  "name": "Paid AI Platforms & APIs",
+  "display_names": {
+    "ru": "Коммерческий AI & API",
+    "zh": "商业 AI 与 API"
+  },
+  "match": "match.md",
+  "analysis": "analysis.md",
+  "content": {
+    "analysis_max_chars": 4000,
+    "enrichment_max_chars": 10000,
+    "sampling": "prefix"
+  },
+  "enrichment": {
+    "prompt": "enrichment.md",
+    "blocks": [
+      {
+        "id": "summary",
+        "type": "section",
+        "tools": [],
+        "primary": true
+      },
+      {
+        "id": "pricing_and_quotas",
+        "type": "section",
+        "tools": [
+          "web_search"
+        ]
+      },
+      {
+        "id": "infrastructure_impact",
+        "type": "section",
+        "tools": [
+          "web_search"
+        ],
+        "optional": true
+      }
+    ]
+  }
+}

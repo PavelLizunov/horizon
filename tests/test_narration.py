@@ -921,3 +921,33 @@ def test_transcribe_grader_faster_whisper(monkeypatch, tmp_path):
     assert "Тестовый транскрипт" in res["text"]
     assert res["speech_end"] == 3.5
 
+
+def test_speak_chunk_tera_rejects_incomplete_tail(monkeypatch, tmp_path):
+    """Ensure _speak_chunk_tera returns None when transcription fails reached_the_end tail gate."""
+    from scripts import dev_narrate_article as driver
+
+    # Mock synthesize to create a valid wav file with long enough duration
+    def mock_synth(text, voice, model, out_path):
+        out_path.write_bytes(b"dummy_audio")
+        return True
+
+    monkeypatch.setattr(driver, "_synthesize_tera", mock_synth)
+    monkeypatch.setattr(driver, "_duration", lambda p: 5.0)
+    monkeypatch.setattr(driver, "_ffmpeg", lambda *args: None)
+    # Transcript heard misses the end of the spoken text
+    monkeypatch.setattr(driver, "_transcribe", lambda probe, checker: {"text": "Начало фразы"})
+
+    spoken_text = "Начало фразы и совершенно другой длинный несоответствующий финал"
+    result = driver._speak_chunk_tera(
+        text=spoken_text,
+        out=tmp_path,
+        name="chunk-00",
+        voice="ru_f1",
+        model=None,
+        checker="mock_checker"
+    )
+    assert result is None
+    # Verify the wav was unlinked on failure
+    assert not (tmp_path / "chunk-00.wav").exists()
+
+

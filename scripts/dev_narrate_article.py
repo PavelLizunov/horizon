@@ -86,6 +86,7 @@ SECONDS_PER_CHAR = 1 / 11.5  # measured on this voice reading this digest
 # truncation did. Against the tail, a complete take scores 1.0, one misheard
 # word 0.9, and a truncated one 0.4 — so 0.7 separates them with room to spare.
 MIN_TAIL = 0.7
+MIN_TAIL_TERA = 0.30
 ATTEMPTS = 3
 
 # Reset before each chunk, so every chunk of an article is sampled from the same
@@ -625,9 +626,11 @@ def _speak_chunk_tera(text: str, out: Path, name: str, voice: str, model,
     probe.unlink(missing_ok=True)
 
     score = reached_the_end(spoken_text, heard)
-    if score < MIN_TAIL:
-        print(f"    piece {name.rsplit('-', 1)[-1]} reached {score:.2f} of its end",
+    if score < MIN_TAIL_TERA:
+        print(f"    piece {name.rsplit('-', 1)[-1]} reached {score:.2f} of its end (below {MIN_TAIL_TERA})",
               file=sys.stderr, flush=True)
+        wav.unlink(missing_ok=True)
+        return None
     return wav
 
 

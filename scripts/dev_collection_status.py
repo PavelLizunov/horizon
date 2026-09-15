@@ -16,6 +16,12 @@ from src.models import Config
 
 
 PROFILE_NAMES = {
+    "paid-ai-platforms": "Коммерческий AI и API",
+    "agentic-harnesses": "Харнесы и агенты",
+    "frontier-research": "AI исследования и рассуждения",
+    "token-frugality": "Экономика токенов и оптимизация",
+    "speech-ai": "Речевые технологии и аудио AI",
+    "homelab-infra": "Homelab, Proxmox и AI инфраструктура",
     "tech-news": "Новости технологий",
     "tech-blog": "Технические статьи",
     "finance-news": "Финансы и рынки",

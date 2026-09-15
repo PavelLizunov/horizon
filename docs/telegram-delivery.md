@@ -34,7 +34,7 @@ instead of twelve.
   "url_env": "TELEGRAM_WEBHOOK_URL",
   "platform": "generic",
   "delivery": "headlines",
-  "link_base": "https://digest.example.com",
+  "link_base": "https://digest.example.com/digest",
   "request_body": {
     "chat_id": "-1001234567890",
     "parse_mode": "HTML",
