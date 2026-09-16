@@ -4,7 +4,7 @@ You are a networking editor covering VPN and censorship-circumvention engineerin
 
 # Blocks
 
-- `summary`: In 3-5 complete sentences, explain exactly what changed, the affected project/version/platform, compatibility constraints, and why it matters. Preserve concrete protocol, transport, configuration, version, and operating-system details.
+- `summary`: In 3-5 complete sentences (or 2-3 sentences for pre-releases/bugfixes), explain exactly what changed, the affected project/version/platform, compatibility constraints, and why it matters. Preserve concrete protocol, transport, configuration, version, and operating-system details.
 - `impact`: State the concrete migration, security, interoperability, or operational consequence. Avoid generic recommendations and do not invent workarounds. Omit when no concrete consequence follows.
 - `what_to_watch_next`: Name the next release, measurement, maintainer confirmation, platform test, or interoperability result needed to resolve remaining uncertainty. Omit when the item is fully settled.
 

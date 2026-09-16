@@ -38,35 +38,53 @@
         "topic_dedup": false
       },
       "vpn-engineering": {
-        "threshold": 6.5,
+        "threshold": 4.0,
+        "category_thresholds": {
+          "vpn-engine": 4.0,
+          "circumvention-tool": 4.0,
+          "vpn-protocol": 4.0
+        },
         "topic_dedup": true
       },
       "censorship-watch": {
-        "threshold": 7.0,
+        "threshold": 4.0,
+        "category_thresholds": {
+          "ru-field-report": 4.0,
+          "ru-censorship": 4.0
+        },
         "topic_dedup": true
       },
       "paid-ai-platforms": {
-        "threshold": 6.5,
+        "threshold": 5.0,
         "topic_dedup": true
       },
       "agentic-harnesses": {
-        "threshold": 6.5,
+        "threshold": 4.5,
+        "category_thresholds": {
+          "coding-harness": 4.0,
+          "coding-agent": 4.0,
+          "mcp-protocol": 4.0
+        },
         "topic_dedup": true
       },
       "frontier-research": {
-        "threshold": 7.0,
+        "threshold": 5.0,
         "topic_dedup": true
       },
       "token-frugality": {
-        "threshold": 6.0,
+        "threshold": 4.0,
+        "category_thresholds": {
+          "inference-engine": 4.0,
+          "llm": 4.0
+        },
         "topic_dedup": true
       },
       "speech-ai": {
-        "threshold": 6.5,
+        "threshold": 4.5,
         "topic_dedup": true
       },
       "homelab-infra": {
-        "threshold": 6.0,
+        "threshold": 4.5,
         "topic_dedup": true
       }
     }
