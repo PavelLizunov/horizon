@@ -678,14 +678,31 @@ class HorizonOrchestrator:
 
                 # Send webhook notification if configured
                 if self.webhook_notifier:
-                    await self.webhook_notifier.send_daily_summary(
-                        summary=summary,
-                        important_items=important_items,
-                        all_items_count=len(all_items),
-                        date=today,
-                        lang=lang,
-                        summarizer=summarizer,
-                    )
+                    if os.environ.get("HORIZON_DEFER_WEBHOOK") == "1":
+                        self.console.print(
+                            f"{self.icons['webhook']} Webhook notification deferred until site publication\n"
+                        )
+                        messages = self.webhook_notifier.build_daily_summary_messages(
+                            summary=summary,
+                            important_items=important_items,
+                            all_items_count=len(all_items),
+                            date=today,
+                            lang=lang,
+                            summarizer=summarizer,
+                        )
+                        pending_file = self.storage.data_dir / f"pending-webhook-{today}-{lang}.json"
+                        pending_file.write_text(
+                            json.dumps(messages, ensure_ascii=False, indent=2), encoding="utf-8"
+                        )
+                    else:
+                        await self.webhook_notifier.send_daily_summary(
+                            summary=summary,
+                            important_items=important_items,
+                            all_items_count=len(all_items),
+                            date=today,
+                            lang=lang,
+                            summarizer=summarizer,
+                        )
 
             self.console.print(
                 f"[bold green]{self.icons['success']} "

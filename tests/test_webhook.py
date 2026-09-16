@@ -472,8 +472,24 @@ class TestHeadlineDelivery:
         for index in (1, 2):
             anchor = DailySummarizer._item_anchor("tech-news", index)
             slug = anchor.removeprefix("item-")
-            assert f"https://digest.example.com/2026-08-06-ru/{slug}/" in body
+            assert f"https://digest.example.com/digest/2026-08-06-ru/{slug}/" in body
             assert f"#{anchor}" not in body
+
+    def test_link_base_normalizes_to_digest_root(self):
+        # Prevent 404 links when operators configure bare host without /digest
+        assert (
+            WebhookConfig(link_base="https://digest.ninitux.com").link_base
+            == "https://digest.ninitux.com/digest"
+        )
+        assert (
+            WebhookConfig(link_base="https://digest.ninitux.com/digest").link_base
+            == "https://digest.ninitux.com/digest"
+        )
+        assert (
+            WebhookConfig(link_base="https://digest.ninitux.com/digest/").link_base
+            == "https://digest.ninitux.com/digest"
+        )
+        assert WebhookConfig(link_base=None).link_base is None
 
     def test_without_link_base_it_falls_back_to_the_item_url(self):
         body = "".join(self._chunks([self._item(1, "A")], link_base=None))
@@ -499,6 +515,54 @@ class TestHeadlineDelivery:
         assert notifier.build_daily_summary_messages(
             "summary", [self._item(1, "A")], 1, "2026-08-06", "ru", DailySummarizer()
         ) == []
+
+    def test_dispatch_deferred_webhooks(self, monkeypatch, tmp_path):
+        from scripts import dev_dispatch_webhooks as dispatcher
+        from src.services.webhook import WebhookDeliveryResult, WebhookDeliveryStatus
+        from src.storage.manager import StorageManager
+
+        data_dir = tmp_path / "data"
+        data_dir.mkdir()
+        config_path = data_dir / "config.json"
+        config_path.write_text(
+            json.dumps({
+                "ai": {
+                    "provider": "openai",
+                    "model": "gpt-4",
+                    "api_key_env": "OPENAI_API_KEY",
+                },
+                "sources": {},
+                "webhook": {
+                    "enabled": True,
+                    "url_env": "TEST_WEBHOOK_URL",
+                },
+            }),
+            encoding="utf-8",
+        )
+        monkeypatch.setenv("TEST_WEBHOOK_URL", "https://example.com/webhook")
+
+        # Create pending webhook file
+        pending = data_dir / "pending-webhook-2026-09-16-ru.json"
+        pending.write_text(
+            json.dumps([{"text": "Hello world"}]),
+            encoding="utf-8",
+        )
+
+        sent_messages = []
+
+        async def mock_notify(self, msg):
+            sent_messages.append(msg)
+            return WebhookDeliveryResult(WebhookDeliveryStatus.SUCCESS, status_code=200)
+
+        monkeypatch.setattr(WebhookNotifier, "notify", mock_notify)
+        monkeypatch.setattr(dispatcher, "StorageManager", lambda: StorageManager(data_dir=data_dir, config_path=config_path))
+
+        status = asyncio.run(dispatcher.dispatch())
+        assert status == 0
+        assert len(sent_messages) == 1
+        assert sent_messages[0]["text"] == "Hello world"
+        # Pending file should be unlinked on success
+        assert not pending.exists()
 
 
 class TestWebhookRedaction:

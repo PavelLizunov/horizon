@@ -18,6 +18,14 @@
 set -u
 cd "${HORIZON_DIR:-$HOME/horizon}" || exit 1
 
+# Auto-update production repository from origin/main before daily run
+if [[ -d .git && "${HORIZON_NO_PULL:-0}" != "1" ]]; then
+  log "git: pulling latest main"
+  # Revert tracked generated placeholders so fast-forward is not blocked
+  git checkout -- docs/checks.md docs/collection.md docs/digest/index.md 2>/dev/null || true
+  git pull --ff-only origin main || log "git: pull failed, running on current commit"
+fi
+
 # launchd gives a non-interactive shell almost no PATH.
 export PATH="$HOME/bin:/opt/homebrew/bin:/usr/local/bin:$PATH"
 
@@ -54,6 +62,8 @@ if [[ "${HORIZON_SHIP_ONLY:-0}" == "1" ]]; then
 fi
 
 log "pipeline: start"
+# Defer webhooks so notifications go out only after verified site publish
+export HORIZON_DEFER_WEBHOOK=1
 .venv/bin/horizon --hours "${HORIZON_HOURS:-24}"
 pipeline_status=$?
 log "pipeline: exit $pipeline_status"
@@ -83,13 +93,16 @@ log "article verification: refresh public wording and labels"
 .venv/bin/python scripts/dev_verification_status.py --refresh-articles docs/digest \
   || log "article verification: FAILED - generated pages stay unchanged"
 
-# Publish text immediately. The pipeline has already sent Telegram by now, so
-# every minute spent before this call is another minute of broken links.
+# Publish text immediately. The site is now live on ingress.
 if [[ ! -x "$HOME/bin/mkdocs" ]]; then
   log "site: SKIPPED — ~/bin/mkdocs missing (uv tool install mkdocs --with mkdocs-material)"
   exit $pipeline_status
 fi
 ship_site || exit 1
+
+# Dispatch deferred webhooks now that the site is verified live on ingress
+log "webhook: dispatching notifications for published site"
+.venv/bin/python scripts/dev_dispatch_webhooks.py || log "webhook: dispatch FAILED"
 
 # Narration. Two interpreters on purpose: preparing the text needs the project's
 # dependencies, and TeraTTSv2 needs onnxruntime and transformers, which live in

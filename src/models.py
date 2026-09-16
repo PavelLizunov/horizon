@@ -610,6 +610,18 @@ class WebhookConfig(BaseModel):
             raise ValueError(f"webhook.delivery must be one of {allowed}, got '{v}'")
         return v
 
+    @field_validator("link_base")
+    @classmethod
+    def validate_link_base(cls, v: Optional[str]) -> Optional[str]:
+        if v is None:
+            return None
+        stripped = v.strip().rstrip("/")
+        if not stripped:
+            return None
+        if not stripped.endswith("/digest"):
+            stripped = f"{stripped}/digest"
+        return stripped
+
     @field_validator("platform")
     @classmethod
     def validate_platform(cls, v: str) -> str:

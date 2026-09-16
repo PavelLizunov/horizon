@@ -12,6 +12,13 @@ recoverable by reading the code.
 
 ## Unreleased
 
+### Guaranteed site publication before webhook delivery and production synchronization
+
+- Enforced `link_base` normalization in `src/models.py` (`WebhookConfig`): bare domains (e.g. `https://digest.ninitux.com`) automatically normalize to end with `/digest` to prevent 404 dead links in notifications.
+- Added deferred webhook delivery via `HORIZON_DEFER_WEBHOOK=1` in `src/orchestrator.py` and `scripts/dev_dispatch_webhooks.py`. Webhooks are now dispatched in `deploy/run-daily.sh` strictly *after* `ship_site` succeeds, closing the race condition where chat notifications preceded site availability.
+- Added automated `git pull --ff-only origin main` in `deploy/run-daily.sh` before pipeline execution, reverting tracked placeholder metadata to prevent merge blocks.
+- Added `deploy/sync-production.sh` for one-command synchronization of Git code, `data/config.json`, and `.env` credentials from development workstations to production containers (LXC 213).
+
 ### Specialized AI, infrastructure and agentic processing profiles
 
 Added 6 dedicated processing profiles under `profiles/`:
