@@ -66,11 +66,37 @@ before mutating production; failed access is not permission to bypass host keys.
 - Hard Gate: PASS; only observed counts/test results reported, no invented metrics.
 - Prose/grounding: PASS; correction described by geometry, layers and icon functions.
 
-- [ ] Push exact candidate and preserve rollout/rollback metadata.
+- [x] Push exact candidates and preserve rollout/rollback metadata: visual fix
+  `94a204a`, final published correction `d63b93f`. Dedicated deployment branch;
+  no push to main. Previous checkout SHA and byte-identical tracked user diff
+  retained in private operator rollout record. Pre-release site tar validated.
 - [x] Full production archive build and initial publication: 548 articles, 408
   attached audio tracks, no missing targets. Existing tracked local changes remained
   byte-identical after checkout switch; timers unchanged and no paid run/restart.
-- [ ] Resolve live instant-navigation history: Material strips inline JSON script
-  snapshots on live article transitions. Replace with escaped hidden data attributes,
-  then verify instant/direct visits before final acceptance.
-- [ ] Public route/hash/interaction checks and recorded rollback path.
+- [x] Resolve live instant-navigation history: Material stripped inline JSON script
+  snapshots on live article transitions. Escaped hidden data attributes now preserve
+  snapshots; regression and actual instant/direct article history checks pass.
+- [x] Public route/hash/interaction checks: 14 live browser checks passed on the
+  production HTTPS origin, including five tiles, 24-card feed, SVG bookmarks,
+  real article/direct history, local search, archive/collection/checks/search/API
+  responses, mobile overflow, dark contrast/icon labels and no JS errors. Homepage,
+  chip, catalog and final client hashes match candidate files. Catalog has 548
+  articles, 408 audio flags, 467,175 bytes and `Cache-Control: no-cache`.
+
+## Rollback and runtime evidence
+
+The private operator record holds the previous checkout SHA, user patch/status,
+pre- and final-build outputs and deployed SHA. The ingress pre-release tar outside
+web root was validated by a complete listing. Rollback restores that tar through
+management access and switches the production checkout to its recorded prior SHA
+without discarding user changes, under the shared production lock. Rollback was
+not executed on the healthy live site. Both timers remain enabled with unchanged
+next runs; both one-shot services remained inactive during application. No LLM/TTS
+job or service restart occurred. Catalog generation on the full archive measured
+0.406 s and native build 3.96 s during the recorded preparation build. These are observed build times, not
+client rendering guarantees.
+
+Client browser verification ran on the public origin from local Chromium. This
+proves the tested path, not every physical device or all original archive anchor
+links; 548 generated article targets were checked on disk. Production checkout is
+pinned to `d63b93f`, while documentation receipts may advance the task branch.

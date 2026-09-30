@@ -78,15 +78,21 @@
       generated live news/catalogs never committed.
 - [x] Commit/push task-only changes and provide owner preview + verification record.
 
-## Phase F — separately approved rollout
+## Phase F — owner-authorized rollout
 
-- [ ] Obtain deployment authorization/window; check active publishers, timers,
+Production publication was authorized after cover/icon checks. Published code
+`d63b93f` passed the full production archive build and live browser checks; see
+[visual-rollout.md](visual-rollout.md). Full arbitrary legacy anchor click-through
+and an executed rollback on the healthy site are not claimed.
+
+- [x] Obtain deployment authorization/window; check active publishers, timers,
       exact checkout and supported MkDocs versions. No DSH restart.
-- [ ] Preserve rollback artifact, apply verified commit and rebuild/ship without
+- [x] Preserve rollback artifact, apply verified commit and rebuild/ship without
       fetch/LLM/narration, with no overlapping publishers.
-- [ ] Verify exact public homepage, old article/anchor links, archive/search,
+- [x] Verify exact public homepage, article targets, archive/search,
       checks/collection, local assets, audio flags, and cache freshness.
-- [ ] Verify rollback path and report measured results/remaining limits.
+- [x] Verify retained rollback archive/path (without executing rollback on the
+      healthy live site) and report measured results/remaining limits.
 
 
 ## Implementation evidence
@@ -96,4 +102,4 @@ Implementation commit `e431a86`, pushed to `origin/feat/news-dashboard`.
 3-article, 90-item and 1000-item archives. Evidence/limits are in
 [verification.md](verification.md). The managed Tailnet preview remains available;
 its runtime articles/screenshots are ignored and not pushed. Production rollout
-checks above remain deliberately pending and require separate authorization.
+was subsequently authorized, verified and recorded in visual-rollout.md.

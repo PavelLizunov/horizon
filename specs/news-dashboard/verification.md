@@ -62,8 +62,13 @@ existing narration/player tests remain unchanged.
   never live config/credentials or private model reasoning.
 - Raw source URLs are internal dedup inputs, omitted from public catalog; card
   labels are escaped and trusted SVG files contain no external/script references.
-- Article JSON escapes `<`, `>` and `&` to prevent a closing-script injection.
+- Article JSON escapes `<`, `>` and `&` and is HTML-attribute escaped inside a
+  hidden snapshot node. Live rollout found Material strips inline JSON scripts;
+  final `d63b93f` uses `data-snapshot`, verified on actual instant navigation.
   JS checks route/ID/schema fields and escapes all text before rendering.
+- Subsequent owner-authorized cover/icon correction and production application
+  passed 894 offline tests, 34 local browser and 14 live browser checks. See
+  [visual-rollout.md](visual-rollout.md) for exact SHAs, coverage and rollback limits.
 - Unknown published formats/duplicate IDs fail the local build before transfer;
   stale pruning removes absent pages from subsequent catalog builds.
 - Hook handles all site builds, so ship-only narration refresh rederives attached
