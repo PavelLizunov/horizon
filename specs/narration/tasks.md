@@ -9,12 +9,14 @@
 
 ## Player Availability Fix
 
-- [ ] Cache the Linux Whisper grader without changing transcription options.
-- [ ] Add the optional argv-based after-attach hook and daily ship-only wiring.
-- [ ] Verify per-article ordering and failure boundaries with offline regressions.
-- [ ] Update narration/deployment documentation and local guides.
-- [ ] Run the full offline suite and review the task diff.
-- [ ] Commit verified changes and push the dedicated task branch.
+- [x] Cache the Linux Whisper grader without changing transcription options.
+- [x] Add the optional argv-based after-attach hook and daily ship-only wiring.
+- [x] Verify per-article ordering and failure boundaries with offline regressions.
+- [x] Update narration/deployment documentation and local guides.
+- [x] Run the full offline suite and review the task diff.
+- [x] Commit verified changes and push the dedicated task branch.
+
+Implementation: `d8f967b`, pushed to `origin/fix/narration-player-availability`.
 
 ### Verification record
 
