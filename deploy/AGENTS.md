@@ -9,6 +9,7 @@ The `deploy/` directory contains host orchestration tools:
 - `horizon-digest.service.example` & `horizon-digest.timer.example`: Systemd unit templates for current Debian LXC production topology.
 - `horizon.launchd.example.plist` & `horizon-video.launchd.example.plist`: macOS launchd service templates for rollback/reference topology.
 - `audio-server.caddy.example`: Caddy virtual host configuration for static voice asset delivery.
+- `dashboard_hook.py`: Native MkDocs hook; builds homepage/card catalog from published pages on every build, including ship-only. Uses the site interpreter's YAML dependency and stdlib catalog helpers, never runtime config or paid APIs. Partial coverage fails the local build before shipping.
 - `search/`: Search API artifact plus a reference Docker Compose stack. Current production keeps the artifact (`horizon-search-api.service`) and Elasticsearch (`horizon-elasticsearch.service`) on a separate Debian guest; see `deploy/search/AGENTS.md` and `specs/linux-production`.
 
 ## Pipeline & Publishing Execution Order

@@ -31,7 +31,7 @@ SITE_DIGEST_DIR = _REPO_ROOT / "docs" / "digest"
 _SITE_FRONT_MATTER = "---\nsearch:\n  exclude: true\n---\n\n"
 
 
-def _site_front_matter(title: str = "") -> str:
+def _site_front_matter(title: str = "", dashboard: dict | None = None) -> str:
     """Front matter for a site page, carrying an explicit title when known.
 
     MkDocs derives a page title from its first H1, but an article's H1 is a
@@ -40,9 +40,14 @@ def _site_front_matter(title: str = "") -> str:
     tabs and link previews read "Tech news 1". json.dumps produces a
     double-quoted scalar that is valid YAML whatever the title contains.
     """
-    if not title:
+    if not title and dashboard is None:
         return _SITE_FRONT_MATTER
-    return f"---\ntitle: {json.dumps(title, ensure_ascii=False)}\nsearch:\n  exclude: true\n---\n\n"
+    result = "---\n"
+    if title:
+        result += f"title: {json.dumps(title, ensure_ascii=False)}\n"
+    if dashboard is not None:
+        result += "dashboard: " + json.dumps(dashboard, ensure_ascii=False, allow_nan=False) + "\n"
+    return result + "search:\n  exclude: true\n---\n\n"
 
 
 def safe_output_path(root: Path, filename: str) -> Path:
@@ -172,7 +177,7 @@ class StorageManager:
         written: list[Path] = []
         for page in pages:
             filepath = safe_output_path(issue_dir, f"{page.slug}.md")
-            _atomic_write_text(filepath, _site_front_matter(page.title) + page.markdown)
+            _atomic_write_text(filepath, _site_front_matter(page.title, getattr(page, "dashboard", None)) + page.markdown)
             written.append(filepath)
 
         current_names = {p.name for p in written}

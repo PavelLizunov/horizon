@@ -53,7 +53,7 @@ Requires specific hardware, virtual environments, or production infrastructure:
   - `dev_check_asr.py`: ASR smoke test using `mlx-whisper` on Apple Silicon.
 - **Operational & Deployment**:
   - `daily-run.sh`: Legacy/alternative production runner (pulls git, runs the paid pipeline, and updates `gh-pages`).
-  - `dev_reindex_archive.py`: Reads archive files, sends HTTP requests to Elasticsearch, and mutates the configured index.
+  - `dev_reindex_archive.py`: Reads archive files, sends HTTP requests to Elasticsearch, and mutates the configured index. Its pure parser exports remain compatible through `src/storage/archive.py`; test parsing offline, do not invoke indexing to verify dashboard builds.
 - **Interactive Setup**:
   - `setup_r2.py`: Interactive Cloudflare R2 bucket setup (writes credentials to `.env`).
   - `setup_telegram.py`: Interactive Telegram bot token setup (writes token to `.env`).

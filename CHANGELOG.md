@@ -1,5 +1,11 @@
 # Changelog
 
+- The news homepage now browses published Russian articles across the archive,
+  with topic/period filters, interest-score sorting, local search, browser-local
+  bookmarks/history, and deterministic vector covers. A native MkDocs hook builds
+  static cards and a public catalog on every rebuild, including narration refreshes;
+  no new service/model calls or article/search URL changes are required.
+
 - Narration now publishes each validated article's player before synthesizing the
   next article, rather than waiting for the entire issue. The Linux Whisper
   grader is reused across chunks; grading thresholds are unchanged. Failed

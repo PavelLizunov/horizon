@@ -46,6 +46,7 @@ Key modules:
 - Script normalization (`normalize_language`) uses OpenCC (`t2s`) to force Traditional Chinese to Simplified Chinese for `zh` targets.
 
 ### 5. Evaluator Segregation & Pure Programmatic Rendering
+- `ArticlePage.dashboard` is optional public card metadata derived from resolved summary-view profile/title/analysis. It must never export analysis reasoning or operational verification state; legacy callers remain valid.
 - `summarizer.py` is strictly **programmatic**: it formats Markdown digests without making LLM calls. It sanitizes unsafe URLs (`_safe_url`), escapes Markdown special characters (`_escape_markdown`), and formats typography (`_pangu`).
 - `narration.py` operates completely offline to convert digest text into clean speakable Russian prose. Speech synthesis (TeraTTS) and grading (Whisper) are decoupled into host scripts/venvs.
 

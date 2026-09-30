@@ -220,7 +220,11 @@ narration, then ships each validated player's page before synthesizing the next
 article. The optional `--after-attach` hook invokes the same script in
 ship-only/no-pull mode; it never reruns the pipeline or narration. A failed hook
 stops the narration batch, and the daily runner retains its final site publish
-as recovery. Each refresh still rebuilds and transfers the whole site, with the
+as recovery. Each native MkDocs build also regenerates the news dashboard from
+published pages, including audio-ready flags and the static catalog. No additional
+service or pipeline/model call is needed; see [dashboard builds](../docs/dashboard.md).
+The site interpreter needs MkDocs with native hooks (verified with 1.6.1).
+Each refresh still rebuilds and transfers the whole site, with the
 existing non-atomic remote replacement. Do not move narration ahead of the first
 ship: on 2026-08-10 it stretched this window from seconds to nine minutes
 (including a cold model download).

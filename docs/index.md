@@ -1,9 +1,11 @@
-# Digest Ninitux
+---
+title: Digest Ninitux
+search:
+  exclude: true
+---
 
-<img class="hz-mark" src="assets/hz-mark.png" alt="" width="420" height="420">
+# Ваш новостной горизонт
 
-Модель читает мои источники, оценивает каждый материал и разбирает то, что
-прошло порог: контекст, влияние, обсуждение, проверка фактов.
+Главная собирается из опубликованных статей при каждой сборке сайта.
 
-[Архив выпусков](digest/index.md){ .md-button .md-button--primary }
-[Поиск по архиву](search.md){ .md-button }
+[Архив выпусков](digest/index.md) · [Поиск по архиву](search.md)

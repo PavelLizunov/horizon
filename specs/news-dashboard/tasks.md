@@ -2,7 +2,11 @@
 
 ## Planning record
 
-- Planning-only authorization; no implementation or production deployment yet.
+- Implementation authorized by the user's «Начинай»; production deployment remains
+  outside authorization. Branch `feat/news-dashboard` descends from plan commit
+  `57e8bae`, preserving prototype and narration fixes. Unrelated user changes remain
+  unstaged. Local inventory: 3 published Russian articles, 1 issue, all with attached
+  audio, none with dashboard front matter. No archive body is copied into records.
 - Inspected published-page/storage contracts, resolved summary view, search
   identity/schema, frozen archive parser/republisher, ship-only/narration flow,
   Material palette/instant navigation, and the approved prototype.
@@ -12,7 +16,7 @@
 
 ## Phase A — contract and coverage (D1, D2, D4, D7, D9)
 
-- [ ] Owner approves this implementation scope, focus defaults, static catalog v1,
+- [x] Owner approves this implementation scope, focus defaults, static catalog v1,
       vector-only covers, and browser-local state.
 - [ ] Establish task branch base and preserve the verified narration fixes;
       exclude unrelated config/profile changes.

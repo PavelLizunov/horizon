@@ -13,6 +13,7 @@ site_dir: site
 theme:
   name: material
   language: ru
+  custom_dir: docs/overrides
   # No Google Fonts: the stylesheet link is render-blocking and the CDN is
   # unreachable for the audience; the skin uses the system font stack anyway.
   font: false
@@ -37,11 +38,15 @@ theme:
     # the only way out of an article was the pager three screens down.
     - navigation.tabs
 
+hooks:
+  - deploy/dashboard_hook.py
 extra_css:
   - assets/horizon-digest.css
+  - assets/horizon-dashboard.css
 
 extra_javascript:
   - assets/horizon-search-redirect.js
+  - assets/horizon-dashboard.js
   - assets/horizon-player.js
 
 plugins:
@@ -78,6 +83,7 @@ exclude_docs: |
   _posts/
   AGENTS.md
   **/AGENTS.md
+  overrides/**
   feed-*.xml
   assets/js/horizon.js
   assets/css/horizon.css
@@ -91,6 +97,7 @@ exclude_docs: |
   extractors.md
   twitter-cookies.md
   narration.md
+  dashboard.md
   vpn-radar.md
   verification/
 

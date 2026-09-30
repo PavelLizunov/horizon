@@ -8,6 +8,7 @@ from urllib.parse import quote, urlsplit
 
 from .localization import normalize_language
 from ..models import ContentItem
+from ..storage.dashboard import metadata as dashboard_metadata
 
 
 _CJK = r"[\u4e00-\u9fff\u3400-\u4dbf]"
@@ -139,6 +140,7 @@ class ArticlePage:
     slug: str
     title: str
     markdown: str
+    dashboard: Optional[dict] = None
 
 
 # CJK corner brackets around block titles, e.g. **「Контекст」**. Non-raw
@@ -851,9 +853,21 @@ class DailySummarizer:
                     title_override=view_item.title,
                     score_override=view_item.score,
                 )
+                item = view_item.item
+                artifact = item.processing.artifacts.get(language) if item.processing else None
+                analysis = item.processing.analysis if item.processing else None
+                primary = next((block for block in artifact.blocks if block.primary), None) if artifact else None
+                card = dashboard_metadata(
+                    title=view_item.title,
+                    teaser=primary.content if primary else (analysis.summary if analysis else ""),
+                    profile_id=group.profile_id, profile_name=group.name,
+                    score=view_item.score, tags=analysis.tags if analysis else [],
+                    source_url=str(item.url),
+                )
                 pages.append(
                     ArticlePage(
                         slug=slug,
+                        dashboard=card,
                         title=view_item.title,
                         markdown=article_site_markup(
                             body,

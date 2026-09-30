@@ -9,3 +9,6 @@
 - [x] Add offline HTTP/cache/concurrency regression coverage and update the owning API documentation.
 - [x] Implement ingress shipping script (`deploy/run-daily.sh`).
 - [x] Sanitize error states and dollar estimates from published article views.
+
+News dashboard extension implementation/acceptance is tracked separately in
+[news-dashboard/tasks.md](../news-dashboard/tasks.md).

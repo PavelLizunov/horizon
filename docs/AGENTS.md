@@ -10,7 +10,7 @@ The `docs/` tree serves two distinct purposes governed by `mkdocs.yml`:
   - Tracked entrypoints: `docs/index.md`, `docs/digest/index.md`, `docs/collection.md`, `docs/checks.md`, `docs/search.md`, and `docs/not-found.md`.
   - Static site assets live in `docs/assets/`.
 - **Repository-Only Manual** (excluded from the public MkDocs build via `exclude_docs` in `mkdocs.yml`):
-  - Internal architecture and operational guides (`pipeline.md`, `configuration.md`, `scrapers.md`, `video-source.md`, `narration.md`, `profiles.md`, `scoring.md`, `extractors.md`, `telegram-delivery.md`, `twitter-cookies.md`, `vpn-radar.md`, and `verification/`).
+  - Internal architecture and operational guides (`pipeline.md`, `dashboard.md`, `configuration.md`, `scrapers.md`, `video-source.md`, `narration.md`, `profiles.md`, `scoring.md`, `extractors.md`, `telegram-delivery.md`, `twitter-cookies.md`, `vpn-radar.md`, and `verification/`).
   - Retained for GitHub reading without cluttering public digest readers.
   - Legacy upstream Jekyll files (`_config.yml`, `_includes/`, `_posts/`, `feed-*.xml`, `assets/css/horizon.css`, `assets/js/horizon.js`) are also in `exclude_docs` to preserve upstream merge compatibility.
   - Repository guidance files (`AGENTS.md` and `**/AGENTS.md`) are excluded explicitly; they are agent instructions, not public site content.

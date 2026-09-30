@@ -37,8 +37,9 @@ An installed native hook is enough; a custom plugin package is not warranted.
 3. Build the catalog from all eligible article files registered in the MkDocs
    build; ignore issue index/aggregate pages, validate IDs and dates, and verify
    referenced page output routes. No secret config is needed by the site hook.
-4. Metadata fallback for existing pages/legacy summaries reuses the current
-   archive parser. If reuse needs extraction from the dev script, move only pure
+4. Metadata fallback uses already published page bodies and issue-index labels;
+   it does not need private frozen summary files. For legacy linked headings it
+   reuses the current pure archive parser. If reuse needs extraction from the dev script, move only pure
    parsing helpers to an owning module and keep the script imports/API compatible.
 5. Inventory legacy formats and parser coverage using local read-only counts,
    never publishing private archive contents into task records. Add fixtures for
@@ -63,10 +64,11 @@ separately testable if necessary; avoid a framework for this small hook.
   focus selection. Produce a server-rendered homepage during page rendering, so
   headline links/cards are present even without JS. Do not rewrite tracked live
   `docs/index.md` with runtime news or make another generated-placeholder trap.
-- Write the compact, versioned JSON into `site_dir` after the build (or register
-  it as a generated MkDocs File after validating the installed native API).
-  Final hook event/API choice must be verified in a scratch fixture build before
-  implementing; it must work for clean build and instant navigation.
+- Native-hook proof on MkDocs 1.6.1 selected `on_files` for complete public page
+  inventory, `on_page_markdown` for homepage SSR, `on_page_content` for article
+  controls/snapshots, and `on_post_build` for compact JSON under `site_dir`.
+  Scratch builds verified these events for empty, 90 and 1000-article archives;
+  JSON never enters tracked docs source. Instant navigation is verified.
 - Read attached validated audio markup from the page to derive `audio_ready`.
   Do not probe storage/network, transcribe audio, or consider leftover local Opus
   files a publication signal.

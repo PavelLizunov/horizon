@@ -1,0 +1,8 @@
+{% extends "base.html" %}
+{% block container %}
+{% if page and page.meta.dashboard_home %}
+<div class="md-content hd-main" data-md-component="content">
+  <article class="md-content__inner md-typeset">{{ page.content }}</article>
+</div>
+{% else %}{{ super() }}{% endif %}
+{% endblock %}

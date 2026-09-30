@@ -4,8 +4,8 @@ Parent `specs/AGENTS.md` and the root guide apply.
 
 - `spec.md` defines proposed dashboard behavior and the additive public catalog v1.
   `plan.md` owns build/UI integration; `tasks.md` tracks verified implementation.
-- This trio is currently a plan, not authorization to change the production site.
-  Obtain owner approval before behavioral implementation and separately before rollout.
+- Implementation is approved by the user's «Начинай». Production rollout still
+  requires separate approval; no service restart or live publish is authorized.
 - Preserve published article/issue URLs and search API contracts. Reuse current
   scores/classification and the existing pure archive parser; never fabricate
   scores/source labels or silently truncate old articles.

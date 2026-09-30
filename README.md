@@ -17,6 +17,9 @@ Its five major additions are:
 - **A published site.** The digest is rendered by MkDocs Material and shipped to
   an ingress; chat delivery carries headlines that deep-link into it, because a
   full digest does not fit in a message and is rejected rather than truncated.
+  The editorial homepage browses published articles by topic, date and interest
+  score, with deterministic vector covers and browser-local saved/history lists.
+  See [dashboard behavior and builds](docs/dashboard.md).
 - **Narration.** The deployment attempts a Russian voice track for each published
   article on supported runtimes, generates it locally, and has a second model transcribe it back;
   only tracks that pass grading are linked from the page player (skipped on Linux production until

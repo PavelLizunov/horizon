@@ -83,6 +83,8 @@ docs/digest/*
 
 # mkdocs build output
 site/
+# Isolated integrated previews contain generated public runtime articles.
+opendesign/previews/
 
 # A/B capture (regenerated on demand)
 data/ab-items.json

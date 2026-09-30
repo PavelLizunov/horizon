@@ -14,6 +14,16 @@
 4. `SearchHTTPServer` bounds active handler threads with `SEARCH_MAX_CONCURRENCY` and applies `SEARCH_REQUEST_TIMEOUT` to client socket I/O and Elasticsearch requests.
 5. `tests/test_search_api.py` verifies aliases, request normalization, response/cache contracts, sanitized failures, concurrency bounds, and slow-client release entirely offline.
 
+## News dashboard extension
+
+The native `deploy/dashboard_hook.py` hook runs during every MkDocs build, renders
+static homepage cards and writes catalog v1 only to build output. It reads published
+page metadata/bodies, not private runtime archives or API services. Thus ship-only
+and per-article narration refresh update audio readiness without pipeline calls.
+The homepage-only Material override and scoped CSS/JS preserve article layouts,
+existing search contracts, palette, and instant navigation. Details and verification
+are in [the dashboard integration plan](../news-dashboard/plan.md).
+
 ## 3. Invariants
 * Secrets, raw credentials, sensitive query tokens, internal backend URLs, and exception details are never included in generated pages or public API responses.
 * Clean, semantic HTML structure with high-contrast accessibility and mobile touch targets.
