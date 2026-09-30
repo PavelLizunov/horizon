@@ -111,6 +111,20 @@
       return new URL("./", location.href);
     }
   }
+  function icon(name) {
+    var paths = {
+      search: '<circle cx="10.5" cy="10.5" r="6.5"/><path d="m15.5 15.5 5 5"/>',
+      bookmark: '<path d="M6 3h12v18l-6-4-6 4z"/>',
+      "bookmark-saved":
+        '<path d="M6 3h12v18l-6-4-6 4z"/><path d="m9 9 2 2 4-4"/>',
+      close: '<path d="m6 6 12 12M18 6 6 18"/>',
+    };
+    return (
+      '<svg class="hd-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">' +
+      paths[name] +
+      "</svg>"
+    );
+  }
   function syncButtons() {
     document.querySelectorAll("[data-save]").forEach(function (button) {
       var saved = hasSaved(button.dataset.save);
@@ -119,13 +133,13 @@
       button.setAttribute("aria-pressed", String(saved));
       var title =
         button.dataset.title || button.getAttribute("aria-label") || "";
-      button.textContent = button.classList.contains("hd-save-article")
-        ? saved
-          ? "✓ В отложенном"
-          : "Отложить на потом"
-        : saved
-          ? "✓"
-          : "+";
+      button.innerHTML =
+        icon(saved ? "bookmark-saved" : "bookmark") +
+        (button.classList.contains("hd-save-article")
+          ? "<span>" +
+            (saved ? "В отложенном" : "Отложить на потом") +
+            "</span>"
+          : "");
       if (!button.classList.contains("hd-save-article")) {
         if (!button.dataset.title)
           button.dataset.title = title.replace(
@@ -229,13 +243,17 @@
           esc(x.id) +
           '" aria-label="Убрать из истории: ' +
           esc(x.title) +
-          '">×</button>'
+          '">' +
+          icon("close", base) +
+          "</button>"
         : "") +
       '<button class="hd-save" data-save="' +
       esc(x.id) +
       '" aria-label="Отложить: ' +
       esc(x.title) +
-      '" aria-pressed="false">+</button></div></div></article>'
+      '" aria-pressed="false">' +
+      icon("bookmark", base) +
+      "</button></div></div></article>"
     );
   }
   function initializeHome(root) {
@@ -311,7 +329,7 @@
                 esc(new URL(x.page, base).href) +
                 '">' +
                 esc(x.title) +
-                " ↗</a>"
+                "</a>"
               );
             })
             .join("")
@@ -439,7 +457,7 @@
                       : "Ничего не нашлось") +
                   "</h2><p>" +
                   (ui.view === "saved"
-                    ? "Нажмите «+» на карточке, чтобы вернуться к статье позже."
+                    ? "Нажмите закладку на карточке, чтобы вернуться к статье позже."
                     : ui.view === "recent"
                       ? "Откройте статью из ленты, архива или Telegram."
                       : "Измените тему или период. Поиск по всему тексту доступен отдельно.") +

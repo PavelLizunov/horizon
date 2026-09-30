@@ -179,10 +179,28 @@ body[data-md-color-scheme="slate"]:has(.hd-dashboard) {
   flex: 1;
   min-width: 0;
 }
-.hd-search > span {
-  font-family: serif;
-  font-size: 30px;
+.hd-icon {
+  width: 19px;
+  height: 19px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  flex-shrink: 0;
+}
+.hd-search > .hd-icon {
   color: var(--hd-muted);
+}
+.hd-save-article {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+}
+.hd-search button,
+.hd-remove-recent {
+  display: inline-grid;
+  place-items: center;
 }
 .hd-search input {
   border: 0;
@@ -328,6 +346,10 @@ body[data-md-color-scheme="slate"]:has(.hd-dashboard) {
 .hd-cover[data-seed="2"] img {
   filter: hue-rotate(-15deg);
   transform: scaleX(-1);
+}
+/* Keep the play symbol direction meaningful in speech/video covers. */
+.hd-cover[data-cover="video"][data-seed="2"] img {
+  transform: none;
 }
 .hd-cover[data-seed="3"] img {
   filter: hue-rotate(23deg);

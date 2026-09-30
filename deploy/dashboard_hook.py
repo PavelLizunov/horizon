@@ -69,6 +69,15 @@ def e(value):
     return html.escape(str(value), quote=True)
 
 
+def icon(name):
+    paths = {
+        "search": '<circle cx="10.5" cy="10.5" r="6.5"/><path d="m15.5 15.5 5 5"/>',
+        "bookmark": '<path d="M6 3h12v18l-6-4-6 4z"/>',
+        "close": '<path d="m6 6 12 12M18 6 6 18"/>',
+    }
+    return '<svg class="hd-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">' + paths[name] + '</svg>'
+
+
 def card(item, lead=False):
     score = f'{item["score"]:.1f}<small> / 10</small>' if item["score"] is not None else '<small>без оценки</small>'
     audio = ' · <span class="hd-audio">Аудио</span>' if item["audio_ready"] else ""
@@ -76,7 +85,7 @@ def card(item, lead=False):
 <div class="hd-cover" data-cover="{e(item['cover_key'])}" data-seed="{item['cover_seed']}" aria-hidden="true"><img src="assets/dashboard/{e(item['cover_key'])}.svg" alt="" width="640" height="420"><span>ИЛЛЮСТРАЦИЯ</span></div>
 <div class="hd-story-body"><div class="hd-story-top"><span>{e(item['profile_name'])}</span><span class="hd-score">{score}</span></div>
 <h3><a href="{e(item['page'])}">{e(item['title'])}</a></h3><p>{e(item['teaser'])}</p>
-<div class="hd-story-bottom"><span>{e(item['date'])} · ≈{item['reading_minutes']} мин{audio}</span><button class="hd-save" data-save="{e(item['id'])}" aria-label="Отложить: {e(item['title'])}" aria-pressed="false" hidden>+</button></div></div></article>'''
+<div class="hd-story-bottom"><span>{e(item['date'])} · ≈{item['reading_minutes']} мин{audio}</span><button class="hd-save" data-save="{e(item['id'])}" aria-label="Отложить: {e(item['title'])}" aria-pressed="false" hidden>{icon('bookmark')}</button></div></div></article>'''
 
 
 def homepage():
@@ -92,7 +101,7 @@ def homepage():
     return f'''<div class="hd-dashboard" data-catalog="assets/dashboard/catalog.json" markdown="0">
 <div class="hd-intro"><div><p class="hd-eyebrow">{date_label}</p><h1>Ваш новостной горизонт</h1><p>Важное из ваших источников. И всё, что стоит перечитать.</p></div><div class="hd-edition"><span>ОТБОР ПО ИНТЕРЕСАМ</span><b>Свежие материалы.<br>Архив без календаря.</b></div></div>
 <nav class="hd-views" aria-label="Личная лента" hidden><button data-view="news" aria-pressed="true">Главная</button><button data-view="saved" aria-pressed="false">Отложенное <span data-saved-count>0</span></button><button data-view="recent" aria-pressed="false">История</button><span data-storage-note></span></nav>
-<div class="hd-controls" hidden><div class="hd-search"><span aria-hidden="true">⌕</span><input type="search" aria-label="Найти материал" placeholder="Заголовок, описание, тема или источник"><button data-clear-search aria-label="Очистить поиск" hidden>×</button></div><label>Период<select aria-label="Период публикации"><option value="all">Всё время</option><option value="7">Последние 7 дней</option><option value="30">Последние 30 дней</option></select></label><div class="hd-sort" role="group" aria-label="Порядок материалов"><button data-sort="newest" aria-pressed="true">Свежие</button><button data-sort="score" aria-pressed="false">По рейтингу</button></div></div>
+<div class="hd-controls" hidden><div class="hd-search">{icon('search')}<input type="search" aria-label="Найти материал" placeholder="Заголовок, описание, тема или источник"><button data-clear-search aria-label="Очистить поиск" hidden>{icon('close')}</button></div><label>Период<select aria-label="Период публикации"><option value="all">Всё время</option><option value="7">Последние 7 дней</option><option value="30">Последние 30 дней</option></select></label><div class="hd-sort" role="group" aria-label="Порядок материалов"><button data-sort="newest" aria-pressed="true">Свежие</button><button data-sort="score" aria-pressed="false">По рейтингу</button></div></div>
 <div class="hd-topics" role="group" aria-label="Темы" hidden><button data-topic="all" aria-pressed="true">Все темы</button>{filters}</div>
 <div class="hd-search-help"><span>Поиск по полному тексту:</span> <a class="hd-full-search" href="search/">Поиск по архиву →</a></div>
 <p class="hd-status" role="status" aria-live="polite" hidden></p><div class="hd-error" role="alert" hidden><p>Не удалось загрузить каталог. Опубликованные карточки и архив остаются доступны.</p><button data-retry>Попробовать снова</button></div>
