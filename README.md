@@ -20,7 +20,9 @@ Its five major additions are:
 - **Narration.** The deployment attempts a Russian voice track for each published
   article on supported runtimes, generates it locally, and has a second model transcribe it back;
   only tracks that pass grading are linked from the page player (skipped on Linux production until
-  independent Linux grading exists; macOS retained as cold reference). See [docs/narration.md](docs/narration.md).
+  independent Linux grading exists; macOS retained as cold reference). On narrated
+  runs, text publishes first and each validated player's page publishes before
+  synthesis of the next article. See [docs/narration.md](docs/narration.md).
 - **Evidence Ledger verification.** Core factual claims are captured with replayable
   lineage, checked against source documents, and published through a bounded
   reader-facing schema. See [docs/verification/](docs/verification/).

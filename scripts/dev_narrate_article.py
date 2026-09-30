@@ -44,6 +44,7 @@ import time
 import urllib.request
 import wave
 from collections import Counter
+from functools import cache
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[1]
@@ -499,17 +500,23 @@ def _attach(issue: str, slug: str, url: str, seconds: float) -> None:
     """
     page = SITE_DIGEST_DIR / issue / f"{slug}.md"
     if not page.exists():
-        print(f"  no published page at {page}", file=sys.stderr)
-        return
+        raise RuntimeError(f"no published page at {page}, player not inserted")
 
     from src.ai.narration import attach_player
 
     try:
         updated = attach_player(page.read_text(encoding="utf-8"), url, seconds)
     except ValueError as error:
-        print(f"  {error}; player not inserted", file=sys.stderr)
-        return
+        raise RuntimeError(f"{error}; player not inserted") from error
     page.write_text(updated, encoding="utf-8")
+
+
+@cache
+def _load_whisper(checker: str):
+    """Keep the CPU grader loaded across chunks, retries, and articles."""
+    from faster_whisper import WhisperModel
+
+    return WhisperModel(checker, device="cpu", compute_type="int8")
 
 
 def _transcribe(audio: Path, checker: str) -> dict:
@@ -518,14 +525,12 @@ def _transcribe(audio: Path, checker: str) -> dict:
 
     # 1. Prefer faster-whisper if available (Linux-native, ONNX/CPU)
     try:
-        from faster_whisper import WhisperModel
-
         # If a full repo or path is passed (like mlx-community/...), map or default to tiny/base
         model_size = os.getenv("WHISPER_MODEL", "tiny")
         if isinstance(checker, str) and "/" not in checker:
             model_size = checker
 
-        model = WhisperModel(model_size, device="cpu", compute_type="int8")
+        model = _load_whisper(model_size)
         segments, info = model.transcribe(str(audio), language="ru")
         seg_list = list(segments)
         text = " ".join(s.text for s in seg_list)
@@ -920,6 +925,16 @@ def _speak_many(directory: Path, args) -> int:
             print(f"  FAILED {type(error).__name__}: {error}", file=sys.stderr)
             failures.append(f"{issue}/{slug}")
 
+        # Publish this attached player before starting the next article. Keep
+        # hook errors outside synthesis retries: a publish failure must not
+        # cause another generation or silently wait until the batch finishes.
+        if f"{issue}/{slug}" not in failures and getattr(args, "after_attach", None):
+            try:
+                subprocess.run(args.after_attach, check=True)
+            except (OSError, subprocess.CalledProcessError) as error:
+                print(f"  FAILED player publish: {error}", file=sys.stderr)
+                return 1
+
     print(
         f"\n{len(texts) - len(failures)}/{len(texts)} narrated in "
         f"{(time.time() - started) / 60:.0f} min"
@@ -947,6 +962,10 @@ def main() -> int:
         help="upload existing ISSUE__SLUG.opus tracks and attach their players",
     )
     parser.add_argument("--attach", action="store_true", help="upload and link it")
+    parser.add_argument(
+        "--after-attach", nargs=argparse.REMAINDER, metavar="COMMAND",
+        help="run command argv after each successful batch attachment (put last)",
+    )
     # Both defaults live in the constants above; these exist because the two of
     # them are what you reach for when the delivery wanders, and comparing takes
     # means changing one without editing the file between runs.
@@ -958,6 +977,11 @@ def main() -> int:
     parser.add_argument("--seed", type=int, help=f"random seed (default {SEED})")
     parser.add_argument("--model", default=None, help="model repo id, for comparing takes")
     args = parser.parse_args()
+    if args.after_attach is not None:
+        if not args.after_attach:
+            parser.error("--after-attach requires a command")
+        if not (args.speak_dir and args.attach):
+            parser.error("--after-attach requires --speak-dir and --attach")
 
     from dotenv import load_dotenv
 

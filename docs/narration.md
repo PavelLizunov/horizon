@@ -256,6 +256,29 @@ exits non-zero. The audio stays in `~/tts/out/` so you can listen to what the ch
 objected to. Already graded tracks can be retried without synthesis by naming them
 `ISSUE__SLUG.opus` and passing their directory to `--publish-existing-dir`.
 
+### Player availability
+
+The daily runner publishes text first, then refreshes the site after each
+validated track is uploaded and attached, before synthesizing the next article.
+Ready players no longer wait for all tracks in the issue. A final refresh remains
+as recovery after an intermediate publish failure.
+
+For `--speak-dir --attach`, the optional `--after-attach COMMAND [ARG ...]`
+hook runs after each successful attachment. Put it last on the command line. It
+executes argv directly, without a shell; a failed hook stops the batch with a
+non-zero result. The daily runner supplies its own ship-only/no-pull invocation.
+Manual commands without this option retain their existing batch behavior.
+Missing article pages or invalid player markup are reported as attachment
+failures, not successful tracks.
+
+On Linux, the driver keeps the faster-whisper CPU grader loaded once per resolved
+model name for the process. Chunk retries and final-file checks reuse the same
+independent grader with unchanged transcription options and quality thresholds.
+This removes repeated initialization; production timings have not been measured
+for this change.
+
+### Audio upload
+
 Production audio is streamed to the ingress host over the same source-restricted
 SSH publisher used by the site and served by Caddy. Its forced command accepts
 only the legacy site archive or one validated `put-opus` upload; it never executes

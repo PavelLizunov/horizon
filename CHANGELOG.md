@@ -1,5 +1,10 @@
 # Changelog
 
+- Narration now publishes each validated article's player before synthesizing the
+  next article, rather than waiting for the entire issue. The Linux Whisper
+  grader is reused across chunks; grading thresholds are unchanged. Failed
+  attachments report errors instead of silently counting as successful tracks.
+
 - Narration can now publish directly to an SSH-accessible Caddy host and retain
   only the newest 2 GiB, avoiding the throttled R2 development endpoint.
 

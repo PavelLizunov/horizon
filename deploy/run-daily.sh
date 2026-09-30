@@ -124,16 +124,19 @@ else
         --write-all "$work" >/dev/null; then
     # --attach edits the published pages. An article that fails its check is
     # left unlinked rather than published, and that exit code is reported, not
-    # obeyed; the second site build below reads whatever passed.
+    # obeyed. Publish each passed article before synthesizing the next one.
+    # Ship-only returns before narration; no-pull keeps this run on one version.
     "$narrator" scripts/dev_narrate_article.py --speak-dir "$work" --attach \
-      || log "narration: some articles did not pass their check and were not linked"
+      --after-attach env HORIZON_SHIP_ONLY=1 HORIZON_NO_PULL=1 \
+        zsh "$PWD/deploy/run-daily.sh" \
+      || log "narration: synthesis, attachment, or player publish failed"
   else
     log "narration: FAILED to prepare text — pages keep whatever audio they had"
   fi
   rm -rf "$work"
 
-  # --attach edits the markdown. Refresh the already-readable site so players
-  # appear, without making the text pages wait for synthesis and grading.
+  # Final recovery refresh includes successful attachments even if an earlier
+  # per-article publish failed. Text has been readable throughout narration.
   ship_site || exit 1
 fi
 

@@ -49,7 +49,7 @@ These send model-completion requests. Some target models named `*-free`, but the
 Requires specific hardware, virtual environments, or production infrastructure:
 
 - **Host-Specific Hardware / Venv**:
-  - `dev_narrate_article.py`: Mac-side narration driver. Requires Apple Silicon host, `~/tts/.venv`, TeraTTSv2, Whisper, `ffmpeg`, and upload credentials; its optional pronunciation-review path also creates the configured AI client and may bill.
+  - `dev_narrate_article.py`: Isolated narration driver. Synthesis/grading requires the host's TeraTTSv2 and Whisper runtime, `ffmpeg`, and upload credentials; its optional pronunciation-review path also creates the configured AI client and may bill. Linux faster-whisper is cached per resolved model name for the process. `--after-attach COMMAND [ARG ...]` is optional, must be last and requires `--speak-dir --attach`; it runs operator-supplied argv without a shell only after successful upload/attachment. Failed attachment must return non-zero; failed hooks stop the batch without synthesis retries. Verify with mocked offline tests, not an operational invocation.
   - `dev_check_asr.py`: ASR smoke test using `mlx-whisper` on Apple Silicon.
 - **Operational & Deployment**:
   - `daily-run.sh`: Legacy/alternative production runner (pulls git, runs the paid pipeline, and updates `gh-pages`).

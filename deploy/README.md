@@ -216,9 +216,14 @@ mistake surfaces immediately instead of at the next visitor.
 Known and accepted: a **404 window of a few seconds**. Today's page reaches the
 target only after the first copy, which runs after the digest job has already
 sent its Telegram links. `run-daily.sh` deliberately ships the text pages before
-narration, then ships again with the audio players. Do not move narration ahead
-of the first ship: on 2026-08-10 it stretched this window from seconds to nine
-minutes (including a cold model download).
+narration, then ships each validated player's page before synthesizing the next
+article. The optional `--after-attach` hook invokes the same script in
+ship-only/no-pull mode; it never reruns the pipeline or narration. A failed hook
+stops the narration batch, and the daily runner retains its final site publish
+as recovery. Each refresh still rebuilds and transfers the whole site, with the
+existing non-atomic remote replacement. Do not move narration ahead of the first
+ship: on 2026-08-10 it stretched this window from seconds to nine minutes
+(including a cold model download).
 
 ## Systemd timer cutover and rollback
 

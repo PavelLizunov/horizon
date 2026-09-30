@@ -17,3 +17,4 @@ This directory governs Russian neural voice track generation, text preparation, 
 4. **Chunk Bounds & Acronym Unspelling**: Text chunks must be strictly bounded between 120 and 400 characters, packed evenly. Acronyms are unspelled phonetically by letter name (e.g. *«GPU»* → *«джи-пи-ю»*).
 5. **Playback Speed Alignment**: Audio files are pre-encoded with ffmpeg at 1.25x tempo; HTML5 audio player default playback rate is set to 1.0x.
 6. **Environment Isolation**: Pure text preparation runs with the project virtualenv; only TTS synthesis and Whisper grading execute in the host's isolated `~/tts/.venv`.
+7. **Player Availability**: The daily runner's optional argv-only `--after-attach` hook ships each successful attachment before the next article. Failed grading/attachment never runs the hook. Hook failures stop the batch; final site publish remains recovery. Linux grader reuse must preserve transcription settings and independent grading.

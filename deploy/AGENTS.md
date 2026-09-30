@@ -19,7 +19,7 @@ The `deploy/` directory contains host orchestration tools:
 2. **Metadata Regeneration**: Rebuilds archive index (`StorageManager.write_site_index()`), verification status (`docs/checks.md`), collection status (`docs/collection.md`), and article verification labels.
 3. **First Site Publish (`ship_site`)**: Builds (`mkdocs build`) and streams site files via SSH (`tar czf - . | ssh ...`) using a restricted SSH publisher key *before* starting speech synthesis. This minimizes the period in which Telegram links wait for narration; the current remote replace is not atomic and does not itself guarantee a zero-downtime publish.
 4. **Narration Synthesis**: Prepares text and attempts voice tracks via `scripts/dev_narrate_article.py` when configured. Debian production points the optional interpreter at a non-existent path because no independent Linux Whisper grader is approved. Passed checks on supported runtimes attach audio player markdown (`--attach`).
-5. **Second Site Publish (`ship_site`)**: Re-builds and re-ships site to activate audio player components for validated voice tracks (if narration produced assets).
+5. **Per-Article Site Publish**: `--after-attach` runs this script in `HORIZON_SHIP_ONLY=1 HORIZON_NO_PULL=1` mode after each successful attachment, before the next article. Hook failures stop the narration batch and are logged as non-fatal. A final `ship_site` remains as recovery. All publication remains sequential; ship-only must return before the paid pipeline or narration.
 
 ## Operational Constraints (Linux Production Path)
 

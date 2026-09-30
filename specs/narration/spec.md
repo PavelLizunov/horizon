@@ -24,3 +24,27 @@ Generate high-quality Russian spoken voice tracks for all published digest artic
 * Encode audio at 1.25x tempo with ffmpeg.
 * Upload Opus (`.opus`) audio to static SSH storage or Cloudflare R2 bucket.
 * Attach accessible custom HTML5 audio player to MkDocs article pages.
+
+## 3. Player Availability Fix
+
+### Intended result and scope
+* Publish each validated article's player before synthesizing the next article,
+  rather than waiting for all tracks in the issue. Text must still publish first.
+* Reuse the Linux Whisper grader once per checker name in the narration process;
+  preserve the independent model, chunk checks, retries, and final-file grading.
+* Add optional `--after-attach COMMAND [ARG ...]` to `--speak-dir --attach`.
+  Run the operator-supplied argv without a shell only after upload verification
+  and successful attachment. Existing invocations remain unchanged.
+* Missing pages or invalid attachment markup must report failure, not trigger
+  a success hook without an attached player.
+* A hook failure stops that narration batch with a non-zero status; the daily
+  runner logs it as non-fatal and retains the final site publish as recovery.
+
+### Constraints and verification
+* No models, providers, quality thresholds, credentials, or deployment endpoints
+  change. No production restart or full pipeline run is authorized by this fix.
+* Offline regressions must prove grader reuse, per-article publish ordering,
+  failed-track rejection, hook failure propagation, and text-first deployment.
+* Material unknowns: active production interpreter and model versions, current
+  generation/grading timings, and end-to-end latency. Local mocked checks do not
+  establish a measured production speedup.
