@@ -4,7 +4,8 @@
 
 Implementation approved by the user's «Начинай» following the reviewed plan.
 The editorial prototype, static catalog v1, selection defaults, vector-only covers,
-and browser-local state are the baseline. Production deployment is not approved.
+and browser-local state are the baseline. Production publication was subsequently
+approved after visual checks and completed at `d63b93f`; see visual-rollout.md.
 Replace the explanatory homepage with a usable news dashboard matching the approved
 prototype: one lead tile, four supporting tiles, and an archive-spanning feed.
 Use deterministic vector covers, not a generative image model, in v1.
