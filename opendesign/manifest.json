@@ -1,0 +1,15 @@
+{
+  "sections": [
+    {
+      "label": "Макеты",
+      "groups": [
+        {
+          "slug": "Digest Ninitux",
+          "files": [
+            {"label": "Новостная главная", "path": "mockups/news-dashboard/index.html"}
+          ]
+        }
+      ]
+    }
+  ]
+}
