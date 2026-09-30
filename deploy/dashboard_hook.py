@@ -123,7 +123,7 @@ def on_page_content(html_content, page, config, files):
     if item is None:
         return html_content
     snapshot = json.dumps(item, ensure_ascii=False).replace('<', '\\u003c').replace('>', '\\u003e').replace('&', '\\u0026')
-    controls = f'''<div class="hd-article-tools" data-article-id="{e(item['id'])}"><button class="hd-save-article" data-save="{e(item['id'])}" aria-pressed="false" hidden>Отложить на потом</button><span data-storage-note></span><script type="application/json" class="hd-article-data">{snapshot}</script></div>'''
+    controls = f'''<div class="hd-article-tools" data-article-id="{e(item['id'])}"><button class="hd-save-article" data-save="{e(item['id'])}" aria-pressed="false" hidden>Отложить на потом</button><span data-storage-note></span><span class="hd-article-data" data-snapshot="{e(snapshot)}" hidden></span></div>'''
     return controls + html_content
 
 

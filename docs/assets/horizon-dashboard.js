@@ -178,7 +178,7 @@
     if (!node) return;
     var item;
     try {
-      item = JSON.parse(node.textContent);
+      item = JSON.parse(node.dataset.snapshot);
     } catch (_) {
       return;
     }

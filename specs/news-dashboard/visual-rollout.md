@@ -67,5 +67,10 @@ before mutating production; failed access is not permission to bypass host keys.
 - Prose/grounding: PASS; correction described by geometry, layers and icon functions.
 
 - [ ] Push exact candidate and preserve rollout/rollback metadata.
-- [ ] Verify production archive/build and publish approved candidate.
+- [x] Full production archive build and initial publication: 548 articles, 408
+  attached audio tracks, no missing targets. Existing tracked local changes remained
+  byte-identical after checkout switch; timers unchanged and no paid run/restart.
+- [ ] Resolve live instant-navigation history: Material strips inline JSON script
+  snapshots on live article transitions. Replace with escaped hidden data attributes,
+  then verify instant/direct visits before final acceptance.
 - [ ] Public route/hash/interaction checks and recorded rollback path.

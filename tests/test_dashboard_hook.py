@@ -65,7 +65,12 @@ def test_article_snapshot_cannot_close_script(hook):
     hook.on_files(Files(body),None)
     page=SimpleNamespace(file=SimpleNamespace(url='digest/2026-09-30-ru/tech-news-1/'))
     output=hook.on_page_content('<p>body</p>',page,None,None)
-    assert output.count('</script>')==1
+    assert '<script' not in output
+    assert 'data-snapshot="{&quot;' in output
+    import html, re
+    snapshot = re.search(r'data-snapshot="([^"]+)"', output).group(1)
+    parsed = json.loads(html.unescape(snapshot))
+    assert parsed['id'] == '2026-09-30-ru-tech-news-1'
     assert '<script>alert' not in output
     assert output.endswith('<p>body</p>')
 
