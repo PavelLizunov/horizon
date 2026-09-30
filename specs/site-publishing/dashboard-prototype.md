@@ -50,7 +50,8 @@ Do not claim production performance or user-side reachability from local checks.
   dialog focus restoration. Full Python suite: 862 passed.
 - [x] Preview server: managed job `bash-106`, bound only to the verified Tailnet
   address/port. Root viewer and direct prototype return the expected artifacts.
-- [ ] Commit and push the dedicated task branch.
+- [x] Commit and push the dedicated task branch: implementation `7083837`,
+  backed up to `origin/design/news-dashboard-prototype`.
 
 Evidence and limitations: `opendesign/mockups/news-dashboard/VERIFICATION.md`.
 The remote browser navigation timed out; client-side network reachability remains
