@@ -11,72 +11,72 @@
   identity/schema, frozen archive parser/republisher, ship-only/narration flow,
   Material palette/instant navigation, and the approved prototype.
 - Verified available site build tool: MkDocs 1.6.1; native hooks avoid a new service
-  or dependency. Hook event details remain an implementation proof task.
-- Defaults proposed in spec/plan, not already active site behavior.
+  or dependency. Native hook events verified in isolated MkDocs fixture builds.
+- Defaults implemented and verified on the task branch; production remains unchanged.
 
 ## Phase A — contract and coverage (D1, D2, D4, D7, D9)
 
 - [x] Owner approves this implementation scope, focus defaults, static catalog v1,
       vector-only covers, and browser-local state.
-- [ ] Establish task branch base and preserve the verified narration fixes;
+- [x] Establish task branch base and preserve the verified narration fixes;
       exclude unrelated config/profile changes.
-- [ ] Inventory published Russian archive format/counts locally; record coverage
+- [x] Inventory published Russian archive format/counts locally; record coverage
       counts without committing private article contents or runtime config.
-- [ ] Add synthetic modern/frozen/invalid/malicious/missing-score fixtures.
-- [ ] Validate legacy metadata precedence and ID/URL compatibility with every
+- [x] Add synthetic modern/frozen/invalid/malicious/missing-score fixtures.
+- [x] Validate legacy metadata precedence and ID/URL compatibility with every
       supported format; explicitly resolve unsupported real formats.
 
 ## Phase B — catalog and build (D1, D2, D7, D8, D9, D10)
 
-- [ ] Add optional metadata to ArticlePage and versioned namespaced front matter,
+- [x] Add optional metadata to ArticlePage and versioned namespaced front matter,
       based on resolved SummaryItemView/DailySummaryView values.
-- [ ] Reuse pure archive parser helpers; preserve existing script contracts and
+- [x] Reuse pure archive parser helpers; preserve existing script contracts and
       do not rerender historical audio/verification bodies for metadata backfill.
-- [ ] Implement safe catalog serialization and deterministic focus selection.
-- [ ] Prove native hook events/registered output in a scratch MkDocs build using
+- [x] Implement safe catalog serialization and deterministic focus selection.
+- [x] Prove native hook events/registered output in a scratch MkDocs build using
       the site's isolated interpreter; avoid application-heavy imports.
-- [ ] Integrate hook-rendered static homepage and complete compact JSON catalog.
-- [ ] Test clean clone, empty history, bad-entry diagnostics, invalid-empty guard,
+- [x] Integrate hook-rendered static homepage and complete compact JSON catalog.
+- [x] Test clean clone, empty history, bad-entry diagnostics, invalid-empty guard,
       stale page pruning, and all article path targets.
-- [ ] Test ship-only/per-article narration rebuild updates audio metadata without
+- [x] Test ship-only/per-article narration rebuild updates audio metadata without
       any paid pipeline/model calls or new scheduler.
 
 ## Phase C — visual homepage (D2, D3, D4, D6, D8, D11)
 
-- [ ] Add homepage-only Material override, scoped CSS/JS, and licensed local fonts.
-- [ ] Reuse approved SVG families; add deterministic variants/profile mappings
+- [x] Add homepage-only Material override, scoped CSS/JS, and licensed local fonts.
+- [x] Reuse approved SVG families; add deterministic variants/profile mappings
       and generic fallback. Keep all source text out of raw SVG commands.
-- [ ] Implement five focus cards, 24-card feed batches, actual page links, and
+- [x] Implement five focus cards, 24-card feed batches, actual page links, and
       access to archive/search/collection/checks.
-- [ ] Implement newest/score sorting, real profile filters, periods, local search
+- [x] Implement newest/score sorting, real profile filters, periods, local search
       and explicit full-text search handoff with query preservation.
-- [ ] Implement URL/back navigation state, empty/error/retry and static no-JS fallback.
-- [ ] Compare production-integrated preview to approved mockup at all breakpoints;
+- [x] Implement URL/back navigation state, empty/error/retry and static no-JS fallback.
+- [x] Compare production-integrated preview to approved mockup at all breakpoints;
       no demo news/control panel or duplicate Material headers on the public page.
 
 ## Phase D — return-to-reading features (D5, D8, D11)
 
-- [ ] Bookmark buttons on both cards and real article pages, bounded state, remove
+- [x] Bookmark buttons on both cards and real article pages, bounded state, remove
       and clear controls, minimal safe snapshots and missing-article handling.
-- [ ] Record history on direct/Telegram/new-tab page visits and instant navigation.
-- [ ] Use isolated versioned production storage namespace; handle corrupt/blocked/
+- [x] Record history on direct/Telegram/new-tab page visits and instant navigation.
+- [x] Use isolated versioned production storage namespace; handle corrupt/blocked/
       quota-exceeded storage visibly without breaking reading.
-- [ ] Reuse Material theme; verify focus, keyboard, reduced motion, touch targets,
+- [x] Reuse Material theme; verify focus, keyboard, reduced motion, touch targets,
       idempotent subscriptions, and unchanged narration player behavior.
 
 ## Phase E — acceptance and backup (D1–D11)
 
-- [ ] Offline unit/contract/regression tests pass for the changed version; full suite.
-- [ ] Native MkDocs build verified with scratch output and sanitized real-size data;
+- [x] Offline unit/contract/regression tests pass for the changed version; full suite.
+- [x] Native MkDocs build verified with scratch output and sanitized real-size data;
       catalog/build/render measurements satisfy agreed budgets or plan is revised.
-- [ ] Browser tests: all UI actions, persistence/URL navigation, JS disabled,
+- [x] Browser tests: all UI actions, persistence/URL navigation, JS disabled,
       missing catalog, storage faults, dark/light and 1440/768/390/320 widths.
-- [ ] All catalog links resolve; coverage and legacy omissions explicitly reviewed.
-- [ ] Scoped correctness/security review: escaping, paths, SVG allowlists, JSON
+- [x] All catalog links resolve; coverage and legacy omissions explicitly reviewed.
+- [x] Scoped correctness/security review: escaping, paths, SVG allowlists, JSON
       embedding, no private data leaks, no injected commands or API expansion.
-- [ ] Update owning README, local guides, publishing spec references and docs;
+- [x] Update owning README, local guides, publishing spec references and docs;
       generated live news/catalogs never committed.
-- [ ] Commit/push task-only changes and provide owner preview + verification record.
+- [x] Commit/push task-only changes and provide owner preview + verification record.
 
 ## Phase F — separately approved rollout
 
@@ -87,3 +87,13 @@
 - [ ] Verify exact public homepage, old article/anchor links, archive/search,
       checks/collection, local assets, audio flags, and cache freshness.
 - [ ] Verify rollback path and report measured results/remaining limits.
+
+
+## Implementation evidence
+
+Implementation commit `e431a86`, pushed to `origin/feat/news-dashboard`.
+890 offline tests and 34 browser checks passed. Native builds cover empty, real
+3-article, 90-item and 1000-item archives. Evidence/limits are in
+[verification.md](verification.md). The managed Tailnet preview remains available;
+its runtime articles/screenshots are ignored and not pushed. Production rollout
+checks above remain deliberately pending and require separate authorization.
