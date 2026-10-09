@@ -86,6 +86,15 @@
       "homelab-infra": {
         "threshold": 4.5,
         "topic_dedup": true
+      },
+      "arc-raiders": {
+        "threshold": 4.5,
+        "category_thresholds": {
+          "game-updates": 4.0,
+          "gaming-press": 4.5,
+          "community-news": 5.0
+        },
+        "topic_dedup": true
       }
     }
   },

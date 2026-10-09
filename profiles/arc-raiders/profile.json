@@ -1,0 +1,39 @@
+{
+  "id": "arc-raiders",
+  "name": "ARC Raiders",
+  "display_names": {
+    "ru": "ARC Raiders",
+    "zh": "ARC Raiders"
+  },
+  "match": "match.md",
+  "analysis": "analysis.md",
+  "content": {
+    "analysis_max_chars": 4000,
+    "enrichment_max_chars": 10000,
+    "sampling": "head-middle-tail"
+  },
+  "enrichment": {
+    "prompt": "enrichment.md",
+    "blocks": [
+      {
+        "id": "summary",
+        "type": "section",
+        "tools": [],
+        "primary": true
+      },
+      {
+        "id": "gameplay_and_mechanics",
+        "type": "section",
+        "tools": [
+          "web_search"
+        ]
+      },
+      {
+        "id": "release_and_community",
+        "type": "section",
+        "tools": [],
+        "optional": true
+      }
+    ]
+  }
+}
