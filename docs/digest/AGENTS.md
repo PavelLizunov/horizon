@@ -4,10 +4,6 @@ This file defines local rules for working inside `docs/digest/`. Parent guidelin
 
 ## 1. Directory Boundaries & File Roles
 
-- **`docs/digest/index.md` (Tracked Empty Placeholder)**:
-  - Tracked in git as a static empty-state placeholder (`<div class="hz-empty">`) so fresh clones build successfully with MkDocs.
-  - Regenerated dynamically at build/deploy time by `StorageManager.write_site_index()` in `src/storage/manager.py` or `deploy/run-daily.sh`.
-  - **Do not edit or manually overwrite** this file with live issue links in source control.
 - **`docs/digest/*` (Runtime Generated Issue Pages)**:
   - Issue directories (`YYYY-MM-DD-lang/`) and individual article pages (`*.md`) are written at runtime by `StorageManager.publish_site_pages()` (`src/storage/manager.py`).
   - Generated pages are gitignored and excluded from navigation (`not_in_nav: digest/*`); `.gitignore` explicitly keeps this `AGENTS.md` tracked, while `mkdocs.yml` excludes all agent guides from the site.

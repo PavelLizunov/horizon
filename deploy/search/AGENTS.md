@@ -26,11 +26,6 @@ pipeline host:
 - The pipeline reaches Elasticsearch through an operator-managed local SSH
   forward; never make port `9200` LAN-facing as a shortcut.
 
-Do not add real hostnames, IP addresses, LXC/VM identifiers, usernames, or SSH
-aliases to tracked files. Unit files and tunnel definitions remain
-operator-managed infrastructure unless explicitly added through a separate
-approved change.
-
 ## Public API and security invariants
 
 - Only `GET /search` and `GET /api/search` reach Elasticsearch. Query text is
@@ -43,18 +38,11 @@ approved change.
 - `SearchHTTPServer` acquires a bounded semaphore before starting a handler.
   `SEARCH_MAX_CONCURRENCY` defaults to 8 and `SEARCH_REQUEST_TIMEOUT` defaults
   to 15 seconds for client inactivity and Elasticsearch requests.
-- Keep Elasticsearch unauthenticated only while both Elasticsearch ports remain
-  loopback-only. The LAN-facing API is read-only but still benefits from
-  ingress rate limiting.
 
 ## Failure and deployment boundaries
 
 - Search indexing failure warns and degrades without aborting digest publishing.
 - Search/API failure does not affect static site availability.
-- Deploy the exact committed `search_api.py`, syntax-check the candidate, retain
-  the previous artifact, atomically replace it, and restart only
-  `horizon-search-api.service`. Do not restart Elasticsearch for proxy-only
-  changes and never run the paid pipeline as a deployment check.
 - Compose uses Docker DNS (`http://es:9200`) and a 512 MB Elasticsearch JVM heap;
   production systemd uses loopback and manages resources independently.
 - Preserve highlight sentinels (`\u0001` / `\u0002`) and per-fragment balancing;

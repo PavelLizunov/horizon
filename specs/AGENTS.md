@@ -32,7 +32,5 @@ All major features and architectural components in Horizon follow Spec-Driven De
 ## 4. Cross-Cutting Invariants
 
 - **Offline Testing Discipline**: The `pytest` suite must pass entirely offline without network access or live API keys (Constitution §2.1).
-- **Cost Discipline**: LLM commands incur token costs. Default to offline `pytest`; consult `scripts/AGENTS.md` before any script because several `dev_check_*` commands use live network or paid models. Never run the full pipeline without owner approval (Constitution §2.2).
-- **Secret Isolation**: Credentials and cookies must never be committed or logged. Secrets are stored via environment variable references (`api_key_env`) (Constitution §1.5, §5).
 - **Evaluator Segregation**: A model must never grade its own generated output (Constitution §2.3).
 - **Honest Public Presentation**: Article pages sanitize internal error states and omit usage details. The public checks page currently exposes usage under a tested contract that conflicts with Constitution §1.4; changing it requires an explicit owner decision and synchronized spec/code/test updates.

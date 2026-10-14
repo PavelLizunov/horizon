@@ -13,10 +13,6 @@ This directory governs CI/CD automation defined in `.github/workflows/`.
 - Disabled workflows must retain the `.disabled` extension to prevent unwanted scheduled execution. Note that `daily-summary.yml.disabled` is a legacy template requiring publishing path (`./site`) and setup updates before activation.
 - Workflows should explicitly declare least-privilege job-level `permissions:`. `deploy-docs.yml` grants `contents: write`; `tests.yml` currently omits a block and relies on repository defaults, which is a known hardening gap rather than a pattern to copy.
 
-## Secret & Permissions Safety
-- Reference secrets only through explicit action inputs or step `env:` entries (for example `github_token: ${{ secrets.GITHUB_TOKEN }}`); never interpolate them into scripts.
-- Never echo or log secret values in workflow execution steps.
-
 ## Validation
 - Test python dependencies and test suite locally:
   ```bash

@@ -3,7 +3,6 @@
 This directory contains static, deterministic test fixtures for offline evaluation.
 
 ## Fixture Invariants
-- **Zero Secrets**: Fixtures MUST NOT contain real API keys, credentials, private session cookies, or sensitive tokens. Use explicit dummy tokens (`test_key_123`, `example.com`).
 - **Minimal & Stable**: Keep fixture payloads as minimal as possible while covering required test conditions. Do not add unused fields or bloated payloads.
 - **Deterministic & Immutable**: Fixture files are committed to version control and must yield identical test assertions across environments.
 - **Schema Validation**: Synthetic fixtures must conform to the relevant Pydantic schema when one exists, or to the explicit test-local evidence/adjudication contract otherwise.

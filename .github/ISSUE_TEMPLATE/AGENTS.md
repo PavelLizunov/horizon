@@ -9,9 +9,6 @@ This directory governs GitHub issue templates in `.github/ISSUE_TEMPLATE/`.
 - Template files must use valid Markdown with valid YAML frontmatter header block (`name`, `about`, `title`, `labels`, `assignees`).
 - Template body must prompt for clear problem description, proposed solution, alternative considerations, and additional context.
 
-## Secret & Permissions Safety
-- Issue templates must never contain API keys, server IP addresses, credentials, or personal system paths.
-
 ## Validation
 - Inspect frontmatter and markdown rendering locally.
 - Run `git diff --check -- .github/ISSUE_TEMPLATE/AGENTS.md` to verify formatting.

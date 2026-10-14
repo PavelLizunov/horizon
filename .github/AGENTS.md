@@ -12,10 +12,6 @@ This directory governs GitHub repository configuration, issue/PR templates, and 
 - No real credentials, `.env` variables, or runtime configuration (`data/config.json`) may be committed in `.github/`.
 - Subdirectories (`workflows/`, `ISSUE_TEMPLATE/`) inherit these baseline rules and define localized constraints.
 
-## Secret & Permissions Safety
-- Never hardcode secrets in workflow files or templates.
-- New or edited workflows must use minimal explicit permissions and reference secrets only via `${{ secrets.SECRET_NAME }}`. The existing `tests.yml` still relies on repository-default permissions; see the nested workflow guide.
-
 ## Validation
 - Validate YAML and Markdown formatting locally.
 - Run `pytest` locally to verify the test suite runs cleanly prior to pushing CI changes.

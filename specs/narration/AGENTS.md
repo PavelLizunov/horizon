@@ -12,6 +12,7 @@ This directory governs Russian neural voice track generation, text preparation, 
 ## 2. Local Non-Negotiable Invariants
 
 1. **Speech & Publishing Decoupling**: Text articles publish to ingress immediately in Phase 1; narration then runs synchronously as Phase 2 of the same deployment script, so cold TTS models or long synthesis runs never delay the first text publish.
+
 2. **Evaluator Segregation**: TeraTTSv2 synthesis is strictly graded piece-by-piece by a distinct model (Whisper ASR) — the TTS generator never grades its own audio.
 3. **Failed Audio Rejection**: Audio failing Whisper grading or processing returns a non-zero exit code and is discarded — defective audio is never uploaded or linked on published pages.
 4. **Chunk Bounds & Acronym Unspelling**: Text chunks must be strictly bounded between 120 and 400 characters, packed evenly. Acronyms are unspelled phonetically by letter name (e.g. *«GPU»* → *«джи-пи-ю»*).

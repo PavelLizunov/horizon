@@ -11,4 +11,3 @@ This file defines rules for maintaining template partials inside `docs/_includes
 
 - **Jekyll Compatibility**: Maintain Liquid tag syntax (e.g., `{{ '/assets/css/horizon.css' | relative_url }}`) without breaking resolution against legacy assets in `docs/assets/css/` or `docs/assets/js/`.
 - **Path Validation**: Verify that any CSS, JS, or icon assets referenced in HTML partials actually exist (e.g., `docs/assets/css/horizon.css`, `docs/assets/js/horizon.js`).
-- **No Secret/Script Leakage**: Do not inject unverified inline scripts, external CDNs, or credentials into HTML head headers.

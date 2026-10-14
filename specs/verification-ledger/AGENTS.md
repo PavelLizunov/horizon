@@ -14,4 +14,5 @@ This directory governs the Evidence Ledger fact-checking engine, claim extractio
 1. **Public Error Sanitization**: Current internal states (`verification_error`, `check_error`, `not_checked`) and legacy/defensive `check_failed` inputs must NEVER be rendered on public site pages or article banners. Readers may see conservative coverage labels, but never operational failure text.
 2. **Usage Policy Is Unresolved**: Preserve the tested article/checks-page split described canonically in [`spec.md` §3](spec.md#3-open-usage-publication-decision) until an owner-approved synchronized policy change.
 3. **Evaluator Isolation**: The corroboration evaluator operates strictly on reader-facing article text and retrieved search results — it never inherits or accesses the generation prompt context.
+
 4. **Graceful Search Fallback**: Search rate limits, timeouts, or network blocks must not block publication or expose operational errors. Healthy inconclusive checks may still render conservative coverage labels.

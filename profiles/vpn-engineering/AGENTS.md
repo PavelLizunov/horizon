@@ -17,12 +17,12 @@ Processes timely engineering developments in VPN, proxy, traffic obfuscation, tu
 ## 3. Evidence & Safety Invariants
 
 - **Upstream Verification Discipline**: Prefer maintainer release notes, official advisories, commits, and reproducible research over vendor announcements or hype.
-- **No Unsubstantiated Bypass Claims**: Never claim a tool bypasses censorship unless the source evidence specifies exact network conditions, region, operator, and date.
 - **No Manual Verification Banners**: Do NOT add manual verification labels in markdown text (managed by Evidence Ledger).
 
 ## 4. Structural Schema & Web Search
 
 - **Content Limits**: `analysis_max_chars`: 5000, `enrichment_max_chars`: 10000, `sampling`: `"head-middle-tail"`.
+
 - **Enrichment Blocks**:
   - `summary` (required, primary, tools: `[]`): 3–5 sentences explaining exact changes, version/platform, constraints, and operational importance.
   - `impact` (optional, tools: `["web_search"]`): Concrete migration, security, or interoperability consequences.

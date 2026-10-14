@@ -39,17 +39,11 @@ The `deploy/` directory contains host orchestration tools:
 - **Narration Failure / Skip**: Narration is non-fatal. If TTS interpreter is missing (`$narrator`), issue directory is absent, or article verification fails during speech synthesis, the script logs a warning and proceeds. The published text site remains available without audio.
 - **Search Separation**: Search API-only changes deploy the exact committed artifact to the Linux guest and restart only `horizon-search-api.service`; Elasticsearch and the paid pipeline remain untouched.
 
-## Portability & Security Policy
-
-- **Deployment Values**: Do not add new hardcoded hosts, IPs, user accounts, or secrets. Prefer SSH aliases (`prod-linux`, `prod-mac`), placeholders, or environment variables. Existing tracked deployment defaults are operator-owned compatibility values; changing or removing them requires explicit owner review.
-- **File Permissions**: `.env` and cookie files in `data/` must be `chmod 600` and kept gitignored.
-
 ## Safe Shell Behavior
 
 - **Environment & PATH**: Non-interactive SSH/systemd environments lack default tool paths. `run-daily.sh` explicitly exports `PATH="$HOME/bin:/opt/homebrew/bin:/usr/local/bin:$PATH"`.
 - **Ship-Only Mode**: `HORIZON_SHIP_ONLY=1 ./deploy/run-daily.sh` skips fetching, LLM work, and narration, but it still rebuilds and replaces the live remote site. It is a production-mutating operator action, not a safe general-development check.
 - **Remote Execution & Quoting**: Avoid complex inline commands or unescaped YouTube URLs (e.g. `watch?v=` glob errors in zsh/bash) over SSH. Transfer scripts via `scp` or use single-line SSH commands with proper shell wrappers (`bash -lc "..."`).
-- **Cost Discipline**: Never invoke `horizon` directly on production without explicit operator confirmation due to LLM token consumption.
 
 ## Verification Commands
 

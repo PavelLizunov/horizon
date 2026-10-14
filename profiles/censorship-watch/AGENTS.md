@@ -12,16 +12,10 @@ Processes timely technical evidence regarding internet censorship, VPN/protocol 
 ## 2. High-Signal Filters & Hard Calibration Rules
 
 - **High Signal (Score 8–10)**: Reproducible new blocking mechanisms, critical nationwide events, or major protocol disruptions supported by multi-network measurements.
-- **Hard Calibration Rules** (Enforced in `analysis.md`):
-  - **Single Field Report Cap**: A single uncorroborated field report CANNOT score above **5.9** (must not enter digest default filter threshold).
-  - **No Regional Bias**: Russian events receive no automatic credibility boost.
-  - **Outage vs Censorship**: A general power/infrastructure outage must never be labeled as targeted VPN blocking.
-  - **OONI Signal Handling**: Treat OONI anomalies as preliminary signals, not proof of mechanism.
 
 ## 3. Evidence & Safety Invariants
 
 - **Observational Precision**: Must specify place, time, affected ASN/operator, and target protocol/traffic. Explicitly state when any observation parameters are unknown.
-- **Safety & Bypass Policy**: NEVER publish bypass instructions, proxy credentials, or unverified operational workarounds.
 - **No Manual Verification Banners**: Do NOT add `CONFIRMED` or `PROBABLE` labels in markdown output (the Evidence Ledger engine handles corroboration separately).
 
 ## 4. Structural Schema & Web Search

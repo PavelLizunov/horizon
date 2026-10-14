@@ -4,11 +4,6 @@
 
 This package manages configuration loading, environment variable expansion, state persistence, subscriber state, and site page publishing (`StorageManager` in `src/storage/manager.py`).
 
-## Filesystem Atomicity & Path Safety
-
-- **Atomic Writes**: Text and byte writes use `_atomic_write_text` / `_atomic_write_bytes` from `src._file_utils`. Writes occur via a same-directory temporary `.tmp` file replaced atomically using `os.replace`. If an error occurs, the existing destination file remains unchanged and temp files are cleaned up.
-- **Path Traversal Safety**: `safe_output_path(root, filename)` currently permits only a direct child of `root`; absolute paths, traversal, and nested filenames all raise `ValueError`. Treat that flat-output restriction as part of the current API until a tested contract change says otherwise.
-
 ## Configuration & Environment Expansion
 
 - **Configuration Loading (`load_config`)**: Reads JSON from `config_path` (default `data/config.json`) and parses it into `Config` Pydantic models (`src/models.py`).

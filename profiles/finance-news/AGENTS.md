@@ -18,7 +18,6 @@ Processes news where money, financial markets, companies, macroeconomics, or eco
 
 - **Numeric & Baseline Integrity**: Preserve currencies, units, fiscal or calendar periods, and comparison baselines. Never omit baseline figures when available; never present percentage moves without starting values.
 - **Fact vs Opinion Distinction**: Distinguish reported actual results from forecasts, analyst estimates, proposals, or allegations. Always attribute company claims and forecasts to their source.
-- **Safety Boundaries**: Never calculate missing financial values, infer causation from correlation, give investment advice, recommend trades, or predict price movements.
 
 ## 4. Structural Schema & Web Search
 

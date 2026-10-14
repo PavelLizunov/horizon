@@ -17,7 +17,6 @@ The `docs/` tree serves two distinct purposes governed by `mkdocs.yml`:
 
 ## 2. Generated vs. Live Documentation Boundaries
 
-- `docs/digest/index.md`: GENERATED page tracked with an empty-state placeholder so fresh clones can build. `deploy/run-daily.sh` regenerates the listing before every build. Do not overwrite the placeholder format manually in source control.
 - `docs/digest/*`: Individual generated issue pages produced at runtime are excluded from navigation and gitignored; `docs/digest/AGENTS.md` is an explicit tracked exception.
 - `index.md`, `search.md`, and `not-found.md` are manually maintained public pages. `collection.md` and `checks.md` are tracked empty-state/placeholders regenerated from runtime config or verification state by their `scripts/dev_*_status.py` owners; change their templates/generators rather than committing live data.
 

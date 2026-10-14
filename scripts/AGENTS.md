@@ -32,7 +32,6 @@ Fetches raw HTML, RSS feeds, or model metadata over the network, but consumes **
 - `dev_check_new_channels.py`: Validates YouTube RSS feeds for new channels.
 - `dev_list_opencode_models.py`: Queries the gateway model-list endpoint; it does not send completions.
 
-### C. LLM Utility & Benchmark Scripts (STRICT: REQUIRES OWNER APPROVAL)
 These send model-completion requests. Some target models named `*-free`, but they still require credentials and live provider access; other calls may bill by output volume:
 
 - `dev_check_free_models.py`: Sends `Respond with OK` completions to each nominally free OpenCode Zen model; model naming does not make it offline.
@@ -42,8 +41,6 @@ These send model-completion requests. Some target models named `*-free`, but the
 - `dev_check_video_score.py`: Runs `ContentAnalyzer` LLM scoring on a single video item.
 - `dev_check_one_video.py`: Fetches video transcript, invoking vision LLM fallback when subtitles are absent.
 - `dev_test_laguna.py` / `dev_test_laguna_ru.py`: Tests scoring or Russian enrichment prompts against Laguna model endpoints.
-
-> **CRITICAL RULE**: Never run any section-C LLM script, `horizon`, or `daily-run.sh` without explicit owner approval. Default to offline pytest; run only the specific section-B checks whose network and side effects are acceptable.
 
 ### D. Host-Specific & Operational / Deployment Scripts
 Requires specific hardware, virtual environments, or production infrastructure:
@@ -61,7 +58,6 @@ Requires specific hardware, virtual environments, or production infrastructure:
 ## 3. Dev, Setup, and Operational Boundaries
 
 - **Development vs. Operational**: Dev scripts are for debugging and testing. Operational scripts (`daily-run.sh`, `dev_narrate_article.py`) target deployment environments or remote servers; do not invoke them in general development.
-- **Setup Scripts & Secret Handling**: Setup scripts (`setup_r2.py`, `setup_telegram.py`) write credentials to `.env`. Secrets must **never** be printed to terminal output, logged, or committed to source control.
 
 ## 4. Verification Instructions
 

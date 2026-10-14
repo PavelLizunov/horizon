@@ -18,7 +18,6 @@ Processes long-form technical writing whose primary value is explanation, archit
 
 - **Sampling & Text Budget**: Configured for `sampling: "head-middle-tail"` with higher input character caps (`analysis_max_chars`: 16000, `enrichment_max_chars`: 24000) to preserve long-form article structure.
 - **Narrative Integrity**: Retells the post as a connected 5–8 sentence story across blocks (Chinese target ~300–500 characters; English target ~150–250 words; comparable reading length for Russian and other languages). Block titles must be localized to the digest language.
-- **Faithful Representation**: Attribute arguments and unverified claims to the author. Preserve baselines, test conditions, tradeoffs, and limitations. Never invent missing details or data.
 
 ## 4. Structural Schema & Tools
 

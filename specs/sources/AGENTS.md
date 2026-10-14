@@ -12,6 +12,7 @@ This directory governs external source ingestion scrapers, content extraction la
 ## 2. Local Non-Negotiable Invariants
 
 1. **Graceful Degradation**: External scrapers must degrade gracefully on network failures, timeouts, rate limits, or IP blocks. Scrapers reduce item volume or detail, but must never raise unhandled exceptions or crash the pipeline.
+
 2. **Offline Test Isolation**: All scrapers must pass offline unit tests (`pytest`) with mocked network responses. Heavy third-party network libraries (e.g. `yt-dlp`) are imported lazily inside methods to keep test suites offline.
 3. **YouTube Invariants**:
    - Ingestion sequence: Channel RSS discovery, then content fallback Subtitles/VTT → local ASR (`mlx-whisper`) → vision.

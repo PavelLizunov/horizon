@@ -28,11 +28,7 @@ All schema versions and data contracts are API-sensitive and serialized into dur
   - `VerificationStatus`: `"supported_by_evidence"`, `"contradicted_by_evidence"`, `"mixed_evidence"`, `"insufficient_evidence"`, `"not_checkable"`, `"verification_error"`.
 - **Span Locator Invariant**: `source_text` spans in claims, evidence cards, and artifact audit spans must be exact, contiguous, non-paraphrased substrings within declared source fields (`title`, `content`, or normalized text). Locators that fail exact string matching or exhibit ambiguity must be rejected or discarded.
 
-## 3. Security & Safety Invariants
-
-1. **SSRF & URL Safety**: All external HTTP fetching in `fetch.py` MUST route through `resolve_public_http_url()` from `src/url_security.py`. Requests to internal, private, loopback, or link-local IP addresses are blocked (`UnsafeURLError` -> `security_blocked`). Redirects must re-evaluate destination IP addresses and create isolated HTTP client sessions per hop.
-2. **Evaluator Segregation & Data Isolation**: Claim, evidence, and artifact text is enclosed by stage-specific untrusted-data markers (`UNTRUSTED_NEWS_DATA_START`, `UNTRUSTED_EVIDENCE_DATA_START`, `UNTRUSTED_ARTIFACT_DATA_START`). These models must never inherit, view, or rely on generation prompt context.
-3. **Source Independence & Origin Keys**: Interested-party sources cannot independently corroborate event or quantity claims. `origin_key` values (`url:...`, `report:...`, `copy:...`) enforce source independence to prevent syndicated content or mirror sites from satisfying multi-source corroboration gates.
+1. **Source Independence & Origin Keys**: Interested-party sources cannot independently corroborate event or quantity claims. `origin_key` values (`url:...`, `report:...`, `copy:...`) enforce source independence to prevent syndicated content or mirror sites from satisfying multi-source corroboration gates.
 
 ## 4. Bounded Costs & Resource Limits
 
@@ -44,9 +40,8 @@ Verification activities are strictly resource-capped via `VerificationConfig` (`
 
 ## 5. Public Error & Usage Presentation
 
-1. **Error Hiding**: Readers must never see current internal states (`verification_error`, `check_error`, `not_checked`) or legacy/defensive `check_failed` inputs on live article pages. `build_public_verification()` may expose conservative coverage labels for healthy inconclusive checks, but renderers suppress operational failures.
-2. **Current Split Behavior**: Article banners do not render token or cost details, but `build_public_verification()` may carry `token_usage`, and `scripts/dev_verification_status.py` publishes usage on the public checks page with `include_usage=True`.
-3. **Unresolved Policy**: Preserve the split defined canonically in [`specs/verification-ledger/spec.md` §3](../../specs/verification-ledger/spec.md#3-open-usage-publication-decision); resolving it requires an owner-approved synchronized contract change.
+1. **Current Split Behavior**: Article banners do not render token or cost details, but `build_public_verification()` may carry `token_usage`, and `scripts/dev_verification_status.py` publishes usage on the public checks page with `include_usage=True`.
+2. **Unresolved Policy**: Preserve the split defined canonically in [`specs/verification-ledger/spec.md` §3](../../specs/verification-ledger/spec.md#3-open-usage-publication-decision); resolving it requires an owner-approved synchronized contract change.
 
 ## 6. Content Immutability & Incident Semantics
 

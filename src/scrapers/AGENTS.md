@@ -16,8 +16,6 @@ class BaseScraper(ABC):
 *Note*: `VideoScraper` additionally accepts `ai_config` (`AIConfig`), and `RSSScraper` accepts `ExtractorRegistry`.
 Scrapers execute concurrently via `asyncio.gather` inside `HorizonOrchestrator.fetch_all_sources()` (`src/orchestrator.py`).
 
-## 2. Core Invariants & Contract Rules
-
 ### 2.1 Source Addition Parity (7-Step Contract)
 Adding or updating a source requires synchronized changes across 7 locations:
 1. `src/models.py`: Add enum value to `SourceType`.
@@ -50,14 +48,11 @@ Adding or updating a source requires synchronized changes across 7 locations:
 - **Custom Metadata**: Source-specific attributes (e.g. upvotes, comment counts, star counts, flair, watchlist symbols) **must** be stored inside `item.metadata` dict, never on top-level `ContentItem` fields.
 
 ### 2.5 Config, API & Dependency Compatibility
-- Secrets (API keys, tokens) are referenced by environment variable names (e.g., `api_key_env`, `apify_token_env`), loaded via `.env`. Never store raw key strings in config files or models.
 - Heavy/platform dependencies must stay behind lazy import boundaries where implemented. `openbb`, `mlx-whisper`, and Playwright are optional extras; `yt-dlp` is a standard dependency but is still imported lazily so partial installations degrade cleanly.
 
 ### 2.6 Known Audit Gaps (Do Not Copy)
 - Google News uses its query time operator but does not locally enforce `published_at >= since`, and its string-date fallback is not normalized to UTC.
 - Reddit and Telegram assume `Retry-After` is an integer even though the header may legally be an HTTP date.
-
-## 3. Special Scraper Invariants
 
 ### 3.1 YouTube Video Scraper (`src/scrapers/video.py`)
 - **RSS Discovery**: Discovers videos via `https://www.youtube.com/feeds/videos.xml?channel_id=...` without API keys.
@@ -73,8 +68,6 @@ Adding or updating a source requires synchronized changes across 7 locations:
 - **Deep Links**: Links directly to individual post IDs (`&view=findpost&p={post_id}`).
 
 ## 4. Test Coverage & Network Mocking
-
-All scraper tests run strictly offline. Network calls are mocked via `httpx.MockTransport`, `unittest.mock.AsyncMock`, or local HTML/JSON fixtures.
 
 | Scraper Module | Scraper Class | Primary Test File | Coverage Focus |
 |---|---|---|---|

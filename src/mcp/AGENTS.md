@@ -16,8 +16,6 @@ This package provides a Model Context Protocol (MCP) server exposing the Horizon
 - `run_store.py`: `RunStore` intermediate artifact persistence under `data/mcp-runs/<run_id>/`, downstream stage invalidation, monotonic microsecond timestamping, path security checks.
 - `errors.py`: `HorizonMcpError` dataclass with stable error codes (`code`, `message`, `details`).
 
-## Public API Stability Contracts
-
 ### Tools (13 Public Tools)
 Tool names, parameters, and JSON response envelopes (`ok`, `tool`, `data`/`error`, `meta`) are public API:
 - Configuration: `hz_validate_config`
@@ -53,23 +51,11 @@ Stage names and file mappings inside `data/mcp-runs/<run_id>/` are public contra
    - The MCP layer MUST NOT reimplement scraping, scoring, filtering, enrichment, or summarization business logic.
    - Always delegate directly to core modules: `HorizonOrchestrator`, `StorageManager`, `DailySummarizer`, `ContentAnalyzer`, `ContentEnricher`, and `src/models.py`.
 
-3. **Run-Store & Path Security**:
-   - Validate `run_id` using `RUN_ID_RE` (`^[A-Za-z0-9][A-Za-z0-9._-]*$`) and verify resolved path relative to `runs_root` to prevent directory traversal.
-   - Validate summary language strings using `LANGUAGE_RE`.
-   - File updates MUST use atomic file replacement (`_atomic_write_text`).
-   - ISO timestamps must maintain microsecond precision (`timespec="microseconds"`) and monotonic increments for string-based sorting in `list_runs()`.
-   - Saving or modifying an upstream stage MUST invalidate all downstream stage files, summaries, and associated stage metadata.
-   - Known gaps: metadata updates and stage invalidation are multi-step read/modify/write operations without inter-process locking, and `list_runs(limit)` reads/sorts every run's metadata before applying the limit. Atomic replacement prevents torn files but not lost concurrent updates.
-
-4. **Error Translation & Handling**:
+3. **Error Translation & Handling**:
    - Application errors must raise or translate into `HorizonMcpError` carrying structured codes (e.g. `HZ_RUN_NOT_FOUND`, `HZ_STAGE_NOT_FOUND`, `HZ_SUMMARY_NOT_FOUND`, `HZ_CONFIG_NOT_FOUND`, `HZ_INVALID_INPUT`, `HZ_INVALID_STAGE`, `HZ_EMPTY_INPUT`).
    - `server.py` wraps tool execution in standard envelopes (`_ok` / `_err`) and records call duration and error telemetry.
 
-5. **Secret Sanitization**:
-   - Config outputs in tools and resources MUST pass through `_redact_config()` before returning JSON. It redacts expanded secret values while deliberately preserving non-secret `*_env` variable names as configuration references.
-   - Secrets loaded via `.env` or `mcp.secrets.json` populate environment variables without logging key values.
-
-6. **Doc & Test Synchronization**:
+4. **Doc & Test Synchronization**:
    - Any modifications to tools, resources, stage formats, or error codes MUST be kept in sync across `src/mcp/server.py`, `src/mcp/service.py`, `src/mcp/README.md`, `src/mcp/integration.md`, and `tests/test_mcp_*.py`.
 
 ## Verification

@@ -54,12 +54,9 @@ Defer package-specific implementation details to child guides or module document
    - `models.py` schema is the contract. Adding or updating a source requires sync across `models.py` -> `SOURCE_REGISTRY` -> `src/scrapers/` -> `src/orchestrator.py` -> `data/config.example.json` -> `tests/`.
    - Entry point callables and CLI arguments in `_cli.py` and `main.py` must maintain public interface stability.
 
-2. **URL Security**:
-   - Web queries and link fetches must route through `src/url_security.py` as the central address-pinned SSRF policy; never validate a hostname and then issue an independently resolved request.
-
-3. **Graceful Degradation**:
+2. **Graceful Degradation**:
    - External fetch, scrape, or AI failures are isolated per source. One failed source must not abort the run; an all-sources fetch failure remains a fatal pipeline condition.
    - Verification gracefully handles search rate limits and errors without rendering scary internal error statuses to public outputs.
 
-4. **Offline Testing**:
+3. **Offline Testing**:
    - All tests in `tests/` must run offline without live API keys or external network connections. Heavy/platform dependencies (e.g. `yt-dlp`, `mlx-whisper`) must be imported lazily or mocked in test contexts.
