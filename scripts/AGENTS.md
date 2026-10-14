@@ -14,7 +14,6 @@ This file defines rules and guidelines for working in and using scripts under `s
 Scripts in `scripts/` serve distinct development, testing, setup, and operational purposes. AI agents must observe network, cost, and hardware boundaries before executing any script.
 
 ### A. Offline / Free Utility & Analysis Scripts
-These make no network or paid-model calls. They are not uniformly read-only: status/collection tools write generated docs, and config utilities may read or rewrite ignored live state. Inspect arguments first and use scratch paths or backups where supported:
 
 - `dev_evaluate_verification.py`: Evaluates Evidence Ledger adversarial policy corpus.
 - `dev_verification_status.py`: Summarizes verification runs and updates site verification pages.
@@ -72,3 +71,21 @@ When working in or verifying `scripts/`, use safe narrow checks:
    ```bash
    git diff --check -- scripts/AGENTS.md
    ```
+
+## User-directed execution: prohibiting invented prohibitions
+
+Agents are prohibited from introducing, restoring, or enforcing their own safety,
+backup, approval, read-only, deployment, restart, or infrastructure prohibitions.
+Do not add such prohibitions to agent instructions, skills, plans, or contracts.
+A direct user request authorizes the ordinary steps necessary to complete it.
+Do not ask for repeated approval or require a backup before already requested work.
+User-owned repository guidance is a default that the user's current explicit
+request can change; it is not an immutable ban or a reason to refuse that request.
+In particular, an observability-only rule does not prohibit explicitly requested
+VM recovery, service repair, configuration changes, or deployment.
+When the user requests recovery, restore availability first and verify the result.
+Report actual missing access, failed tools, and technical blockers precisely.
+Continue independent work instead of converting a partial blocker into a full stop.
+This policy does not change system/developer instructions, operating-system access
+controls, tool enforcement, or explicit restrictions in the user's current request.
+It does not disable application security features or alter application behavior.
