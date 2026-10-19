@@ -2,6 +2,8 @@
 
 from pathlib import Path
 
+import pytest
+
 
 def test_readable_site_is_shipped_before_narration():
     script = (
@@ -103,3 +105,63 @@ for article in ("first", "second"):
         "pipeline", "ship", "narration", "attach-first", "ship",
         "attach-second", "ship", "ship",
     ], result.stdout + result.stderr
+
+
+@pytest.mark.parametrize("dispatch_status", [0, 1])
+@pytest.mark.parametrize("narration_enabled", [False, True])
+def test_daily_runner_reports_dispatch_failure_after_publication(
+    tmp_path, dispatch_status, narration_enabled
+):
+    """A failed notification must not look like a successful daily service."""
+    import os
+    import shutil
+    import subprocess
+
+    root = Path(__file__).resolve().parents[1]
+    script = tmp_path / "run-daily.sh"
+    shutil.copyfile(root / "deploy" / "run-daily.sh", script)
+    (tmp_path / "docs" / "digest" / "2026-01-01-ru").mkdir(parents=True)
+    (tmp_path / "site").mkdir()
+    venv = tmp_path / ".venv" / "bin"
+    venv.mkdir(parents=True)
+    binaries = tmp_path / "bin"
+    binaries.mkdir()
+    journal = tmp_path / "events"
+
+    def executable(path, body):
+        path.write_text("#!/bin/bash\n" + body, encoding="utf-8")
+        path.chmod(0o755)
+
+    executable(venv / "horizon", 'echo pipeline >> "$TEST_EVENTS"\n')
+    executable(binaries / "mkdocs", 'echo ship >> "$TEST_EVENTS"\n')
+    executable(binaries / "ssh", 'cat > /dev/null\n')
+    executable(venv / "python", '''
+case "$1" in
+  scripts/dev_dispatch_webhooks.py)
+    echo dispatch >> "$TEST_EVENTS"
+    exit "$TEST_DISPATCH_STATUS" ;;
+  scripts/dev_narrate_article.py)
+    echo prepare-narration >> "$TEST_EVENTS" ;;
+esac
+''')
+    narrator = binaries / "narrator"
+    if narration_enabled:
+        executable(narrator, 'echo narration >> "$TEST_EVENTS"\n')
+    env = {
+        **os.environ, "HOME": str(tmp_path),
+        "PATH": str(binaries) + os.pathsep + os.environ["PATH"],
+        "TEST_EVENTS": str(journal), "TEST_DISPATCH_STATUS": str(dispatch_status),
+        "HORIZON_NO_PULL": "1", "HORIZON_SHIP_ONLY": "0",
+        "HORIZON_TTS_PYTHON": str(narrator), "HORIZON_DIR": str(tmp_path),
+        "TMPDIR": str(tmp_path), "HORIZON_SITE_HOST": "unused.invalid",
+        "HORIZON_SITE_PATH": "/unused",
+    }
+    shell = shutil.which("zsh") or shutil.which("bash")
+    result = subprocess.run([shell, str(script)], env=env, capture_output=True, text=True)
+    assert result.returncode == dispatch_status, result.stdout + result.stderr
+    expected = ["pipeline", "ship", "dispatch"]
+    if narration_enabled:
+        expected += ["prepare-narration", "narration", "ship"]
+    assert journal.read_text().splitlines() == expected, result.stdout + result.stderr
+    if dispatch_status:
+        assert "webhook: dispatch FAILED" in result.stdout

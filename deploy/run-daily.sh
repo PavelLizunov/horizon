@@ -102,7 +102,11 @@ ship_site || exit 1
 
 # Dispatch deferred webhooks now that the site is verified live on ingress
 log "webhook: dispatching notifications for published site"
-.venv/bin/python scripts/dev_dispatch_webhooks.py || log "webhook: dispatch FAILED"
+delivery_status=0
+.venv/bin/python scripts/dev_dispatch_webhooks.py || {
+  delivery_status=$?
+  log "webhook: dispatch FAILED — pending notifications retained; daily job will fail"
+}
 
 # Narration. Two interpreters on purpose: preparing the text needs the project's
 # dependencies, and TeraTTSv2 needs onnxruntime and transformers, which live in
@@ -140,4 +144,6 @@ else
   ship_site || exit 1
 fi
 
-exit $pipeline_status
+# Text and optional audio stay published even when notification delivery fails.
+# Do not retry ambiguous sends here; expose the failure to the scheduler instead.
+exit $delivery_status

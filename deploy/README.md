@@ -254,6 +254,13 @@ seven consecutive automated Linux runs have succeeded.
 ## Operations
 
 - **Logs**: Linux production writes the token summary to `journalctl -u horizon-digest.service`; the macOS reference keeps `logs/horizon.log`.
+- **Notification failures**: If deferred webhook dispatch fails after the site ships,
+  the runner finishes optional narration, leaves published pages in place, and exits
+  nonzero so the scheduler reports a failed daily job. Pending notifications remain
+  for recovery; the runner does not automatically repeat an ambiguous timed-out send.
+  Check the dispatch journal before using `scripts/dev_dispatch_webhooks.py` under
+  the same service environment and shared execution lock. Do not rerun the paid
+  pipeline merely to resend an already-generated briefing.
 - **Output**: `data/summaries/YYYY-MM-DD-*.md` (gitignored state).
 - **Cookies expiry**: when subtitle fetches start failing, re-export
   `data/youtube-cookies*.txt` (see [`docs/video-source.md`](../docs/video-source.md)).
